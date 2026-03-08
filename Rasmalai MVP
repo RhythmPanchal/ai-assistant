@@ -1,0 +1,77 @@
+/tools
+
+    /telegram
+        /sendMessage
+        /telegramHandler
+
+    /notion
+        /createPage
+        /updatePage
+
+    /calendar
+        /createEvent
+
+    /mogno
+        /createCollection
+        /updateCollection
+        /createRecord
+        /updateRecord
+        /deleteRecord
+
+
+
+/services
+    /trigger
+
+    /polling or webhook 
+
+    /knowledgePipeline
+        /mongoConnection
+        /chathistory
+        /currentMonthExpenditure
+        /currentMonthDiet
+        /TaskCalnedar
+        /Goals
+        /Chathisotry
+
+
+
+/langchain
+
+
+
+as discussed to you before, I want to create an ai agent for personal assistant in regular day life. 
+My use cases are :
+1.It should take logs of how my day went. 
+2.Every day it give schedule of the day and set it in google calendar
+3.It helps me to take my personal decesion like I want to each this, buy this, do this task.
+4.It keep log of my health and fitness 
+5.It helps me to align me with my long and short term goals. 
+
+This are the basic features I want in my agent, I give it name, rasmalai( a sweet name ). 
+I have tried to create a no code ai agent from zapier, but it was doing mistakes and latency was also too high. also need a complex design according to this. to you suggest me to do by coding myself.
+picked up Java script to do that. 
+please find below my flow of the project. give suggest after that I will give you folder structure and we start coding. 
+
+
+
+as discussed to you before, I want to create an ai agent for personal assistant in regular day life. 
+My use cases are :
+1.It should take logs of how my day went. 
+2.Every day it give schedule of the day and set it in google calendar
+3.It helps me to take my personal decesion like I want to each this, buy this, do this task.
+4.It keep log of my health and fitness 
+5.It helps me to align me with my long and short term goals. 
+
+This are the basic features I want in my agent, I give it name, rasmalai( a sweet name ). 
+I have tried to create a no code ai agent from zapier, but it was doing mistakes and latency was also too high. also need a complex design according to this. to you suggest me to do by coding myself.
+picked up Java script to do that. 
+please find below my flow of the project. give suggest after that I will give you folder structure and we start coding. 
+
+
+
+
+curl --request GET \
+  --url https://api.notion.com/v1/data_sources/2cf94e59618680a89b79f0a76df1b608/templates \
+  --header 'Authorization: Bearer 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' \
+  --header 'Notion-Version: 2025-09-03'
