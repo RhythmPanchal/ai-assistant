@@ -9,6 +9,7 @@ function formatChatHistoryForLLM(records) {
 
 export default async function chatHistoryKnowledge(userId) {
     if (!userId) {
+        console.trace();
         throw new Error("userId is required to fetch chat history");
     }
     

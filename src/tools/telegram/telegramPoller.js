@@ -23,6 +23,7 @@ export async function startTelegramPolling(onMessage) {
         lastUpdateId = update.update_id;
 
         if (update.message?.text) {
+           console.log("getting here :", update.message)
           await onMessage(update.message);
         }
       }

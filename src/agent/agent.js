@@ -6,6 +6,7 @@ import { chatHistoryBuilder, CHAT_HISTORY } from "../tools/mongo/schema/chatHist
 import agentInstruction from "./instruction.js"
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js"
 import pendingTasksKnowledge from "../knowledge/pendingTasksKnowledge.js";
+import { dispatchAction } from "../scheduler/actionDispatcher.js";
 
 // function buildUserContext(text) {
 //     return [
@@ -49,9 +50,8 @@ Use this information as context. Do not repeat it unless needed.
 }
 
 
-export async function runAgent(userId, userInstruction) {
-    try {
-        
+export async function runAgent({userId, userInstruction}) {
+    try { 
         let contents = buildContext(userId, userInstruction);
 
         //save user message into chathistory collection in db. 
@@ -78,11 +78,7 @@ export async function runAgent(userId, userInstruction) {
                 for (const functionCall of functionCalls) {
                     const { name, args } = functionCall;
 
-                    if (!toolFunction[name]) {
-                        throw new Error(`Unknown function call: ${name}`);
-                    }
-
-                    const toolResponse = await toolFunction[name](args);
+                    const toolResponse = await dispatchAction(name, args);
 
                     console.log("\nExecuted function response:", toolResponse);
                     console.log("---------------------------------");

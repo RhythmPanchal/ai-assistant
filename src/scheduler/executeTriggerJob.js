@@ -10,14 +10,14 @@ export default async function executeTriggerJob(job) {
     const db = await getDB();
     const collection = db.collection(TRIGGER_JOB);
     const now = new Date();
-
+    console.log(job);
     // ─── 1. Mark as processing ───────────────────────────────────────────────
-    const { value: updatedJob } = await collection.findOneAndUpdate(
-        { _id: new ObjectId(job._id), status: "active" },
+    const updatedJob = await collection.findOneAndUpdate(
+        { _id: job._id, status: "active" },
         { $set: { status: "processing", updatedAt: now } },
         { returnDocument: "after" }
     );
-
+    
     if (!updatedJob) {
         throw new Error(`[executeTriggerJob] Job ${job._id} is not active. Skipping.`);
     }
@@ -32,7 +32,7 @@ export default async function executeTriggerJob(job) {
             : null;
 
         await collection.updateOne(
-            { _id: new ObjectId(job._id) },
+            { _id: job._id },
             {
                 $set: {
                     status: updatedJob.recurring ? "active" : "completed",
@@ -81,7 +81,7 @@ export default async function executeTriggerJob(job) {
                         status: "active",
                         attempts: 0,
                         failedAt: new Date(),
-                        nextExecutionAt,
+                        nextExecutionAt : nextExecutionAt,
                         updatedAt: new Date(),
                     },
                 }

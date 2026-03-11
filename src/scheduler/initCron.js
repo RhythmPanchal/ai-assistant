@@ -1,4 +1,5 @@
 import cron from "node-cron";
+import { getDB } from "../tools/mongo/mongoClient.js";
 import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
 import executeTriggerJob from "./executeTriggerJob.js";
 
@@ -29,7 +30,7 @@ async function triggerExecutor() {
 	return processTriggers(pendingTriggers);
 }
 
-async function processTriggers(TriggerJobs) {
+export async function processTriggers(TriggerJobs) {
 	if (TriggerJobs.length == 0) {
 		return;
 	}
@@ -40,9 +41,9 @@ async function processTriggers(TriggerJobs) {
 
 	results.forEach((result, index) => {
     if (result.status === "rejected") {
-      console.error(`[processTriggers] Job ${pendingTriggers[index]._id} failed:`, result.reason);
+      console.error(`[processTriggers] Job ${TriggerJobs[index]._id} failed:`, result.reason);
     } else {
-      console.log(`[processTriggers] Job ${pendingTriggers[index]._id} completed successfully.`);
+      console.log(`[processTriggers] Job ${TriggerJobs[index]._id} completed successfully.`);
     }
   });
 }

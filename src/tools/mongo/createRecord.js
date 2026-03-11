@@ -17,12 +17,6 @@ function normalizeDates(obj) {
   return obj;
 }
 
-function validateAgainstSchema(collectionName, userData){
-  const allSchemas = fetchCollectionNameAndSchema();
-  const collectionSchema = allSchemas[collectionName]; 
-
-
-}
 
 
 export async function createRecord(args) {
