@@ -32,7 +32,7 @@ export default async function chatHistoryKnowledge(userId) {
                 $lte: endOfDay
             }
         })
-        .sort({ timestamp: 1 }) // oldest → newest
+        .sort({ timestamp: -1 }) // newest → oldest
         .toArray();
     
     return formatChatHistoryForLLM(records);

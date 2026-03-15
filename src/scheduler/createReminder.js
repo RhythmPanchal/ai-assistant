@@ -1,7 +1,7 @@
 import { createRecord } from "../tools/mongo/createRecord.js";
 import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
 
-export async function createOneTimeReminder({ title, userId, nextExecutionAt, message }) {
+export async function createOneTimeReminder(title, userId, nextExecutionAt, message) {
   const record = {
     title,
     userId,
@@ -25,5 +25,5 @@ export async function createOneTimeReminder({ title, userId, nextExecutionAt, me
     updatedAt: new Date(),
   };
   console.log(record);
-  return await createRecord({collectionName : TRIGGER_JOB, data : record});
+  return await createRecord( TRIGGER_JOB, record);
 }

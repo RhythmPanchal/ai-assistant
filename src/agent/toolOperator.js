@@ -45,31 +45,49 @@ export const tools = [
                 },
             },
             {
-        name: "createOneTimeReminder",
-        description: "Creates a one-time reminder for the user. It will trigger once at the specified time. Always confirm the exact date and time with the user before calling this.",
-        parameters: {
-          type: "object",
-          properties: {
-            title: {
-              type: "string",
-              description: "Human-readable title for the reminder. e.g. 'Take medicine at 8pm'",
+                name: "createOneTimeReminder",
+                description: "Creates a one-time reminder for the user. It will trigger once at the specified time. Always confirm the exact date and time with the user before calling this.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        title: {
+                            type: "string",
+                            description: "Human-readable title for the reminder. e.g. 'Take medicine at 8pm'",
+                        },
+                        userId: {
+                            type: "number",
+                            description: "Identifier of the user who owns this reminder.",
+                        },
+                        nextExecutionAt: {
+                            type: "string",
+                            description: "ISO 8601 datetime string for when the reminder should trigger. e.g. '2025-06-01T20:00:00'",
+                        },
+                        message: {
+                            type: "string",
+                            description: "Any extra description needed to execute the reminder action, e.g. { message: 'Take your medicine' }",
+                        },
+                    },
+                    required: ["title", "userId", "nextExecutionAt", "message"],
+                },
             },
-            userId: {
-              type: "string",
-              description: "Identifier of the user who owns this reminder.",
-            },
-            nextExecutionAt: {
-              type: "string",
-              description: "ISO 8601 datetime string for when the reminder should trigger. e.g. '2025-06-01T20:00:00'",
-            },
-            message: {
-              type: "object",
-              description: "Any extra description needed to execute the reminder action, e.g. { message: 'Take your medicine' }",
-            },
-          },
-          required: ["title", "userId", "nextExecutionAt", "message"],
-        },
-      }
+            {
+                name: "runAgent",
+                description: "Runs the assistant agent with the user context and instruction.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        userId: {
+                            type: "number",
+                            description: "Unique identifier of the user (default is 1136575387)",
+                        },
+                        userInstruction: {
+                            type: "string",
+                            description: "User message or instruction that the agent should process"
+                        }
+                    },
+                    required: ["userId", "userInstruction"]
+                }
+            }
 
         ],
     },

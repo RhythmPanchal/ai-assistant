@@ -4,22 +4,37 @@ import { runAgent } from "../agent/agent.js";
 import fetchCollectionNameAndSchema from "../tools/mongo/fetchCollectionSchema.js";
 import { createOneTimeReminder } from "./createReminder.js";
 
-const ACTION_MAP = {
-  createRecord,
-  sendMessage,
-  runAgent,
-  fetchCollectionNameAndSchema,
-  createOneTimeReminder
+export const ACTION_MAP = {
+  createOneTimeReminder: {
+    fn: createOneTimeReminder,
+    params: ["title", "userId", "nextExecutionAt", "message"]
+  },
+
+  createRecord: {
+    fn: createRecord,
+    params: ["collectionName", "data"]
+  },
+
+  sendMessage: {
+    fn: sendMessage,
+    params: ["chatId", "text"]
+  },
+
+  fetchCollectionNameAndSchema: {
+    fn: fetchCollectionNameAndSchema,
+    params: []
+  }
 };
 
 export async function dispatchAction(actionType, payload) {
-  const actionFn = ACTION_MAP[actionType];
+  const action = ACTION_MAP[actionType];
 
-  if (!actionFn) {
+  if (!action) {
     throw new Error(`[dispatchAction] Unknown actionType: "${actionType}"`);
   }
 
-  const result = await actionFn(payload);
-  if( result === undefined)return true; 
-  return result;
+  const args = action.params.map(p => payload[p]);
+
+  const res =  await action.fn(...args);
+  return res === undefined ? true : res ; 
 }

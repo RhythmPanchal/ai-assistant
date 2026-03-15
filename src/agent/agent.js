@@ -50,15 +50,15 @@ Use this information as context. Do not repeat it unless needed.
 }
 
 
-export async function runAgent({userId, userInstruction}) {
+export async function runAgent(userId, userInstruction) {
     try { 
         let contents = buildContext(userId, userInstruction);
 
         //save user message into chathistory collection in db. 
-        await createRecord({
-            collectionName: CHAT_HISTORY,
-            data: chatHistoryBuilder(userId, userInstruction, "user")
-        });
+        await createRecord(
+            CHAT_HISTORY,
+            chatHistoryBuilder(userId, userInstruction, "user")
+        );
 
         while (true) {
             const result = await gemini_ai.models.generateContent({
@@ -111,10 +111,10 @@ export async function runAgent({userId, userInstruction}) {
                 const LLMresponse = result.text;
                 console.log("FINAL LLM RESPONSE : ", LLMresponse);
                 //store the final response in db. 
-                await createRecord({
-                    collectionName: CHAT_HISTORY,
-                    data: chatHistoryBuilder(userId, LLMresponse, "assistant")
-                });
+                await createRecord(
+                    CHAT_HISTORY,
+                    chatHistoryBuilder(userId, LLMresponse, "assistant")
+                );
 
                 return LLMresponse;
             }

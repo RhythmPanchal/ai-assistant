@@ -25,7 +25,7 @@ export default async function pendingTasksKnowledge(userId) {
             userId: userId,
             status : "Pending"
         })
-        .sort({ priorityScore : 1 }) // oldest → newest
+        .sort({ priorityScore : 1 }) // most prior -> least prior
         .toArray();
     
     return formatPendingTaskforLLM(records);

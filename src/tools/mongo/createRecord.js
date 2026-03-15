@@ -19,13 +19,10 @@ function normalizeDates(obj) {
 
 
 
-export async function createRecord(args) {
-    const collectionName = args.collectionName; 
+export async function createRecord(collectionName, data) {
     let refinedData = {}; 
-    // CHANGED: Parse the string back to an object
-    let data;
     try {
-      data = typeof args.data === 'string' ? JSON.parse(args.data) : args.data;
+        data = typeof data === 'string' ? JSON.parse(data) : data;
         refinedData = normalizeDates(data);
         const validatedData = ValidateSchema(collectionName, refinedData); 
     } catch (e) {

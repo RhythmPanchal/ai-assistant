@@ -1,12 +1,9 @@
 import { getDB } from "./mongoClient.js";
 
-export async function updateRecord(args) {
-    const collectionName = args.collectionName; 
+export async function updateRecord(collectionName, data) {
     
-    
-    let data;
     try {
-        data = typeof args.data === 'string' ? JSON.parse(args.data) : args.data;
+        data = typeof data === 'string' ? JSON.parse(data) : data;
     } catch (e) {
         throw new Error("Invalid JSON string provided for data");
     }

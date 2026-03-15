@@ -14,8 +14,7 @@ export async function loadSchema(collectionName) {
 }
 
 
-export async function createCollection(args) {
-    const collectionName = args.collectionName;
+export async function createCollection(collectionName) {
     const db = await getDB();
 
     const collections = await db.listCollections({ name: collectionName }).toArray();
