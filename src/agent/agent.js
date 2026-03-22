@@ -21,9 +21,9 @@ import { dispatchAction } from "../scheduler/actionDispatcher.js";
 //     ];
 // }
 
-function buildContext(userId, userInstruction) {
-    const todayChatHistory = chatHistoryKnowledge(userId);
-    const pendingTasks = pendingTasksKnowledge(userId);
+async function buildContext(userId, userInstruction) {
+    const todayChatHistory = await chatHistoryKnowledge(userId);
+    const pendingTasks = await pendingTasksKnowledge(userId);
     return [
         {
             role: "user",
@@ -39,8 +39,6 @@ ${agentInstruction}
 === TODAY'S CHAT HISTORY ===
 ${todayChatHistory}
 
-=== PENDING TASKS ===
-${pendingTasks}
 Use this information as context. Do not repeat it unless needed.
 `
                 }
@@ -52,8 +50,8 @@ Use this information as context. Do not repeat it unless needed.
 
 export async function runAgent(userId, userInstruction) {
     try { 
-        let contents = buildContext(userId, userInstruction);
-
+        let contents = await buildContext(userId, userInstruction);
+    //    console.log(JSON.stringify(contents, null, 2));
         //save user message into chathistory collection in db. 
         await createRecord(
             CHAT_HISTORY,
@@ -68,7 +66,7 @@ export async function runAgent(userId, userInstruction) {
             });
 
             console.log("---------------------------------");
-            console.log("User Query:", userInstruction);
+            console.log("User Query:", contents);
             console.log("\nLLM response:");
             console.dir(result, { depth: null, colors: true });
 

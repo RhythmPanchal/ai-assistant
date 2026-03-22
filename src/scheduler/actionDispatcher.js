@@ -1,8 +1,9 @@
 import { createRecord } from "../tools/mongo/createRecord.js";
+import { fetchRecord } from "../tools/mongo/fetchRecords.js";
 import { sendMessage } from "../tools/telegram/sendMessage.js";
 import { runAgent } from "../agent/agent.js";
 import fetchCollectionNameAndSchema from "../tools/mongo/fetchCollectionSchema.js";
-import { createOneTimeReminder } from "./createReminder.js";
+import { createOneTimeReminder } from "./createReminders.js";
 
 export const ACTION_MAP = {
   createOneTimeReminder: {
@@ -15,6 +16,11 @@ export const ACTION_MAP = {
     params: ["collectionName", "data"]
   },
 
+  fetchRecord: {
+    fn: fetchRecord, 
+    params: ["collection", "filters", "sortBy", "sortOrder", "limit"] 
+  },
+
   sendMessage: {
     fn: sendMessage,
     params: ["chatId", "text"]
@@ -24,6 +30,7 @@ export const ACTION_MAP = {
     fn: fetchCollectionNameAndSchema,
     params: []
   }
+
 };
 
 export async function dispatchAction(actionType, payload) {

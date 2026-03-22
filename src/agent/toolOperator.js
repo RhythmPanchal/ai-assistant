@@ -45,6 +45,41 @@ export const tools = [
                 },
             },
             {
+                name: "fetchRecord",
+                description: `Fetch records from the database. Use this to retrieve expense, task, or diet records for the user.Always include userId in filters.For date ranges use $gte and $lt operators with ISO date strings like "2026-03-01".`,
+                parameters: {
+                    type: "object",
+                    properties: {
+                        collection: {
+                            type: "string",
+                            enum: ["expenseRegister", "taskRegister", "dietRegister", "taskCalendar"],
+                            description: "The collection to query",
+                        },
+                        filters: {
+                            type: "object",
+                            description: `MongoDB filter object. Supports operators: $eq, $gt, $gte, $lt, $lte, $in, $nin.Example: { "userId": 123, "date": { "$gte": "2026-03-01", "$lt": "2026-04-01" }, "category": "Food" }`,
+                        },
+                        sortBy: {
+                            type: "string",
+                            description: "Field to sort by. Defaults to 'date'",
+                            default: "date",
+                        },
+                        sortOrder: {
+                            type: "string",
+                            enum: ["asc", "desc"],
+                            description: "Sort direction. Defaults to 'desc' (newest first)",
+                            default: "desc",
+                        },
+                        limit: {
+                            type: "number",
+                            description: "Max number of records to return. Defaults to 50.",
+                            default: 50,
+                        },
+                    },
+                    required: ["collection", "filters"],
+                },
+            },
+            {
                 name: "createOneTimeReminder",
                 description: "Creates a one-time reminder for the user. It will trigger once at the specified time. Always confirm the exact date and time with the user before calling this.",
                 parameters: {
@@ -55,7 +90,7 @@ export const tools = [
                             description: "Human-readable title for the reminder. e.g. 'Take medicine at 8pm'",
                         },
                         userId: {
-                            type: "number",
+                            type: "int",
                             description: "Identifier of the user who owns this reminder.",
                         },
                         nextExecutionAt: {
@@ -68,6 +103,37 @@ export const tools = [
                         },
                     },
                     required: ["title", "userId", "nextExecutionAt", "message"],
+                },
+            },
+            {
+                name: "createMultiTimeReminder",
+                description: "Creates a reminder which can be used for multiple times for the user. It will trigger recursively according to cron until expiry date. please give cron and expiry date according to user query",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        title: {
+                            type: "string",
+                            description: "Human-readable title for the reminder. e.g. 'Take medicine at 8pm'",
+                        },
+                        userId: {
+                            type: "int",
+                            description: "Identifier of the user who owns this reminder.",
+                        },
+                        nextExecutionAt: {
+                            type: "string",
+                            description: "ISO 8601 datetime string for when the reminder should trigger. e.g. '2025-06-01T20:00:00'",
+                        },
+                        message: {
+                            type: "string",
+                            description: "Any extra description needed to execute the reminder action, e.g. { message: 'Take your medicine' }",
+                        },
+                        expiryDate: {
+                            type: "string",
+                            description: "ISO 8601 datetime string for after which trigger will expire. e.g. '2025-06-01T20:00:00'",
+                        }
+
+                    },
+                    required: ["title", "userId", "nextExecutionAt", "message", "expiryDate"],
                 },
             }
         ],
