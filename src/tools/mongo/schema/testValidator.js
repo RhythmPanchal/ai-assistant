@@ -3,7 +3,7 @@ const testValidatorSchema = {
   "description": "this validator is written for test purpose",
   "properties": {
     "userId": {
-      "bsonType": "string"
+      "bsonType": "int"
     },
     "time": {
       "bsonType": "string"

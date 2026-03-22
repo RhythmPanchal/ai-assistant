@@ -14,7 +14,7 @@ const triggerJobSchema = {
     },
 
     userId: {
-      bsonType: "string",
+      bsonType: "int",
       description: "Identifier of the user who owns this trigger job."
     },
 

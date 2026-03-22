@@ -69,26 +69,7 @@ export const tools = [
                     },
                     required: ["title", "userId", "nextExecutionAt", "message"],
                 },
-            },
-            {
-                name: "runAgent",
-                description: "Runs the assistant agent with the user context and instruction.",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        userId: {
-                            type: "number",
-                            description: "Unique identifier of the user (default is 1136575387)",
-                        },
-                        userInstruction: {
-                            type: "string",
-                            description: "User message or instruction that the agent should process"
-                        }
-                    },
-                    required: ["userId", "userInstruction"]
-                }
             }
-
         ],
     },
 ];
