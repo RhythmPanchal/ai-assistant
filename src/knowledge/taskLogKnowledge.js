@@ -3,7 +3,7 @@ import { TASK_REGISTER } from "../tools/mongo/schema/taskRegisterSchema.js";
 
 function formatTaskLogsForLLM(records) {
     const cleanData = (Array.isArray(records) ? records : [records]).map(item => {
-        const { _id, createdAt, ...cleanItem } = item;
+        const { _id, userId, createdAt, ...cleanItem } = item;
 
         if (cleanItem.date) {
             cleanItem.date = new Date(cleanItem.date).toISOString().split('T')[0];
@@ -15,7 +15,6 @@ function formatTaskLogsForLLM(records) {
                 return cleanTask;
             });
         }
-
         return cleanItem;
     });
 

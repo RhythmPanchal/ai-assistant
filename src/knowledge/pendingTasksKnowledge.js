@@ -4,7 +4,7 @@ import { TASK_CALENDAR } from "../tools/mongo/schema/taskCalendarSchema.js";
 function formatPendingTaskforLLM(records){
     const cleanData = (Array.isArray(records) ? records : [records]).map(item => {
         //Destructure to REMOVE unwanted metadata
-        const { _id, createdAt, updatedAt, scheduledEventId, ...cleanItem } = item;
+        const { _id, userId, createdAt, updatedAt, scheduledEventId, ...cleanItem } = item;
         if (cleanItem.deadline) {
             cleanItem.deadline = new Date(cleanItem.deadline).toISOString().split('T')[0];
         }

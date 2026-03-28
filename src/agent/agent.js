@@ -95,9 +95,7 @@ export async function runAgent(userId, userInstruction) {
 
                 contents.push({
                     role: "model",
-                    parts: functionCalls.map(call => ({
-                        functionCall: call
-                    }))
+                    parts: result.candidates[0].content.parts
                 });
 
                 contents.push({

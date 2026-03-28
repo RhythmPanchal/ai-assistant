@@ -13,4 +13,6 @@ export async function sendMessage(chatId, text) {
       text
     })
   });
+
+  return response; 
 }

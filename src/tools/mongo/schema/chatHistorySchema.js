@@ -34,7 +34,10 @@ export default chatHistorySchema;
 
 
 export function chatHistoryBuilder(userId, text, role = "user") {
-  console.log("In chathistoryBuilder : ", userId , text, role); 
+    if( userId === -1 && role === "user"){
+      role = "system"
+    }
+    
     return {
         userId: userId,
         role: role,

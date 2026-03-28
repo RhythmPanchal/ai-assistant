@@ -10,8 +10,8 @@ const userId = 1136575387;
 // const chatRecords = await chatHistoryKnowledge(userId);
 // console.log("CHAT RECORDS FETCHED: ", chatRecords);
 
-// const pendingTasks = await pendingTasksKnowledge(userId) 
-// console.log("PENDING TASK RECORDS FETCHED :" , pendingTasks);
+const pendingTasks = await pendingTasksKnowledge(userId) 
+console.log("PENDING TASK RECORDS FETCHED :" , pendingTasks);
 
 // let expenseLogs = await expenseLogKnowledge(userId); 
 // console.log("THIS MONTH EXPENSE RECORDS FETCHED :" , expenseLogs);
@@ -19,5 +19,5 @@ const userId = 1136575387;
 // const taskLogs = await taskLogKnowledge(userId); 
 // console.log("LAST 7 DAYS TASKS RECORDS FETCHED :" , taskLogs);
 
-const dietLogs = await dietLogKnowledge(userId); 
-console.log("LAST 7 DAYS DIET RECORDS FETCHED :" , dietLogs);
+// const dietLogs = await dietLogKnowledge(userId); 
+// console.log("LAST 7 DAYS DIET RECORDS FETCHED :" , dietLogs);
