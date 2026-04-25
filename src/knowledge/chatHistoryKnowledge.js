@@ -1,30 +1,35 @@
 import { getDB } from "../tools/mongo/mongoClient.js";
 import { CHAT_HISTORY } from "../tools/mongo/schema/chatHistorySchema.js";
 
-function formatChatHistoryForLLM(records) {
-    return records
-        .map(r => `${r.role.toUpperCase()}: ${r.text}`)
-        .join("\n");
+/**
+ * Converts DB records into Gemini-compatible chat history format.
+ * Maps "assistant" → "model" as required by the Gemini API.
+ * Returns: [{ role: "user"|"model", parts: [{ text: "..." }] }, ...]
+ */
+function formatChatHistoryForGemini(records) {
+    return records.map(r => ({
+        role: r.role === "assistant" ? "model" : r.role,
+        parts: [{ text: r.text }]
+    }));
 }
 
-export default async function chatHistoryKnowledge(userId) {
+async function fetchTodayChatRecords(userId) {
     if (!userId) {
         console.trace();
         throw new Error("userId is required to fetch chat history");
     }
-    
+
     const db = await getDB();
     const collection = db.collection(CHAT_HISTORY);
 
     // Get today's date range (local day)
     const startOfDay = new Date();
-    // startOfDay.setDate(startOfDay.getDate()-1);
     startOfDay.setHours(0, 0, 0, 0);
 
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
-    
-    const records = await collection
+
+    return collection
         .find({
             userId: userId,
             timestamp: {
@@ -32,8 +37,14 @@ export default async function chatHistoryKnowledge(userId) {
                 $lte: endOfDay
             }
         })
-        .sort({ timestamp: -1 }) // newest → oldest
+        .sort({ timestamp: 1 }) // oldest → newest (chronological order)
         .toArray();
-    
-    return formatChatHistoryForLLM(records);
+}
+
+/**
+ * Returns structured chat history for ai.chats.create({ history }).
+ */
+export default async function chatHistoryKnowledge(userId) {
+    const records = await fetchTodayChatRecords(userId);
+    return formatChatHistoryForGemini(records);
 }

@@ -5,7 +5,6 @@ import { dispatchAction } from "./actionDispatcher.js";
 import cron from "node-cron";
 import { CronExpressionParser } from "cron-parser";
 
-
 export default async function executeTriggerJob(job) {
     const db = await getDB();
     const collection = db.collection(TRIGGER_JOB);
@@ -24,8 +23,10 @@ export default async function executeTriggerJob(job) {
 
     // ─── 2. Execute the action ───────────────────────────────────────────────
     try {
-        await dispatchAction(updatedJob.actionType, updatedJob.payload);
-
+        console.log(updatedJob.actionType, updatedJob.payload); 
+        const res = await dispatchAction(updatedJob.actionType, updatedJob.payload);
+        console.log(res); 
+        //TODO : handle the results. 
         // ─── 3a. Success ─────────────────────────────────────────────────────
         const nextExecutionAt = updatedJob.recurring
             ? getNextCronDate(updatedJob.cronPattern, updatedJob.timeZone)

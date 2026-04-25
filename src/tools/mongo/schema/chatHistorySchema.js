@@ -5,7 +5,6 @@ const chatHistorySchema = {
   description: "Conversation history between user and assistant",
   bsonType: "object",
   properties: {
-    _id: { bsonType: "objectId" },
     userId: {
       bsonType: "int",
       description: "Unique user identifier (Telegram / Discord / internal)"

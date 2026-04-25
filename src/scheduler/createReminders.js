@@ -12,7 +12,7 @@ export async function createOneTimeReminder(title, userId, nextExecutionAt, mess
     actionType: "sendMessage",
     payload : {
         chatId : 1136575387,
-        message : message
+        text : "[*REMINDER*]" + message
     },
     status: "active",
     attempts: 0,
@@ -39,7 +39,7 @@ export async function createMultiTimeReminder(title, userId, cron, nextExecution
     actionType: "sendMessage",
     payload : {
         chatId : 1136575387,
-        message : message
+        text : "[*REMINDER*]" + message
     },
     status: "active",
     attempts: 0,

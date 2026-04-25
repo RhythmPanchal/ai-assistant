@@ -17,3 +17,25 @@ Just drop everything casually—I’ll take care of organizing it and keeping yo
     const res = await sendMessage(userId, message); 
     return res; 
 }
+
+/*curent job in mongo
+{
+  "title": "Good Night Routine",
+  "userId": -1,
+  "type": "recurring",
+  "recurring": true,
+  "cronPattern": "0 23 * * *",
+  "timeZone": "Asia/Kolkata",
+  "actionType": "goodNightJob",
+  "payload": {},
+  "status": "active",
+  "attempts": 0,
+  "maxAttempts": 3,
+  "lastExecutedAt": null,
+  "nextExecutionAt": { "$date": "2026-03-30T22:30:00.000Z" },
+  "expiryDate": null,
+  "failedAt": null,
+  "createdAt": { "$date": "2026-03-30T00:00:00.000Z" },
+  "updatedAt": { "$date": "2026-03-30T00:00:00.000Z" }
+}
+*/

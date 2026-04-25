@@ -4,11 +4,17 @@ import { sendMessage } from "../tools/telegram/sendMessage.js";
 import { runAgent } from "../agent/agent.js";
 import fetchCollectionNameAndSchema from "../tools/mongo/fetchCollectionSchema.js";
 import { createOneTimeReminder } from "./createReminders.js";
+import { createTask } from "../tools/mongo/operation/createTask.js";
 
 export const ACTION_MAP = {
   createOneTimeReminder: {
     fn: createOneTimeReminder,
     params: ["title", "userId", "nextExecutionAt", "message"]
+  },
+
+  createTask: {
+    fn: createTask,
+    params: ["userId", "title", "requiredMinutes", "importance", "priorityScore", "category", "deadline", "recurring"]
   },
 
   createRecord: {
@@ -17,8 +23,8 @@ export const ACTION_MAP = {
   },
 
   fetchRecord: {
-    fn: fetchRecord, 
-    params: ["collection", "filters", "sortBy", "sortOrder", "limit"] 
+    fn: fetchRecord,
+    params: ["collection", "filters", "sortBy", "sortOrder", "limit"]
   },
 
   sendMessage: {
@@ -42,6 +48,6 @@ export async function dispatchAction(actionType, payload) {
 
   const args = action.params.map(p => payload[p]);
 
-  const res =  await action.fn(...args);
-  return res === undefined ? true : res ; 
+  const res = await action.fn(...args);
+  return res === undefined ? true : res;
 }

@@ -5,7 +5,6 @@ const expenseRegisterSchema = {
   description: "Daily expense log",
   bsonType: "object",
   properties: {
-    _id: { bsonType: "objectId" },
     userId : {
       bsonType: "int",
       description: "Identifier for the user who owns the expense"

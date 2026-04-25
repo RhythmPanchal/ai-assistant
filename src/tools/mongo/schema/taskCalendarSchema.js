@@ -5,11 +5,6 @@ const taskCalendarSchema = {
   description: "Single task record to be scheduled or completed",
   bsonType: "object",
   properties: {
-    _id: {
-      bsonType: "string",
-      description: "Unique task identifier"
-    },
-
     userId: {
       bsonType: "int",
       description: "Identifier for the user who owns the task"
@@ -67,7 +62,6 @@ const taskCalendarSchema = {
     }
   },
   required: [
-    "id",
     "userId",
     "title",
     "status",

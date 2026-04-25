@@ -1,26 +1,25 @@
-import { runAgent } from "../../agent/agent";
-import pendingTasksKnowledge from "../../knowledge/pendingTasksKnowledge";
-import taskLogKnowledge from "../../knowledge/taskLogKnowledge";
+import { runAgent } from "../../agent/agent.js";
+import pendingTasksKnowledge from "../../knowledge/pendingTasksKnowledge.js";
+import taskLogKnowledge from "../../knowledge/taskLogKnowledge.js";
+import { sendMessage } from "../../tools/telegram/sendMessage.js";
 
-export async function goodMorningJob(){
-    //TODO : fix this, run for all users. 
-    const userId = 1136575387 ; //temp. hardconding 
-    
-    //fetch the pending tasks. 
-    const pendingTasks = await collection
-        .find({
-            userId: userId,
-            status : "Pending"
-        })
-        .sort({ priorityScore : -1 }) // newest → oldest
-        .toArray();
+export async function goodMorningJob() {
+  //TODO : fix this, run for all users. 
+  const userId = 1136575387; //temp. hardcoding 
 
-    const MorningInstruction = `
+  const [pendingTasks, taskLogs] = await Promise.all([
+    pendingTasksKnowledge(userId),
+    taskLogKnowledge(userId),
+  ]);
+
+  const MorningInstruction = `
         You need to create an optimal schedule for today, with a fine good morning message.
-${pendingTasksKnowledge}
+
+Here are the user's pending tasks:
+${pendingTasks}
 
 Step 1: Analyze past 7 days
-${taskLogKnowledge}
+${taskLogs}
 I have given past 7 days task done by user use that.
 * Identify patterns:
   → When user is most productive
@@ -50,17 +49,38 @@ Important rules:
 * If very few tasks → include self-improvement or maintenance tasks
 
 Goal:
-Create a practical, realistic, and optimized day plan tailored to the user’s behavior and constraints, along with a motivational message.
+Create a practical, realistic, and optimized day plan tailored to the user's behavior and constraints, along with a motivational message.
     `
-    let res; 
-    try{
-        const goodMorningMessage = await runAgent(userId,MorningInstruction);
-        res = sendMessage(goodMorningMessage);
-    }catch(error){
-        throw new Error("Caught error while running Good morning job :" , error); 
-    }
-     
-    return res; 
+  let res;
+  try {
+    const goodMorningMessage = await runAgent(userId, MorningInstruction);
+    res = await sendMessage(userId, goodMorningMessage);
+  } catch (error) {
+    throw new Error(`Caught error while running Good morning job: ${error.message}`);
+  }
+
+  return res;
 }
 
 
+/*current job in mongo: 
+{
+  "title": "Good Morning Routine",
+  "userId": -1,
+  "type": "recurring",
+  "recurring": true,
+  "cronPattern": "0 9 * * *",
+  "timeZone": "Asia/Kolkata",
+  "actionType": "goodMorningJob",
+  "payload": {},
+  "status": "active",
+  "attempts": 0,
+  "maxAttempts": 3,
+  "lastExecutedAt": null,
+  "nextExecutionAt": { "$date": "2026-03-31T08:30:00.000Z" },
+  "expiryDate": null,
+  "failedAt": null,
+  "createdAt": { "$date": "2026-03-30T00:00:00.000Z" },
+  "updatedAt": { "$date": "2026-03-30T00:00:00.000Z" }
+}
+*/

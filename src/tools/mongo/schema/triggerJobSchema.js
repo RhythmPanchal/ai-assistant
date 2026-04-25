@@ -5,9 +5,6 @@ const triggerJobSchema = {
   description: "Background scheduler job for reminders, daily planning, and recurring triggers.",
   bsonType: "object",
   properties: {
-
-    _id: { bsonType: "objectId" },
-
     title: {
       bsonType: "string",
       description: "Human-readable title for this trigger job."

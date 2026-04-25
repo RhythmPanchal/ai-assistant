@@ -1,18 +1,15 @@
 import { createCollection } from "../tools/mongo/createCollection.js";
 import { createRecord } from "../tools/mongo/createRecord.js";
 import fetchCollectionNameAndSchema from "../tools/mongo/fetchCollectionSchema.js";
+import { createTask } from "../tools/mongo/operation/createTask.js";
+import { createMultiTimeReminder, createOneTimeReminder } from "../scheduler/createReminders.js";
 
-export const toolFunction = {
-    fetchCollectionNameAndSchema,
-    createCollection,
-    createRecord
-}
 export const tools = [
     {
         functionDeclarations: [
             {
                 name: "fetchCollectionNameAndSchema",
-                description: "Fetches collection name and schema, and decription about that collection in mongodb",
+                description: "Fetches all available collection names, their schemas, and descriptions from MongoDB. You MUST call this before any read or write operation to know the correct collection name and its schema.",
                 parameters: {
                     type: "object"
                 },
@@ -30,34 +27,76 @@ export const tools = [
             },
             {
                 name: "createRecord",
-                description: "Insert a record into a MongoDB collection, it will create a collection if does not exist",
+                description: "Insert a record into a MongoDB collection. You MUST call fetchCollectionNameAndSchema first to know the correct collection name and schema before using this tool.",
                 parameters: {
                     type: "object",
                     properties: {
                         collectionName: { type: "string" },
                         data: {
                             type: "string",
-                            // CRITICAL CHANGE: Be specific about the format
-                            description: "A valid JSON string representing the object to insert. If inserting chat history, format it as an array of objects: {\"messages\": [{\"sender\": \"...\", \"text\": \"...\"}]}. Do NOT use raw newlines."
+                            description: "A valid JSON string representing the object to insert. Do NOT use raw newlines."
                         },
                     },
                     required: ["collectionName", "data"],
                 },
             },
             {
+                name: "createTask",
+                description: "Add a new task to the user's task calendar. Use this whenever the user wants to create, add, or schedule a task. Try to infer and fill ALL fields from the user's message and context — do not leave fields empty if you can reasonably determine their values.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        userId: {
+                            type: "integer",
+                            description: "Identifier of the user who owns this task.",
+                        },
+                        title: {
+                            type: "string",
+                            description: "Title or name of the task.",
+                        },
+                        requiredMinutes: {
+                            type: "integer",
+                            description: "Estimated time in minutes to complete the task. Infer from context if possible.",
+                        },
+                        importance: {
+                            type: "string",
+                            enum: ["Low", "Medium", "High"],
+                            description: "Importance level of the task. Infer from the nature of the task if not explicitly stated.",
+                        },
+                        priorityScore: {
+                            type: "integer",
+                            description: "Priority score from 1 (highest) to 5 (lowest). Infer based on urgency and importance.",
+                        },
+                        category: {
+                            type: "string",
+                            description: "Category of the task e.g. Work, Personal, Health, Finance. Always try to assign a category.",
+                        },
+                        deadline: {
+                            type: "string",
+                            description: "ISO 8601 datetime string for the task deadline. Infer from context like 'by tomorrow', 'this week', etc.",
+                        },
+                        recurring: {
+                            type: "string",
+                            enum: ["hourly", "daily", "weekly", "monthly", "annually"],
+                            description: "Recurrence pattern for the task. Set if the task appears to be recurring.",
+                        },
+                    },
+                    required: ["userId", "title"],
+                },
+            },
+            {
                 name: "fetchRecord",
-                description: `Fetch records from the database. Use this to retrieve expense, task, or diet records for the user.Always include userId in filters.For date ranges use $gte and $lt operators with ISO date strings like "2026-03-01".`,
+                description: "Fetch records from the database. You MUST call fetchCollectionNameAndSchema first to know the correct collection name before using this tool. Always include userId in filters. For date ranges use $gte and $lt operators with ISO date strings like \"2026-03-01\".",
                 parameters: {
                     type: "object",
                     properties: {
                         collection: {
                             type: "string",
-                            enum: ["expenseRegister", "taskRegister", "dietRegister", "taskCalendar"],
-                            description: "The collection to query",
+                            description: "The collection to query. Call fetchCollectionNameAndSchema first to get valid collection names.",
                         },
                         filters: {
                             type: "object",
-                            description: `MongoDB filter object. Supports operators: $eq, $gt, $gte, $lt, $lte, $in, $nin.Example: { "userId": 123, "date": { "$gte": "2026-03-01", "$lt": "2026-04-01" }, "category": "Food" }`,
+                            description: `MongoDB filter object. Supports operators: $eq, $gt, $gte, $lt, $lte, $in, $nin. Example: { "userId": 123, "date": { "$gte": "2026-03-01", "$lt": "2026-04-01" }, "category": "Food" }`,
                         },
                         sortBy: {
                             type: "string",
@@ -142,12 +181,10 @@ export const tools = [
 
 /*
 Services needed for what --> 
-create taskCalendar ❌
+create taskCalendar ✅ (addTask tool)
 fetch tasksCalendar ❌
 update taskCalendar ❌
 fetch any collection according to user requirments 
-
-abending Service as it is not scalable --> better to create another tool to find schema and collection name which trigger every time agent request is send. 
 
 in case of Trigger only 
 

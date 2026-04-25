@@ -5,7 +5,6 @@ const tasksRegisterSchema = {
   description: "Daily log of performed tasks",
   bsonType: "object",
   properties: {
-    _id: { bsonType: "objectId" },
     userId : {
       bsonType : "int", 
       description : "User Id who owns this task log"

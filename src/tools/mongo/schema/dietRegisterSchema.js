@@ -5,7 +5,6 @@ const dietRegisterSchema = {
   description: "Daily diet and nutrition log",
   bsonType: "object",
   properties: {
-    _id: { bsonType: "objectId" },
     userId : {
       bsonType: "int",
       description: "Identifier for the user who owns the diet record"
