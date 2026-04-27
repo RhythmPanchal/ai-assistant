@@ -1,7 +1,7 @@
 import { tools } from "./toolOperator.js";
 import { gemini_ai, gemini_model } from "./geminiClient.js";
 import { createRecord } from "../tools/mongo/createRecord.js";
-import { chatHistoryBuilder, CHAT_HISTORY } from "../tools/mongo/schema/chatHistorySchema.js";
+import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHistorySchema.js";
 import { buildSystemInstruction } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
 import { dispatchAction } from "../scheduler/actionDispatcher.js";
@@ -11,7 +11,6 @@ export async function runAgent(userId, userInstruction) {
     try {
         // 1. Fetch chat history from DB
         const chatHistory = await chatHistoryKnowledge(userId);
-
         // 2. Build dynamic system instruction (agent persona + live time)
         const systemInstruction = buildSystemInstruction();
 
@@ -25,11 +24,9 @@ export async function runAgent(userId, userInstruction) {
             },
         });
 
-        // 4. Save user message to DB
-        await createRecord(
-            CHAT_HISTORY,
-            chatHistoryBuilder(userId, userInstruction, "user")
-        );
+        // 4. Start building conversation document
+        const conversation = new ConversationBuilder(userId);
+        conversation.addUserMessage(userInstruction);
 
         // 5. Send user's query via chat (clean separation)
         console.log("User Query:", userInstruction);
@@ -41,6 +38,9 @@ export async function runAgent(userId, userInstruction) {
             console.log("\nLLM response (function calls):");
             console.dir(response, { depth: null, colors: true });
 
+            // Record assistant function calls
+            conversation.addAssistantFunctionCalls(response.functionCalls);
+
             const functionResponseParts = [];
 
             for (const functionCall of response.functionCalls) {
@@ -49,6 +49,9 @@ export async function runAgent(userId, userInstruction) {
 
                 console.log("\nExecuted function response:", toolResponse);
                 console.log("---------------------------------");
+
+                // Record each tool result
+                conversation.addToolResult(name, toolResponse);
 
                 functionResponseParts.push({
                     functionResponse: {
@@ -66,11 +69,9 @@ export async function runAgent(userId, userInstruction) {
         const LLMresponse = response.text;
         console.log("FINAL LLM RESPONSE:", LLMresponse);
 
-        // 8. Save assistant response to DB
-        await createRecord(
-            CHAT_HISTORY,
-            chatHistoryBuilder(userId, LLMresponse, "assistant")
-        );
+        // 8. Record final assistant reply & persist entire conversation
+        conversation.addAssistantMessage(LLMresponse);
+        await createRecord(CHAT_HISTORY, conversation.build());
 
         return LLMresponse;
     } catch (error) {

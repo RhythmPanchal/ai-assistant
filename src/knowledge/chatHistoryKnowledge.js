@@ -2,15 +2,52 @@ import { getDB } from "../tools/mongo/mongoClient.js";
 import { CHAT_HISTORY } from "../tools/mongo/schema/chatHistorySchema.js";
 
 /**
- * Converts DB records into Gemini-compatible chat history format.
- * Maps "assistant" → "model" as required by the Gemini API.
- * Returns: [{ role: "user"|"model", parts: [{ text: "..." }] }, ...]
+ * Converts conversation documents (new nested format) into
+ * Gemini-compatible chat history: [{ role, parts }]
+ *
+ * Mapping:
+ *   user          → { role: "user",     parts: [{ text }] }
+ *   assistant/text→ { role: "model",    parts: [{ text }] }
+ *   assistant/fc  → { role: "model",    parts: [{ functionCall: { name, args } }, …] }
+ *   tool          → { role: "function", parts: [{ functionResponse: { name, response } }] }
  */
-function formatChatHistoryForGemini(records) {
-    return records.map(r => ({
-        role: r.role === "assistant" ? "model" : r.role,
-        parts: [{ text: r.text }]
-    }));
+function formatChatHistoryForGemini(conversations) {
+    const history = [];
+
+    for (const conv of conversations) {
+        for (const msg of conv.messages) {
+            if (msg.role === "user") {
+                history.push({
+                    role: "user",
+                    parts: [{ text: msg.content }],
+                });
+            } else if (msg.role === "assistant" && msg.functionCalls) {
+                history.push({
+                    role: "model",
+                    parts: msg.functionCalls.map(fc => ({
+                        functionCall: { name: fc.name, args: fc.args },
+                    })),
+                });
+            } else if (msg.role === "assistant" && msg.content) {
+                history.push({
+                    role: "model",
+                    parts: [{ text: msg.content }],
+                });
+            } else if (msg.role === "tool") {
+                history.push({
+                    role: "user",
+                    parts: [{
+                        functionResponse: {
+                            name: msg.toolName,
+                            response: { result: msg.result },
+                        },
+                    }],
+                });
+            }
+        }
+    }
+
+    return history;
 }
 
 async function fetchTodayChatRecords(userId) {
@@ -32,12 +69,12 @@ async function fetchTodayChatRecords(userId) {
     return collection
         .find({
             userId: userId,
-            timestamp: {
+            createdAt: {
                 $gte: startOfDay,
-                $lte: endOfDay
-            }
+                $lte: endOfDay,
+            },
         })
-        .sort({ timestamp: 1 }) // oldest → newest (chronological order)
+        .sort({ createdAt: 1 }) // oldest → newest (chronological order)
         .toArray();
 }
 
@@ -45,6 +82,6 @@ async function fetchTodayChatRecords(userId) {
  * Returns structured chat history for ai.chats.create({ history }).
  */
 export default async function chatHistoryKnowledge(userId) {
-    const records = await fetchTodayChatRecords(userId);
-    return formatChatHistoryForGemini(records);
+    const conversations = await fetchTodayChatRecords(userId);
+    return formatChatHistoryForGemini(conversations);
 }
