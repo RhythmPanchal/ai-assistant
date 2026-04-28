@@ -44,7 +44,7 @@ const expenseRegisterSchema = {
       bsonType: "date"
     }
   },
-  required: ["name", "amount", "category", "date", "month", "year", "createdAt"]
+  required: ["name", "amount", "category", "date", "month", "year"]
 };
 
 export default expenseRegisterSchema;

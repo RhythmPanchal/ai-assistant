@@ -61,7 +61,7 @@ const chatHistorySchema = {
     }
   },
 
-  required: ["conversationId", "userId", "messages", "createdAt"]
+  required: ["conversationId", "userId", "messages"]
 };
 export default chatHistorySchema;
 
@@ -122,8 +122,7 @@ export class ConversationBuilder {
     return {
       conversationId: this.conversationId,
       userId: this.userId,
-      messages: this.messages,
-      createdAt: this.createdAt,
+      messages: this.messages
     };
   }
 }

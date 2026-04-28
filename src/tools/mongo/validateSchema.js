@@ -156,7 +156,8 @@ function validateObject(data, properties) {
 }
 
 
-async function ValidateSchema(collectionName, userData) {
+async function ValidateSchema(collectionName, userData, options = {}) {
+    const { skipRequired = false } = options;
     const schemas = fetchCollectionNameAndSchema();
     const collectionSchema = schemas[collectionName];
     
@@ -167,12 +168,14 @@ async function ValidateSchema(collectionName, userData) {
     const properties = collectionSchema.schema.properties;
     const required = collectionSchema.schema.required || [];
 
-    // Check all required fields are present
-    required.forEach(field => {
-        if (!(field in userData)) {
-            throw new Error(`${field} is required but not present in userData.`);
-        }
-    });
+    // Check all required fields are present (skip for partial updates)
+    if (!skipRequired) {
+        required.forEach(field => {
+            if (!(field in userData)) {
+                throw new Error(`${field} is required but not present in userData.`);
+            }
+        });
+    }
 
     // Validate the data against properties
     return validateObject(userData, properties);

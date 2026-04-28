@@ -26,7 +26,7 @@ async function triggerExecutor() {
 		.find({ nextExecutionAt: { $lte: now } })
 		.toArray();
 
-	console.log(`[Trigger Executor] found ${pendingTriggers.length} pending triggers. [ ${pendingTriggers.join(" ")} ] at ${now}`);
+	// console.log(`[Trigger Executor] found ${pendingTriggers.length} pending triggers. [ ${pendingTriggers.join(" ")} ] at ${now}`);
 	return processTriggers(pendingTriggers);
 }
 

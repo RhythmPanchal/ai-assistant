@@ -89,7 +89,6 @@ const dietRegisterSchema = {
     "meals",
     "dailyTotals",
     "dailyGoals",
-    "createdAt"
   ]
 };
 

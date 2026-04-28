@@ -62,7 +62,7 @@ const tasksRegisterSchema = {
     }
   },
 
-  required: ["date", "day", "performedTasks", "createdAt"]
+  required: ["date", "day", "performedTasks"]
 };
 
 export default tasksRegisterSchema;

@@ -95,8 +95,7 @@ const triggerJobSchema = {
     "timeZone",
     "actionType",
     "status",
-    "nextExecutionAt",
-    "createdAt"
+    "nextExecutionAt"
   ]
 };
 

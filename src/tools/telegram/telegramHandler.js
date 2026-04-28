@@ -1,16 +1,32 @@
 import { runAgent } from "../../agent/agent.js";
-import { sendMessage } from "./sendMessage.js";
+import { sendMessage, editMessage, createThinkingAnimation } from "./sendMessage.js";
+
 
 export async function handleTelegramMessage(message) {
   const chatId = message.chat.id;
   const text = message.text;
 
+  // Send animated "Thinking..." placeholder + typing indicator
+  const thinking = await createThinkingAnimation(chatId);
+
   try {
     const reply = await runAgent(chatId, text);
     console.log("RUN AGENT COMPLETED WITH THIS REPLY");
-    await sendMessage(chatId, reply);
+
+    // Stop animation BEFORE editing — prevents race condition
+    thinking.stop();
+
+    // Edit the placeholder with the actual response
+    if (thinking.messageId) {
+      await editMessage(chatId, thinking.messageId, reply);
+    } else {
+      await sendMessage(chatId, reply);
+    }
   } catch (error) {
     console.error("[handleTelegramMessage] error:", error);
+
+    // Stop animation BEFORE editing
+    thinking.stop();
 
     const errorReply = [
       "⚠️ *Something went wrong*",
@@ -23,6 +39,10 @@ export async function handleTelegramMessage(message) {
       `🪲 \`${String(error.message || error).slice(0, 200)}\``,
     ].join("\n");
 
-    await sendMessage(chatId, errorReply);
+    if (thinking.messageId) {
+      await editMessage(chatId, thinking.messageId, errorReply);
+    } else {
+      await sendMessage(chatId, errorReply);
+    }
   }
 }

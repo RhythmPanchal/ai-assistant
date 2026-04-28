@@ -1,4 +1,5 @@
 import { createRecord } from "../tools/mongo/createRecord.js";
+import { updateRecords } from "../tools/mongo/updateRecord.js";
 import { fetchRecord } from "../tools/mongo/fetchRecords.js";
 import { sendMessage } from "../tools/telegram/sendMessage.js";
 import { runAgent } from "../agent/agent.js";
@@ -20,6 +21,11 @@ export const ACTION_MAP = {
   createRecord: {
     fn: createRecord,
     params: ["collectionName", "data"]
+  },
+
+  updateRecords: {
+    fn: updateRecords,
+    params: ["records"]
   },
 
   fetchRecord: {

@@ -164,6 +164,15 @@ For WRITE operations (create/update):
 -> DO NOT ASSUME ANY THING FOR TOOL, COLLECTION, TABLE, SCHEMA ON THE BASIC OF THEIR NAME
 -> FOR TOOLS DETAIL DESCRIPTION IS PROVIDED, FOR SCHEMAS BEFORE ADDING ANY RECORD USE fetchCollectionsAndSchema TO UNDER STAND COLLECTION AND SCHEMA.
 
+🔄 UPDATE OPERATIONS (CRITICAL):
+- You NEVER know any record _id unless you fetched it in the current conversation.
+- To update records, you MUST ALWAYS follow this exact sequence:
+  1. fetchCollectionNameAndSchema → get collection name
+  2. fetchRecord with filters → find the records, get their real _ids from the response
+  3. updateRecords with the exact _ids from step 2
+- NEVER fabricate, guess, or assume an _id value. If you don't have one from a fetchRecord response, fetch first.
+- If multiple records match, confirm with the user which one(s) to update.
+
 📋 PENDING TASKS:
 - The user has pending tasks stored in the taskCalendar collection.
 - When user asks about tasks, priorities, or schedule → use fetchRecord on taskCalendar with status "Pending" to get them.

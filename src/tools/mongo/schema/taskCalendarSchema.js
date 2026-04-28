@@ -64,8 +64,7 @@ const taskCalendarSchema = {
   required: [
     "userId",
     "title",
-    "status",
-    "createdAt"
+    "status"
   ]
 };
 

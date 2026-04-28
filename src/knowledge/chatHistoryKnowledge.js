@@ -34,15 +34,16 @@ function formatChatHistoryForGemini(conversations) {
                     parts: [{ text: msg.content }],
                 });
             } else if (msg.role === "tool") {
-                history.push({
-                    role: "user",
-                    parts: [{
-                        functionResponse: {
-                            name: msg.toolName,
-                            response: { result: msg.result },
-                        },
-                    }],
-                });
+                // history.push({
+                //     role: "user",
+                //     parts: [{
+                //         functionResponse: {
+                //             name: msg.toolName,
+                //             response: { result: msg.result },
+                //         },
+                //     }],
+                // });
+                //skip this, as convo history is getting so long. 
             }
         }
     }

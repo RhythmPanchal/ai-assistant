@@ -68,3 +68,91 @@ export async function sendMessage(chatId, text) {
   return data;
 }
 
+/**
+ * Edits an existing Telegram message in-place.
+ *
+ * @param {number|string} chatId
+ * @param {number}        messageId  - message_id returned by sendMessage
+ * @param {string}        text       - new text content
+ */
+export async function editMessage(chatId, messageId, text) {
+  const htmlText = markdownToTelegramHTML(text);
+
+  const response = await fetch(`${TELEGRAM_API}/editMessageText`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text: htmlText,
+      parse_mode: "HTML",
+    }),
+  });
+
+  const data = await response.json();
+
+  // If HTML parsing fails, fallback to plain text
+  if (!data.ok && data.description?.includes("can't parse entities")) {
+    console.warn("[editMessage] HTML parse failed, falling back to plain text");
+    const fallback = await fetch(`${TELEGRAM_API}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text: text,
+      }),
+    });
+    return await fallback.json();
+  }
+
+  return data;
+}
+
+/**
+ * Sends a "✨ Thinking..." placeholder and animates it with a text spinner
+ * while also keeping the Telegram "typing" chat action alive.
+ *
+ * Returns { messageId, stop() }.
+ *
+ * @param {number|string} chatId
+ * @returns {Promise<{ messageId: number|null, stop: () => void }>}
+ */
+export async function createThinkingAnimation(chatId) {
+  const frames = [
+    "⏳ Processing",
+    "⌛ Processing.",
+    "⏳ Processing..",
+    "⌛ Processing...",
+  ];
+
+  let stopped = false;
+
+  // 1. Send the initial placeholder
+  const msg = await sendMessage(chatId, frames[0]);
+  const messageId = msg?.result?.message_id ?? null;
+
+  let frameIndex = 1;
+
+  // 2. Animate the placeholder every 1 s
+  const animationId = messageId
+    ? setInterval(() => {
+        if (stopped) return; // guard: don't edit after stop
+        const text = frames[frameIndex % frames.length];
+        frameIndex++;
+        editMessage(chatId, messageId, text).catch(() => {});
+      }, 1000)
+    : null;
+
+  // 3. Keep Telegram "typing" badge alive every 4 s
+  
+
+  return {
+    messageId,
+    stop: () => {
+      stopped = true; // flag first, so any in-flight callback is a no-op
+      if (animationId) clearInterval(animationId);
+      clearInterval(typingId);
+    },
+  };
+}
