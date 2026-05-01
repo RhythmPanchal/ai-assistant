@@ -145,7 +145,14 @@ export async function createThinkingAnimation(chatId) {
     : null;
 
   // 3. Keep Telegram "typing" badge alive every 4 s
-  
+  const typingId = setInterval(() => {
+    if (stopped) return;
+    fetch(`${TELEGRAM_API}/sendChatAction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, action: "typing" }),
+    }).catch(() => {});
+  }, 4000);
 
   return {
     messageId,
