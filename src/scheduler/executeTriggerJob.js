@@ -25,7 +25,7 @@ export default async function executeTriggerJob(job) {
     try {
         console.log(updatedJob.actionType, updatedJob.payload); 
         const res = await dispatchAction(updatedJob.actionType, updatedJob.payload);
-        console.log(res); 
+        console.log("[executeTriggerJob] job function result",res); 
         //TODO : handle the results. 
         // ─── 3a. Success ─────────────────────────────────────────────────────
         const nextExecutionAt = updatedJob.recurring

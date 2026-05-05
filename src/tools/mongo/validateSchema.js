@@ -1,5 +1,17 @@
 import fetchCollectionNameAndSchema from "./fetchCollectionSchema.js";
 
+//LLM can not generate data with date-time format.
+//it gives strings, so we need to convert it.
+//otherwise schema validation will break. 
+export function normalizeDates(obj) {
+    const avoidNormalization = ["cronPattern"]
+    for (const key in obj) {
+        if ( typeof obj[key] === "string" && !isNaN(Date.parse(obj[key])) && !avoidNormalization.includes(key) ) {
+            obj[key] = new Date(obj[key]);
+        }
+    }
+    return obj;
+}
 
 function validateType(fieldName, value, bsonType, schema) {
     switch (bsonType) {
@@ -116,6 +128,7 @@ function validateField(fieldName, value, schema) {
     }
 
     if (!isValidType) {
+        console.error(`Got invalid value : ${value} for field : ${fieldName}`);
         throw new Error(
             `Field '${fieldName}' has invalid type. Expected: ${allowedTypes.join(' or ')}, Got: ${typeof value}`
         );

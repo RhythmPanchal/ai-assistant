@@ -1,4 +1,4 @@
-import { sendMessage } from "../../tools/telegram/sendMessage";
+import { sendMessage } from "../../tools/telegram/sendMessage.js";
 
 export async function goodNightJob(){
     const userId = 1136575387; 

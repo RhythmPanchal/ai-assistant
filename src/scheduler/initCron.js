@@ -23,7 +23,9 @@ async function triggerExecutor() {
 
 	const pendingTriggers = await db
 		.collection(TRIGGER_JOB)
-		.find({ nextExecutionAt: { $lte: now } })
+		.find({ 
+			status : "active",
+			nextExecutionAt: { $lte: now } })
 		.toArray();
 
 	// console.log(`[Trigger Executor] found ${pendingTriggers.length} pending triggers. [ ${pendingTriggers.join(" ")} ] at ${now}`);

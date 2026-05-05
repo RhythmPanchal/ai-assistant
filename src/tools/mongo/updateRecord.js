@@ -2,21 +2,7 @@ import { ObjectId } from "mongodb";
 import { getDB } from "./mongoClient.js";
 import fetchCollectionNameAndSchema from "./fetchCollectionSchema.js";
 import ValidateSchema from "./validateSchema.js";
-
-//LLM can not generate data with date-time format.
-//it gives strings, so we need to convert it.
-//otherwise schema validation will break. 
-function normalizeDates(obj) {
-    for (const key in obj) {
-        if (
-            typeof obj[key] === "string" &&
-            !isNaN(Date.parse(obj[key]))
-        ) {
-            obj[key] = new Date(obj[key]);
-        }
-    }
-    return obj;
-}
+import { normalizeDates } from "./validateSchema.js";
 
 async function processUpdate(collectionName, id, data) {
 

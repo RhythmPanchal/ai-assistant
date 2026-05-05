@@ -4,6 +4,7 @@ import triggerJobSchema, { TRIGGER_JOB } from "./schema/triggerJobSchema.js";
 import expenseRegisterSchema, { EXPENSE_REGISTER } from "./schema/expenseRegisterSchema.js";
 import tasksRegisterSchema, { TASK_REGISTER } from "./schema/taskRegisterSchema.js";
 import dietRegisterSchema, { DIET_REGISTER } from "./schema/dietRegisterSchema.js";
+import userScheduleSchema, { USER_SCHEDULE } from "./schema/userScheduleSchema.js";
 
 export default function fetchCollectionNameAndSchema() {
 
@@ -36,6 +37,11 @@ export default function fetchCollectionNameAndSchema() {
         [DIET_REGISTER]: {
             collectionName: "dietRegister",
             schema: dietRegisterSchema,
+            writeable: true
+        },
+        [USER_SCHEDULE]: {
+            collectionName: "userSchedule",
+            schema: userScheduleSchema,
             writeable: true
         },
     }

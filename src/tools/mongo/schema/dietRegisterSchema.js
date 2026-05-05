@@ -87,8 +87,7 @@ const dietRegisterSchema = {
     "month",
     "year",
     "meals",
-    "dailyTotals",
-    "dailyGoals",
+    "dailyTotals"
   ]
 };
 
