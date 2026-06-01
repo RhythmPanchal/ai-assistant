@@ -5,14 +5,31 @@ import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHis
 import { buildSystemInstruction } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
 import { dispatchAction } from "../scheduler/actionDispatcher.js";
+import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
+import goodNightFlow from "./flows/goodNightFlow.js";
+import goodMorningFlow from "./flows/goodMorningFlow.js";
 
+// flowType → overlay instruction. Listed explicitly per known flow so the
+// agent never picks up an overlay we have not vetted. Add new flows here.
+const FLOW_OVERLAYS = {
+    [goodNightFlow.flowType]: goodNightFlow.instruction,
+    [goodMorningFlow.flowType]: goodMorningFlow.instruction,
+};
 
 export async function runAgent(userId, userInstruction) {
     try {
         // 1. Fetch chat history from DB
         const chatHistory = await chatHistoryKnowledge(userId);
-        // 2. Build dynamic system instruction (agent persona + live time)
-        const systemInstruction = buildSystemInstruction();
+
+        // 2. Pull any active flow overlays for this user (goodNight, goodMorning, …).
+        //    Lazy expiry inside getOpenFlowsForUser keeps stale flows from leaking.
+        const openFlows = await getOpenFlowsForUser(userId);
+        const overlays = openFlows
+            .map(flow => FLOW_OVERLAYS[flow.flowType])
+            .filter(Boolean);
+
+        // 3. Build dynamic system instruction (agent persona + live time + overlays)
+        const systemInstruction = buildSystemInstruction(overlays);
 
         // 3. Create SDK-managed chat with history & system instruction
         const chat = gemini_ai.chats.create({

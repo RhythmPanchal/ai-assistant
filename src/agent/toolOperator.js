@@ -251,6 +251,30 @@ export const tools = [
                 },
             },
             {
+                name: "completeFlow",
+                description: "Close the user's currently-open scheduled-routine flow (e.g. 'goodNight', 'goodMorning'). Call this ONLY when the active flow's overlay instructions say its completion criteria are met. Do NOT call for normal ad-hoc chat — only when a routine flow is active and finishing.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        userId: {
+                            type: "integer",
+                            description: "Identifier of the user whose flow should be closed.",
+                        },
+                        flowType: {
+                            type: "string",
+                            enum: ["goodNight", "goodMorning"],
+                            description: "Which flow to close.",
+                        },
+                        reason: {
+                            type: "string",
+                            enum: ["done", "skipped"],
+                            description: "Why the flow is closing. 'done' = completion criteria met. 'skipped' = user explicitly opted out for tonight/today.",
+                        },
+                    },
+                    required: ["userId", "flowType", "reason"],
+                },
+            },
+            {
                 name: "createMultiTimeReminder",
                 description: "Creates a reminder which can be used for multiple times for the user. It will trigger recursively according to cron until expiry date. please give cron and expiry date according to user query",
                 parameters: {

@@ -59,18 +59,19 @@ Goal: Maintain productivity, financial discipline, and balanced lifestyle
 🧩 CORE RESPONSIBILITIES
 -------------------------------------
 
-* DAILY UPDATE HANDLING
+* DAILY UPDATE HANDLING (ad-hoc, mid-chat)
 -------------------------------------
-When user provides:
-- Food intake
-- Expenses
-- Completed tasks
+When the user mentions in passing during normal chat:
+- Food intake → log to dietRegister
+- Expenses → log to expenseRegister
+- Completed tasks → log to taskRegister
 
 You must:
-- Update records using tools (if available)
-- Structure the data properly
-- Acknowledge briefly
-- Optionally give small insight (e.g., overspending warning)
+- Call createRecord into the correct collection (call fetchCollectionNameAndSchema first if you do not know the schema).
+- Explicitly tell the user what was logged (e.g. "Logged ₹200 on auto.").
+- Optionally give a small insight (e.g., overspending warning).
+
+The structured end-of-day / start-of-day wrap-up has its own active-flow overlay appended below when relevant — do not duplicate that ceremony in normal chat.
 
 -------------------------------------
 
@@ -211,8 +212,13 @@ export default agentInstruction;
 
 /**
  * Builds the full system instruction with fresh date/time context.
+ *
+ * `overlays` is an optional array of focused instructions appended only
+ * for the duration of an active flow (e.g. goodNight wrap-up). Keeping
+ * them out of the base persona prevents per-turn token bloat and the
+ * hallucinations that come with always-on ceremony rules.
  */
-export function buildSystemInstruction() {
+export function buildSystemInstruction(overlays = []) {
   const ctx = getCurrentContext();
 
   let systemInstruction = agentInstruction + `
@@ -229,6 +235,10 @@ Use this to interpret:
 - "evening"
 - etc.
 `;
+
+  if (Array.isArray(overlays) && overlays.length > 0) {
+    systemInstruction += "\n" + overlays.join("\n\n");
+  }
 
   return systemInstruction;
 }
