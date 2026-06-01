@@ -110,8 +110,14 @@ export async function editMessage(chatId, messageId, text) {
 }
 
 /**
- * Sends a "✨ Thinking..." placeholder and animates it with a text spinner
- * while also keeping the Telegram "typing" chat action alive.
+ * Sends a single "Processing..." placeholder message and keeps the
+ * Telegram "typing" chat action alive while the agent works.
+ *
+ * The text-edit animation was removed: Telegram rate-limits messages
+ * at ~1/sec/chat, so the per-second editMessage calls could queue
+ * ahead of the real reply and delay the final response. The free
+ * sendChatAction("typing") indicator gives the same UX signal
+ * without consuming the chat's message-rate budget.
  *
  * Returns { messageId, stop() }.
  *
@@ -119,32 +125,13 @@ export async function editMessage(chatId, messageId, text) {
  * @returns {Promise<{ messageId: number|null, stop: () => void }>}
  */
 export async function createThinkingAnimation(chatId) {
-  const frames = [
-    "⏳ Processing",
-    "⌛ Processing.",
-    "⏳ Processing..",
-    "⌛ Processing...",
-  ];
-
   let stopped = false;
 
-  // 1. Send the initial placeholder
-  const msg = await sendMessage(chatId, frames[0]);
+  // 1. Send the initial placeholder so we have a message_id to edit later.
+  const msg = await sendMessage(chatId, "⏳ Processing...");
   const messageId = msg?.result?.message_id ?? null;
 
-  let frameIndex = 1;
-
-  // 2. Animate the placeholder every 1 s
-  const animationId = messageId
-    ? setInterval(() => {
-        if (stopped) return; // guard: don't edit after stop
-        const text = frames[frameIndex % frames.length];
-        frameIndex++;
-        editMessage(chatId, messageId, text).catch(() => {});
-      }, 1000)
-    : null;
-
-  // 3. Keep Telegram "typing" badge alive every 4 s
+  // 2. Keep Telegram "typing" badge alive every 4 s (it auto-clears after ~5 s).
   const typingId = setInterval(() => {
     if (stopped) return;
     fetch(`${TELEGRAM_API}/sendChatAction`, {
@@ -158,7 +145,6 @@ export async function createThinkingAnimation(chatId) {
     messageId,
     stop: () => {
       stopped = true; // flag first, so any in-flight callback is a no-op
-      if (animationId) clearInterval(animationId);
       clearInterval(typingId);
     },
   };
