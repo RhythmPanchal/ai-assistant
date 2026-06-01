@@ -1,6 +1,12 @@
 import { getDB } from "../tools/mongo/mongoClient.js";
 import { CHAT_HISTORY } from "../tools/mongo/schema/chatHistorySchema.js";
 
+// Cap the number of past turns we replay to Gemini. Each turn is one
+// runAgent call (one chatHistory doc). 15 turns is enough recall for
+// same-day context without ballooning the prompt — compaction of the
+// older window will land in a follow-up PR.
+const MAX_HISTORY_TURNS = 15;
+
 /**
  * Converts conversation documents (new nested format) into
  * Gemini-compatible chat history: [{ role, parts }]
@@ -67,7 +73,10 @@ async function fetchTodayChatRecords(userId) {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    return collection
+    // Pull the N most recent turns (newest first), then reverse for
+    // chronological replay. This avoids loading the entire day's history
+    // once the conversation gets long.
+    const recent = await collection
         .find({
             userId: userId,
             createdAt: {
@@ -75,8 +84,11 @@ async function fetchTodayChatRecords(userId) {
                 $lte: endOfDay,
             },
         })
-        .sort({ createdAt: 1 }) // oldest → newest (chronological order)
+        .sort({ createdAt: -1 })
+        .limit(MAX_HISTORY_TURNS)
         .toArray();
+
+    return recent.reverse();
 }
 
 /**
