@@ -11,12 +11,14 @@ app.use(express.json());
 
 async function initService(){
   try {
-    initCron(); 
-    await getDB(); 
+    // DB must be ready before the cron tick fires or the first trigger
+    // executor runs against an uninitialized client.
+    await getDB();
+    initCron();
     await startTelegramPolling(handleTelegramMessage);
-     
+
   }catch (e){
-    console.log("Bot chatting is down : ", e); 
+    console.log("Bot chatting is down : ", e);
   }
 }
 

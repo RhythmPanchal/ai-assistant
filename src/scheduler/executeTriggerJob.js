@@ -2,8 +2,16 @@ import { getDB } from "../tools/mongo/mongoClient.js";
 import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
 import { ObjectId } from "mongodb";
 import { dispatchAction } from "./actionDispatcher.js";
-import cron from "node-cron";
 import { CronExpressionParser } from "cron-parser";
+
+// Exponential backoff between in-process retries:
+// attempt 1 → 2s, attempt 2 → 4s, attempt 3 → 8s.
+const RETRY_BASE_MS = 2000;
+const RETRY_MAX_MS = 30000;
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export default async function executeTriggerJob(job) {
     const db = await getDB();
@@ -66,7 +74,9 @@ export default async function executeTriggerJob(job) {
                 }
             );
 
-            console.log(`[executeTriggerJob] Retrying job ${job._id}. Attempt ${attempts}/${maxAttempts}.`);
+            const backoffMs = Math.min(RETRY_BASE_MS * 2 ** (attempts - 1), RETRY_MAX_MS);
+            console.log(`[executeTriggerJob] Retrying job ${job._id} in ${backoffMs}ms. Attempt ${attempts}/${maxAttempts}.`);
+            await delay(backoffMs);
             return executeTriggerJob({ ...updatedJob, attempts, status: "active" });
         }
 

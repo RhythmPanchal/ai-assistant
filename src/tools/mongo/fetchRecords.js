@@ -13,6 +13,17 @@ const WHITELISTED_COLLECTIONS = {
 
 const VALID_OPERATORS = ["$eq", "$gt", "$gte", "$lt", "$lte", "$in", "$nin"];
 
+// Only coerce strings that actually look like ISO 8601 dates.
+// Date.parse() accepts almost any numeric string (e.g. "1136575387" → year 123),
+// which silently turned userId strings into Date objects and broke queries.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+function coerceMaybeDate(val) {
+	if (typeof val !== "string" || !ISO_DATE_RE.test(val)) return val;
+	const parsed = new Date(val);
+	return isNaN(parsed.getTime()) ? val : parsed;
+}
+
 export async function fetchRecord(collection, filters = {}, sortBy = "date", sortOrder = "desc", limit = 50) {
 	// 1. Whitelist check
 	const collectionName = WHITELISTED_COLLECTIONS[collection];
@@ -29,17 +40,12 @@ export async function fetchRecord(collection, filters = {}, sortBy = "date", sor
 				if (!VALID_OPERATORS.includes(op)) {
 					throw new Error(`Operator "${op}" is not allowed.`);
 				}
-				// Convert date strings to Date objects
-				sanitizedCondition[op] = typeof val === "string" && !isNaN(Date.parse(val))
-					? new Date(val)
-					: val;
+				sanitizedCondition[op] = coerceMaybeDate(val);
 			}
 			sanitizedFilters[field] = sanitizedCondition;
 		} else {
 			// Direct equality value
-			sanitizedFilters[field] = typeof condition === "string" && !isNaN(Date.parse(condition))
-				? new Date(condition)
-				: condition;
+			sanitizedFilters[field] = coerceMaybeDate(condition);
 		}
 	}
 
