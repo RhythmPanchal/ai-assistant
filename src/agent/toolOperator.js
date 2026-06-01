@@ -35,8 +35,8 @@ export const tools = [
                     properties: {
                         collectionName: { type: "string" },
                         data: {
-                            type: "string",
-                            description: "A valid JSON string representing the object to insert. Do NOT use raw newlines."
+                            type: "object",
+                            description: "The object to insert. Field names and types must match the collection's schema as returned by fetchCollectionNameAndSchema."
                         },
                     },
                     required: ["collectionName", "data"],
