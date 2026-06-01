@@ -1,24 +1,21 @@
 import { sendMessage } from "../../tools/telegram/sendMessage.js";
+import { openFlow } from "../flows/activeFlowsRepo.js";
+import { goodNightFlow } from "../../agent/flows/goodNightFlow.js";
 
-export async function goodNightJob(){
-    const userId = 1136575387; 
-    const message = `
-    Hey! 😊
-Before we wrap up the day, give me a quick update:
+export async function goodNightJob() {
+  // TODO: iterate real users once multi-user support lands
+  const userId = 1136575387;
 
-• How was your day overall?
-• What tasks did you complete?
-• What did you eat today?
-• How much did you spend and on what?
+  await openFlow({
+    userId,
+    flowType: goodNightFlow.flowType,
+    ttlMinutes: goodNightFlow.ttlMinutes,
+  });
 
-Just drop everything casually—I’ll take care of organizing it and keeping you on track 📊
-    `
-
-    const res = await sendMessage(userId, message); 
-    return res; 
+  return sendMessage(userId, goodNightFlow.openerMessage);
 }
 
-/*curent job in mongo
+/* current job in mongo
 {
   "title": "Good Night Routine",
   "userId": -1,
