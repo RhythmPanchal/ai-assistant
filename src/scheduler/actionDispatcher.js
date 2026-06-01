@@ -3,7 +3,7 @@ import { updateRecords } from "../tools/mongo/updateRecord.js";
 import { fetchRecord } from "../tools/mongo/fetchRecords.js";
 import { sendMessage } from "../tools/telegram/sendMessage.js";
 import fetchCollectionNameAndSchema from "../tools/mongo/fetchCollectionSchema.js";
-import { createOneTimeReminder } from "./createReminders.js";
+import { createOneTimeReminder, createMultiTimeReminder } from "./createReminders.js";
 import { createTask } from "../tools/mongo/operation/createTask.js";
 import { insertSchedule } from "../tools/mongo/operation/insertSchedule.js";
 import { goodMorningJob } from "./jobs/goodMorningJob.js";
@@ -13,6 +13,11 @@ export const ACTION_MAP = {
   createOneTimeReminder: {
     fn: createOneTimeReminder,
     params: ["title", "userId", "nextExecutionAt", "message"]
+  },
+
+  createMultiTimeReminder: {
+    fn: createMultiTimeReminder,
+    params: ["title", "userId", "cron", "nextExecutionAt", "message", "expiryDate"]
   },
 
   createTask: {

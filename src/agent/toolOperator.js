@@ -266,9 +266,13 @@ export const tools = [
                             type: "int",
                             description: "Identifier of the user who owns this reminder.",
                         },
+                        cron: {
+                            type: "string",
+                            description: "Cron expression describing the recurrence (5-field, Asia/Kolkata timezone). e.g. '0 20 * * *' for every day at 8pm.",
+                        },
                         nextExecutionAt: {
                             type: "string",
-                            description: "ISO 8601 datetime string for when the reminder should trigger. e.g. '2025-06-01T20:00:00'",
+                            description: "ISO 8601 datetime string for when the reminder should first trigger. e.g. '2025-06-01T20:00:00'",
                         },
                         message: {
                             type: "string",
@@ -280,7 +284,7 @@ export const tools = [
                         }
 
                     },
-                    required: ["title", "userId", "nextExecutionAt", "message", "expiryDate"],
+                    required: ["title", "userId", "cron", "nextExecutionAt", "message", "expiryDate"],
                 },
             }
         ],
