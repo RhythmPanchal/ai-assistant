@@ -24,7 +24,7 @@ function coerceMaybeDate(val) {
 	return isNaN(parsed.getTime()) ? val : parsed;
 }
 
-export async function fetchRecord(collection, filters = {}, sortBy = "date", sortOrder = "desc", limit = 50) {
+export async function fetchRecord(collection, filters = {}, sortBy, sortOrder = "desc", limit = 50) {
 	// 1. Whitelist check
 	const collectionName = WHITELISTED_COLLECTIONS[collection];
 	if (!collectionName) {
@@ -49,13 +49,16 @@ export async function fetchRecord(collection, filters = {}, sortBy = "date", sor
 		}
 	}
 
-	// 3. Build sort
-	const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
-
-	// 4. Query
+	// 3. Build query — only apply a sort when the caller specified a field,
+	// since the default 'date' didn't exist on every whitelisted collection
+	// (e.g. taskCalendar uses 'deadline') and silently produced empty cursors.
 	const db = await getDB();
 	const col = db.collection(collectionName);
-	const records = await col.find(sanitizedFilters).sort(sort).limit(limit).toArray();
+	let cursor = col.find(sanitizedFilters);
+	if (sortBy) {
+		cursor = cursor.sort({ [sortBy]: sortOrder === "asc" ? 1 : -1 });
+	}
+	const records = await cursor.limit(limit).toArray();
 
 	// 5. Format for LLM
 	return records; 
