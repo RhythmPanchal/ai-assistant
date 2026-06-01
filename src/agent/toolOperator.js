@@ -208,14 +208,12 @@ export const tools = [
                         },
                         sortBy: {
                             type: "string",
-                            description: "Field to sort by. Defaults to 'date'",
-                            default: "date",
+                            description: "Optional. Field to sort by. Must exist on the target collection (e.g. 'deadline' for taskCalendar, 'date' for expenseRegister/taskRegister/dietRegister). Omit to skip sorting.",
                         },
                         sortOrder: {
                             type: "string",
                             enum: ["asc", "desc"],
-                            description: "Sort direction. Defaults to 'desc' (newest first)",
-                            default: "desc",
+                            description: "Sort direction. Only applied when sortBy is provided. Defaults to 'desc' (newest first).",
                         },
                         limit: {
                             type: "number",
