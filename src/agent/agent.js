@@ -41,25 +41,35 @@ export async function runAgent(userId, userInstruction) {
             // Record assistant function calls
             conversation.addAssistantFunctionCalls(response.functionCalls);
 
-            const functionResponseParts = [];
+            // Run independent tool calls in parallel. Order of the response
+            // array is preserved so it still lines up with response.functionCalls
+            // when we ship results back to Gemini.
+            const toolResults = await Promise.all(
+                response.functionCalls.map(async (functionCall) => {
+                    const { name, args } = functionCall;
+                    try {
+                        const result = await dispatchAction(name, args);
+                        return { name, result };
+                    } catch (err) {
+                        // Surface the error to the LLM as a tool result so it
+                        // can self-correct instead of crashing the whole turn.
+                        console.error(`[runAgent] tool "${name}" failed:`, err);
+                        return { name, result: { error: err.message || String(err) } };
+                    }
+                })
+            );
 
-            for (const functionCall of response.functionCalls) {
-                const { name, args } = functionCall;
-                const toolResponse = await dispatchAction(name, args);
-
-                console.log("\nExecuted function response:", toolResponse);
+            const functionResponseParts = toolResults.map(({ name, result }) => {
+                console.log("\nExecuted function response:", result);
                 console.log("---------------------------------");
-
-                // Record each tool result
-                conversation.addToolResult(name, toolResponse);
-
-                functionResponseParts.push({
+                conversation.addToolResult(name, result);
+                return {
                     functionResponse: {
-                        name: functionCall.name,
-                        response: { result: toolResponse },
+                        name,
+                        response: { result },
                     },
-                });
-            }
+                };
+            });
 
             // Send tool results back — chat object auto-tracks conversation turns
             response = await chat.sendMessage({ message: functionResponseParts });
