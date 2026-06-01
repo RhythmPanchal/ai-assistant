@@ -237,7 +237,7 @@ export const tools = [
                             description: "Human-readable title for the reminder. e.g. 'Take medicine at 8pm'",
                         },
                         userId: {
-                            type: "int",
+                            type: "integer",
                             description: "Identifier of the user who owns this reminder.",
                         },
                         nextExecutionAt: {
@@ -263,7 +263,7 @@ export const tools = [
                             description: "Human-readable title for the reminder. e.g. 'Take medicine at 8pm'",
                         },
                         userId: {
-                            type: "int",
+                            type: "integer",
                             description: "Identifier of the user who owns this reminder.",
                         },
                         cron: {
