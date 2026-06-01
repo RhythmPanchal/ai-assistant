@@ -5,18 +5,22 @@ import { normalizeDates } from "./validateSchema.js";
 
 
 export async function createRecord(collectionName, data) {
-  let refinedData = {};
-  try {
-    data = typeof data === 'string' ? JSON.parse(data) : data;
-    refinedData = normalizeDates(data);
-    const validatedData = ValidateSchema(collectionName, refinedData);
-  } catch (e) {
-    throw new Error("Invalid JSON string provided for data");
-  }
-
   if (!collectionName || !data) {
     throw new Error("Invalid parameter: collectionName and data are required.");
   }
+
+  // Parse JSON first — only this step should raise an "Invalid JSON" error.
+  let parsed;
+  try {
+    parsed = typeof data === 'string' ? JSON.parse(data) : data;
+  } catch (e) {
+    throw new Error(`Invalid JSON string provided for data: ${e.message}`);
+  }
+
+  // Normalize and validate separately so schema-validation errors
+  // surface their real message to the caller (and to the LLM).
+  const refinedData = normalizeDates(parsed);
+  ValidateSchema(collectionName, refinedData);
 
   const db = await getDB();
   const collection = db.collection(collectionName);
