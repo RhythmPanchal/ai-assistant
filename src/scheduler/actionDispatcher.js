@@ -8,6 +8,7 @@ import { createTask } from "../tools/mongo/operation/createTask.js";
 import { insertSchedule } from "../tools/mongo/operation/insertSchedule.js";
 import { goodMorningJob } from "./jobs/goodMorningJob.js";
 import { goodNightJob } from "./jobs/goodNightJob.js";
+import { completeFlow } from "./flows/completeFlow.js";
 
 export const ACTION_MAP = {
   createOneTimeReminder: {
@@ -63,6 +64,11 @@ export const ACTION_MAP = {
   goodNightJob: {
     fn: goodNightJob,
     params: []
+  },
+
+  completeFlow: {
+    fn: completeFlow,
+    params: ["userId", "flowType", "reason"]
   }
 
 };
