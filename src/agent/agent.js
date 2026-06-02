@@ -28,11 +28,6 @@ export async function runAgent(userId, userInstruction) {
             .map(flow => FLOW_OVERLAYS[flow.flowType])
             .filter(Boolean);
 
-        // TEMP DEBUG — revert with the temp logs commit
-        console.log(
-            `[runAgent] user=${userId} openFlows=${openFlows.map(f => f.flowType).join(",") || "(none)"} overlaysApplied=${overlays.length}`
-        );
-
         // 3. Build dynamic system instruction (agent persona + live time + overlays)
         const systemInstruction = buildSystemInstruction(overlays);
 

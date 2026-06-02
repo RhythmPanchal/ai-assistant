@@ -37,12 +37,6 @@ export async function openFlow({ userId, flowType, ttlMinutes }) {
   };
 
   const res = await col.insertOne(doc);
-
-  // TEMP DEBUG — revert with the temp logs commit
-  console.log(
-    `[activeFlowsRepo] openFlow → ${flowType} for user ${userId}, expires ${doc.expiresAt.toISOString()}, _id=${res.insertedId}`
-  );
-
   return { _id: res.insertedId, ...doc };
 }
 
@@ -55,7 +49,7 @@ export async function closeFlowByAgent({ userId, flowType, reason = "done" }) {
   const col = db.collection(ACTIVE_FLOWS);
   const now = new Date();
 
-  const result = await col.findOneAndUpdate(
+  return col.findOneAndUpdate(
     { userId, flowType, state: "open" },
     {
       $set: {
@@ -68,13 +62,6 @@ export async function closeFlowByAgent({ userId, flowType, reason = "done" }) {
     },
     { returnDocument: "after" }
   );
-
-  // TEMP DEBUG — revert with the temp logs commit
-  console.log(
-    `[activeFlowsRepo] closeFlowByAgent → ${flowType} for user ${userId}, reason=${reason}, matched=${!!result}`
-  );
-
-  return result;
 }
 
 /**
