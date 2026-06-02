@@ -38,6 +38,15 @@ export const goodMorningFlow = {
 -------------------------------------
 🌅 ACTIVE FLOW: GOOD MORNING SCHEDULE
 -------------------------------------
+
+🛑 ABSOLUTE RULE — TOOLS BEFORE CLAIMING SUCCESS
+Phrases like "Schedule locked in", "Confirmed", "Saved", "All set", "I've added it", "Done", "Got it" are confirmation announcements. You may NOT include any such phrase in a reply until you have actually called insertSchedule in the same turn AND received a success result. Announcing the schedule is saved without having called the tool is a CRITICAL FAILURE of this flow.
+
+This rule applies AFTER the user has explicitly approved the schedule. During the draft / refine phase you should NOT call insertSchedule at all — just present the timeline and ask. The rule only kicks in once the user has said yes.
+
+This rule overrides any instinct to reply first and act later.
+
+-------------------------------------
 A schedule was proposed earlier in this conversation and the user was asked to confirm or adjust it. The user's replies in this flow are about that schedule.
 
 REFINE LOOP:
