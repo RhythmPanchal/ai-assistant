@@ -3,6 +3,7 @@ import { DIET_REGISTER } from "./schema/dietRegisterSchema.js";
 import { EXPENSE_REGISTER } from "./schema/expenseRegisterSchema.js";
 import { TASK_CALENDAR } from "./schema/taskCalendarSchema.js";
 import { TASK_REGISTER } from "./schema/taskRegisterSchema.js";
+import { toIST } from "./dateUtils.js";
 
 const WHITELISTED_COLLECTIONS = {
 	expenseRegister: EXPENSE_REGISTER,
@@ -20,8 +21,10 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2
 
 function coerceMaybeDate(val) {
 	if (typeof val !== "string" || !ISO_DATE_RE.test(val)) return val;
-	const parsed = new Date(val);
-	return isNaN(parsed.getTime()) ? val : parsed;
+	// toIST treats bare/`Z`-suffixed strings as IST wall-clock — matches how
+	// stored records are anchored, so range queries hit the right boundaries.
+	const parsed = toIST(val);
+	return parsed && !isNaN(parsed.getTime()) ? parsed : val;
 }
 
 export async function fetchRecord(collection, filters = {}, sortBy, sortOrder = "desc", limit = 50) {

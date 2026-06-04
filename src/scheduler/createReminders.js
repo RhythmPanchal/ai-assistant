@@ -1,5 +1,6 @@
 import { createRecord } from "../tools/mongo/createRecord.js";
 import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
+import { toIST } from "../tools/mongo/dateUtils.js";
 
 export async function createOneTimeReminder(title, userId, nextExecutionAt, message) {
   const record = {
@@ -18,7 +19,7 @@ export async function createOneTimeReminder(title, userId, nextExecutionAt, mess
     attempts: 0,
     maxAttempts: 3,
     lastExecutedAt: null,
-    nextExecutionAt: new Date(nextExecutionAt),
+    nextExecutionAt: toIST(nextExecutionAt),
     expiryDate: null,
     failedAt: null,
     createdAt: new Date(),
@@ -45,8 +46,8 @@ export async function createMultiTimeReminder(title, userId, cron, nextExecution
     attempts: 0,
     maxAttempts: 3,
     lastExecutedAt: null,
-    nextExecutionAt: new Date(nextExecutionAt),
-    expiryDate,
+    nextExecutionAt: toIST(nextExecutionAt),
+    expiryDate: toIST(expiryDate),
     failedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),

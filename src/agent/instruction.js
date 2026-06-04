@@ -1,15 +1,19 @@
-const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const TZ = "Asia/Kolkata";
 
 /**
- * Returns fresh system context (date/time) at call time,
- * not stale values from module-load time.
+ * Always anchor system context in Asia/Kolkata. Previous version used
+ * toISOString() and toLocaleTimeString() which followed the host's timezone —
+ * on a UTC server that shifted TODAY_DATE near IST midnight and fed the LLM
+ * UTC wall-clock time, which then leaked into reminder strings.
  */
 function getCurrentContext() {
   const now = new Date();
+  const opts = { timeZone: TZ };
   return {
-    TODAY_DATE: now.toISOString().split("T")[0],
-    TODAY_DAY: days[now.getDay()],
-    CURRENT_TIME: now.toLocaleTimeString()
+    TODAY_DATE: now.toLocaleDateString("en-CA", opts),                          // YYYY-MM-DD
+    TODAY_DAY: now.toLocaleDateString("en-US", { ...opts, weekday: "long" }),
+    CURRENT_TIME: now.toLocaleTimeString("en-GB", { ...opts, hour12: false }),  // HH:mm:ss
+    TIMEZONE: TZ
   };
 }
 
@@ -228,6 +232,9 @@ export function buildSystemInstruction(overlays = []) {
 - Today's date: ${ctx.TODAY_DATE}
 - Current day: ${ctx.TODAY_DAY}
 - Current time: ${ctx.CURRENT_TIME}
+- Timezone: ${ctx.TIMEZONE} (IST)
+
+All values above are in Asia/Kolkata. When you emit datetime strings to any tool (reminders, deadlines, schedules), write them as naive local ISO with NO trailing "Z" and NO timezone offset — e.g. "${ctx.TODAY_DATE}T21:00:00" for 9 PM IST. The server interprets your strings as IST; appending "Z" or "+05:30" produces wrong wall-clock times.
 
 Use this to interpret:
 - "tomorrow"

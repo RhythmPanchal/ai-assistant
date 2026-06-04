@@ -1,8 +1,7 @@
 import { getDB } from "../mongoClient.js";
 import { USER_SCHEDULE } from "../schema/userScheduleSchema.js";
 import ValidateSchema from "../validateSchema.js";
-
-const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+import { toIST } from "../dateUtils.js";
 
 /**
  * Insert a new daily schedule for the user.
@@ -26,12 +25,17 @@ export async function insertSchedule(userId, date, slots, summary, motivationalN
         return { success: false, error: "slots must be a non-empty array." };
     }
 
-    const parsedDate = new Date(date);
-    if (isNaN(parsedDate.getTime())) {
+    const parsedDate = toIST(date);
+    if (!parsedDate || isNaN(parsedDate.getTime())) {
         return { success: false, error: "Invalid date format. Use ISO string like '2026-05-01'." };
     }
 
-    const dayName = days[parsedDate.getDay()];
+    // Day name from the IST wall-clock day, not the host's local day —
+    // otherwise a UTC server would label IST-midnight as the previous day.
+    const istDayName = parsedDate.toLocaleDateString("en-US", {
+        timeZone: "Asia/Kolkata",
+        weekday: "long",
+    });
 
     // Enrich slots with defaults
     const enrichedSlots = slots.map(slot => ({
@@ -49,7 +53,7 @@ export async function insertSchedule(userId, date, slots, summary, motivationalN
     const record = {
         userId,
         date: parsedDate,
-        day: dayName,
+        day: istDayName,
         slots: enrichedSlots,
         summary: summary || null,
         motivationalNote: motivationalNote || null

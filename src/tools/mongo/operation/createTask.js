@@ -1,5 +1,6 @@
 import { createRecord } from "../createRecord.js";
 import { TASK_CALENDAR } from "../schema/taskCalendarSchema.js";
+import { toIST } from "../dateUtils.js";
 
 export async function createTask(userId, title, requiredMinutes, importance, priorityScore, category, deadline, recurring) {
     // Validate required fields before attempting to insert
@@ -17,7 +18,7 @@ export async function createTask(userId, title, requiredMinutes, importance, pri
         importance: importance || null,
         priorityScore: priorityScore || null,
         category: category || null,
-        deadline: deadline ? new Date(deadline) : null,
+        deadline: deadline ? toIST(deadline) : null,
         status: "Pending",
         recurring: recurring || null,
         scheduledEventId: null,

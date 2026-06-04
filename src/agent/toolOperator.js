@@ -75,7 +75,7 @@ export const tools = [
                         },
                         deadline: {
                             type: "string",
-                            description: "ISO 8601 datetime string for the task deadline. Infer from context like 'by tomorrow', 'this week', etc.",
+                            description: "Task deadline in Asia/Kolkata. Write as naive ISO local time with NO trailing 'Z' and NO timezone offset, e.g. '2026-06-10T18:00:00' for 6 PM IST. Infer from context like 'by tomorrow', 'this week', etc.",
                         },
                         recurring: {
                             type: "string",
@@ -98,7 +98,7 @@ export const tools = [
                         },
                         date: {
                             type: "string",
-                            description: "ISO date string for the schedule day, e.g. '2026-05-01'.",
+                            description: "Schedule day in Asia/Kolkata as 'YYYY-MM-DD' (date only, no time, no 'Z', no offset), e.g. '2026-05-01'.",
                         },
                         slots: {
                             type: "array",
@@ -240,7 +240,7 @@ export const tools = [
                         },
                         nextExecutionAt: {
                             type: "string",
-                            description: "ISO 8601 datetime string for when the reminder should trigger. e.g. '2025-06-01T20:00:00'",
+                            description: "When the reminder should fire, in Asia/Kolkata. Write as naive ISO local time with NO trailing 'Z' and NO timezone offset, e.g. '2025-06-01T20:00:00' for 8 PM IST.",
                         },
                         message: {
                             type: "string",
@@ -294,7 +294,7 @@ export const tools = [
                         },
                         nextExecutionAt: {
                             type: "string",
-                            description: "ISO 8601 datetime string for when the reminder should first trigger. e.g. '2025-06-01T20:00:00'",
+                            description: "When the reminder should first fire, in Asia/Kolkata. Write as naive ISO local time with NO 'Z' and NO timezone offset, e.g. '2025-06-01T20:00:00' for 8 PM IST.",
                         },
                         message: {
                             type: "string",
@@ -302,7 +302,7 @@ export const tools = [
                         },
                         expiryDate: {
                             type: "string",
-                            description: "ISO 8601 datetime string for after which trigger will expire. e.g. '2025-06-01T20:00:00'",
+                            description: "When the recurring reminder should stop, in Asia/Kolkata. Same format rule as nextExecutionAt — naive ISO local time, no 'Z', no offset. e.g. '2026-06-01T20:00:00'.",
                         }
 
                     },

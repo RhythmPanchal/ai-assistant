@@ -1,13 +1,15 @@
 import fetchCollectionNameAndSchema from "./fetchCollectionSchema.js";
+import { toIST } from "./dateUtils.js";
 
-//LLM can not generate data with date-time format.
-//it gives strings, so we need to convert it.
-//otherwise schema validation will break. 
+// LLM emits dates as strings; Mongo's $jsonSchema rejects strings on `date`
+// fields, so we convert here. Routing through toIST also re-anchors the value
+// to Asia/Kolkata, which protects against the LLM appending a stray `Z`
+// (which `new Date()` would otherwise honor as UTC).
 export function normalizeDates(obj) {
     const avoidNormalization = ["cronPattern"]
     for (const key in obj) {
         if ( typeof obj[key] === "string" && !isNaN(Date.parse(obj[key])) && !avoidNormalization.includes(key) ) {
-            obj[key] = new Date(obj[key]);
+            obj[key] = toIST(obj[key]);
         }
     }
     return obj;

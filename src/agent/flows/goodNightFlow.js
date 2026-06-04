@@ -148,11 +148,22 @@ If the user goes off-topic mid-flow (e.g. "remind me to call mom tomorrow"), han
 -------------------------------------
 🏁 CLOSING THE FLOW (call completeFlow)
 -------------------------------------
-Call completeFlow with flowType "goodNight" when EITHER:
-(a) Every category the user said they would share has been written AND the user has signaled wrap-up ("gn", "that's all", "nothing else", "sleeping now"). Pass reason "done". A category being legitimately empty (e.g. user explicitly said "no expenses today") still counts as "done".
-(b) The user explicitly opts out of the whole wrap-up ("skip", "not today", "don't feel like it"). Pass reason "skipped".
+The three required categories are FOOD, TASKS, EXPENSE. Each must reach a definite state before you may close as "done":
+  ✓ LOGGED    — you successfully ran createRecord / updateRecords for it in this conversation, OR
+  ✓ DECLINED  — the user EXPLICITLY said there was nothing to log for that category, e.g. "no expenses today", "didn't eat anything proper", "no tasks completed", "skip food", "nothing on that".
 
-Do NOT call completeFlow with reason "skipped" just because some items were not logged due to missing details — ask for the details instead, keep the flow open.
+A sleepy sign-off — "gn", "that's all", "nothing else", "sleeping now", "ok done" — covers wrap-up intent but does NOT by itself count as DECLINED for any category that the user never addressed. If even one of the three is still UNKNOWN (not logged AND not explicitly declined), you MUST probe for it once more before closing, even if the user said "gn".
+
+Examples:
+  • Logged food + tasks, user never mentioned expense, user says "gn" → expense is UNKNOWN → reply "Quick one — any expenses today?" Do NOT close.
+  • Logged food, user said "no tasks today" + "no expenses", user says "gn" → all three resolved (1 LOGGED, 2 DECLINED) → close with reason "done".
+  • User has said nothing concrete, just "tiring day, gn" → all three UNKNOWN → ask about all three. Do NOT close.
+
+Call completeFlow with reason:
+- "done"    — all three categories are LOGGED or DECLINED (any mix), AND the user has signaled wrap-up.
+- "skipped" — the user explicitly opted out of the whole wrap-up ("skip", "not today", "don't feel like it") before engaging with any category.
+
+NEVER use reason "skipped" because items lacked detail — ask for the detail and keep the flow open.
 -------------------------------------
 `.trim()
 };
