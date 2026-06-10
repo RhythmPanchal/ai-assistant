@@ -2,6 +2,7 @@ import { getDB } from "../mongoClient.js";
 import { USER_SCHEDULE } from "../schema/userScheduleSchema.js";
 import ValidateSchema from "../validateSchema.js";
 import { toIST } from "../dateUtils.js";
+import { ensureGCalendarReady } from "../../gCalendar/ensureGCalendarReady.js";
 
 /**
  * Insert a new daily schedule for the user.
@@ -71,5 +72,19 @@ export async function insertSchedule(userId, date, slots, summary, motivationalN
 
     const result = await collection.insertOne(record);
     console.log("[insertSchedule] Created schedule for", date);
+
+    // Kick the gCalendar connector check off the critical path. We don't
+    // await it — any failure here must not roll back or surface to the
+    // schedule insert, which is the actual product write. The handler
+    // itself decides whether to prompt, refresh, or skip silently based
+    // on the connector's appSupport state.
+    ensureGCalendarReady(userId)
+      .then((res) => {
+        console.log("[insertSchedule] gCalendar check:", res.status);
+      })
+      .catch((err) => {
+        console.error("[insertSchedule] gCalendar check failed:", err);
+      });
+
     return { success: true, insertedId: result.insertedId };
 }
