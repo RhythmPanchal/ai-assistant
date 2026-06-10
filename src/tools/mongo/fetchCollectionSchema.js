@@ -6,6 +6,7 @@ import tasksRegisterSchema, { TASK_REGISTER } from "./schema/taskRegisterSchema.
 import dietRegisterSchema, { DIET_REGISTER } from "./schema/dietRegisterSchema.js";
 import userScheduleSchema, { USER_SCHEDULE } from "./schema/userScheduleSchema.js";
 import usersSchema, { USERS } from "./schema/usersSchema.js";
+import connectorsSchema, { CONNECTORS } from "./schema/connectorsSchema.js";
 
 // Built once at module load. Schemas are static — there's no reason to
 // rebuild this object on every createRecord / updateRecords / fetch call.
@@ -48,6 +49,11 @@ const COLLECTION_REGISTRY = Object.freeze({
     [USERS]: {
         collectionName: "users",
         schema: usersSchema,
+        writeable: true
+    },
+    [CONNECTORS]: {
+        collectionName: "connectors",
+        schema: connectorsSchema,
         writeable: true
     },
 });
