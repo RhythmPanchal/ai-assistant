@@ -2,26 +2,28 @@
  * Exchange the authorization `code` returned by Google's consent screen for
  * an access_token + refresh_token bundle.
  *
- * Called from the /oauth/google/callback Express handler. The returned
+ * Called from the /auth/callback Express handler. The returned
  * shape is normalized so the caller can hand it straight to
  * `enableConnectorWithTokens`.
  */
+
+import { getRedirectUri } from "./redirectUri.js";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 export async function exchangeCodeForTokens(code) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.OAUTH_REDIRECT_URI;
 
-  if (!clientId || !clientSecret || !redirectUri) {
+  if (!clientId || !clientSecret) {
     throw new Error(
-      "[exchangeCodeForTokens] GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OAUTH_REDIRECT_URI required"
+      "[exchangeCodeForTokens] GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET required"
     );
   }
   if (!code) {
     throw new Error("[exchangeCodeForTokens] authorization code is required");
   }
+  const redirectUri = getRedirectUri();
 
   // Google's /token endpoint expects application/x-www-form-urlencoded.
   const body = new URLSearchParams({

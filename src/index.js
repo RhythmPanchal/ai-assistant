@@ -33,11 +33,13 @@ app.get('/', (req, res) => {
 });
 
 // OAuth flow endpoints — Google redirects the user's browser through these.
-// OAUTH_REDIRECT_URI in env must point at /oauth/google/callback on this host,
-// and that URL must be registered as an Authorized redirect URI in the
-// Google Cloud Console OAuth client config.
-app.get('/oauth/google/start', handleOAuthStart);
-app.get('/oauth/google/callback', handleOAuthCallback);
+// /auth/callback must match the Authorized redirect URI registered in the
+// Google Cloud Console OAuth client. /auth/start is our internal kickoff
+// endpoint (not registered with Google). Both paths are derived from
+// PUBLIC_BASE_URL via tools/gCalendar/oauth/redirectUri.js so they stay in
+// lock-step with the redirect_uri sent to Google.
+app.get('/auth/start', handleOAuthStart);
+app.get('/auth/callback', handleOAuthCallback);
 
 
 app.listen(PORT, () => {

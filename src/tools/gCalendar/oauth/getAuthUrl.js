@@ -3,10 +3,10 @@
  * browser. The flow:
  *
  *   1. We send the user a Telegram button whose URL is our
- *      `/oauth/google/start?token=<state>` endpoint.
+ *      `/auth/start?token=<state>` endpoint.
  *   2. That endpoint looks up the state, then 302-redirects here.
  *   3. Google shows the consent screen, then redirects back to
- *      `OAUTH_REDIRECT_URI` with `code` + `state`.
+ *      the registered redirect URI (`/auth/callback`) with `code` + `state`.
  *
  * Critical query params:
  *   - access_type=offline   : required to receive a refresh_token at all.
@@ -19,6 +19,8 @@
  *   - state=<token>         : CSRF guard, verified on callback.
  */
 
+import { getRedirectUri } from "./redirectUri.js";
+
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
 // Scope is intentionally `calendar.app.created` rather than full
@@ -30,16 +32,13 @@ export const GCALENDAR_SCOPE =
 
 export function getAuthUrl(state) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = process.env.OAUTH_REDIRECT_URI;
-
-  if (!clientId || !redirectUri) {
-    throw new Error(
-      "[getAuthUrl] GOOGLE_CLIENT_ID and OAUTH_REDIRECT_URI must be set"
-    );
+  if (!clientId) {
+    throw new Error("[getAuthUrl] GOOGLE_CLIENT_ID must be set");
   }
   if (!state) {
     throw new Error("[getAuthUrl] state token is required");
   }
+  const redirectUri = getRedirectUri();
 
   const params = new URLSearchParams({
     client_id: clientId,

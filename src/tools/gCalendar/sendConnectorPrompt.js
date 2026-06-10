@@ -21,27 +21,10 @@ import {
 import { registerCallbackHandler } from "../telegram/callbackRouter.js";
 import { disableConnector } from "../mongo/operation/connector.js";
 import { createOAuthState } from "./oauth/oauthState.js";
+import { getStartUrl } from "./oauth/redirectUri.js";
 
 const GCALENDAR_APP = "gCalendar";
 const DISMISS_PREFIX = "gcal:dismiss:";
-
-/**
- * Build the user-facing URL for the Connect button. The button takes the
- * user straight into Express's /oauth/google/start handler, which then
- * 302-redirects them to Google with the right scopes + state.
- */
-function buildConnectUrl(stateToken) {
-  const base = process.env.PUBLIC_BASE_URL;
-  if (!base) {
-    throw new Error(
-      "[sendConnectorPrompt] PUBLIC_BASE_URL env var is required " +
-      "(the public HTTPS origin of the Express server)."
-    );
-  }
-  // Trim trailing slash to keep the joined URL clean.
-  const origin = base.replace(/\/+$/, "");
-  return `${origin}/oauth/google/start?token=${encodeURIComponent(stateToken)}`;
-}
 
 /**
  * Send the inline-keyboard prompt to the user. Mints a fresh state token so
@@ -51,7 +34,7 @@ function buildConnectUrl(stateToken) {
  */
 export async function sendConnectorPrompt(userId, appName = GCALENDAR_APP) {
   const stateToken = await createOAuthState(userId, appName);
-  const connectUrl = buildConnectUrl(stateToken);
+  const connectUrl = getStartUrl(stateToken);
 
   const text =
     "📅 *Sync your schedule to Google Calendar?*\n" +

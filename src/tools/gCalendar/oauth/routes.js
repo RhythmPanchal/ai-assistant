@@ -1,11 +1,11 @@
 /**
  * Express handlers for the gCalendar OAuth flow.
  *
- *   GET /oauth/google/start?token=<state>
+ *   GET /auth/start?token=<state>
  *     - resolves the one-time state token to a (userId, appName)
  *     - 302-redirects to Google's consent screen
  *
- *   GET /oauth/google/callback?code=...&state=...
+ *   GET /auth/callback?code=...&state=...
  *     - verifies state, exchanges code for tokens
  *     - flips the connector to ENABLED with tokens stored
  *     - sends a Telegram confirmation message back to the user
