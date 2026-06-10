@@ -32,40 +32,107 @@ function markdownToTelegramHTML(text) {
   return result;
 }
 
-export async function sendMessage(chatId, text) {
+/**
+ * Send a Telegram message.
+ *
+ * @param {number|string} chatId
+ * @param {string} text
+ * @param {object} [options]
+ * @param {object} [options.replyMarkup]  Telegram reply_markup object
+ *   (e.g. { inline_keyboard: [[ { text, callback_data | url } ]] }). Forwarded
+ *   verbatim to the Bot API; we don't validate shape.
+ */
+export async function sendMessage(chatId, text, options = {}) {
   if (!chatId) {
     throw new Error(`[sendMessage] missing chat id : ${chatId}`);
   }
 
   const htmlText = markdownToTelegramHTML(text);
 
+  const body = {
+    chat_id: chatId,
+    text: htmlText,
+    parse_mode: "HTML"
+  };
+  if (options.replyMarkup) {
+    body.reply_markup = options.replyMarkup;
+  }
+
   const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: htmlText,
-      parse_mode: "HTML"
-    })
+    body: JSON.stringify(body)
   });
 
   const data = await response.json();
 
-  // If HTML parsing fails, fallback to plain text (no formatting)
+  // If HTML parsing fails, fallback to plain text (no formatting). Keep
+  // reply_markup so the buttons still render in the fallback path.
   if (!data.ok && data.description?.includes("can't parse entities")) {
     console.warn("[sendMessage] HTML parse failed, falling back to plain text");
+    const fallbackBody = { chat_id: chatId, text };
+    if (options.replyMarkup) fallbackBody.reply_markup = options.replyMarkup;
     const fallback = await fetch(`${TELEGRAM_API}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text  // send raw, unformatted
-      })
+      body: JSON.stringify(fallbackBody)
     });
     return await fallback.json();
   }
 
   return data;
+}
+
+/**
+ * Higher-level helper: send a message with a row of inline buttons.
+ * Buttons are objects of the form { text, callbackData } (button click sends
+ * the callback_data string back to us via callback_query) or { text, url }
+ * (opens the URL in the user's browser — used for OAuth start links).
+ *
+ * @param {number|string} chatId
+ * @param {string} text
+ * @param {Array<{text: string, callbackData?: string, url?: string}>} buttons
+ */
+export async function sendInlineButtons(chatId, text, buttons) {
+  const row = buttons.map(b => {
+    if (b.url) return { text: b.text, url: b.url };
+    return { text: b.text, callback_data: b.callbackData };
+  });
+  return sendMessage(chatId, text, {
+    replyMarkup: { inline_keyboard: [row] }
+  });
+}
+
+/**
+ * Acknowledge a callback_query so Telegram stops showing the loading
+ * spinner on the button. Optionally show a small toast to the user.
+ */
+export async function answerCallbackQuery(callbackQueryId, text = "") {
+  return fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+      text,
+      show_alert: false
+    })
+  });
+}
+
+/**
+ * Strip the inline keyboard from a message after the user clicks one of its
+ * buttons — prevents a second click from re-triggering the action.
+ */
+export async function clearInlineKeyboard(chatId, messageId) {
+  return fetch(`${TELEGRAM_API}/editMessageReplyMarkup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { inline_keyboard: [] }
+    })
+  });
 }
 
 /**

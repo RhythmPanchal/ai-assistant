@@ -1,3 +1,5 @@
+import { routeCallbackQuery } from "./callbackRouter.js";
+
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
@@ -15,8 +17,12 @@ export async function startTelegramPolling(onMessage) {
   while (true) {
     try {
 
+      // allowed_updates explicitly enables callback_query — without it the
+      // Telegram default still delivers them, but being explicit avoids
+      // future surprises if Telegram changes defaults.
       const res = await fetch(
-        `${TELEGRAM_API}/getUpdates?timeout=30&offset=${lastUpdateId + 1}`
+        `${TELEGRAM_API}/getUpdates?timeout=30&offset=${lastUpdateId + 1}` +
+        `&allowed_updates=${encodeURIComponent(JSON.stringify(["message", "callback_query"]))}`
       );
 
       const data = await res.json();
@@ -31,6 +37,14 @@ export async function startTelegramPolling(onMessage) {
 
         if (update.message?.text) {
           await onMessage(update.message);
+          continue;
+        }
+
+        // Inline-keyboard button clicks come back as callback_query updates,
+        // routed by callback_data prefix to feature handlers.
+        if (update.callback_query) {
+          await routeCallbackQuery(update.callback_query);
+          continue;
         }
       }
     } catch (err) {
