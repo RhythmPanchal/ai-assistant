@@ -1,5 +1,6 @@
 node_modules/
 scratch/
+docs/
 .env
 Rasmalai_MVP
 TriggerScheduler

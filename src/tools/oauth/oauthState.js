@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import { getDB } from "../../mongo/mongoClient.js";
-import { OAUTH_STATES } from "../../mongo/schema/oauthStatesSchema.js";
+import { getDB } from "../mongo/mongoClient.js";
+import { OAUTH_STATES } from "../mongo/schema/oauthStatesSchema.js";
 
 const STATE_TTL_MINUTES = 15;
 
@@ -27,7 +27,7 @@ async function ensureTTLIndex() {
  * Mint a fresh state token for (userId, appName) and persist it.
  *
  * @param {number} userId
- * @param {string} appName
+ * @param {string} appName  registered key in the provider registry
  * @returns {Promise<string>} the token to embed in the OAuth `state` param
  */
 export async function createOAuthState(userId, appName) {
@@ -52,7 +52,7 @@ export async function createOAuthState(userId, appName) {
 }
 
 /**
- * Look up a state token without deleting it. Used by the /start handler,
+ * Look up a state token without deleting it. Used by the /auth/start handler,
  * which only needs to verify the token to know whom to redirect.
  *
  * @param {string} token

@@ -28,10 +28,9 @@ import {
   getConnector,
   ensurePendingConnector
 } from "../mongo/operation/connector.js";
-import { ensureFreshAccessToken } from "./refresh.js";
-import { sendConnectorPrompt } from "./sendConnectorPrompt.js";
-
-const GCALENDAR_APP = "gCalendar";
+import { ensureFreshAccessToken } from "../oauth/refresh.js";
+import { sendConnectorPrompt } from "../telegram/sendConnectorPrompt.js";
+import { GCALENDAR_APP } from "./provider.js";
 
 export async function ensureGCalendarReady(userId) {
   if (!userId) {
@@ -40,17 +39,20 @@ export async function ensureGCalendarReady(userId) {
 
   let connector = await getConnector(userId, GCALENDAR_APP);
 
+  const promptText =
+    "I just built today's schedule. Want me to push it into your Google Calendar so it shows up on your phone/laptop with native reminders?";
+
   // First-time path: no row yet -> create PENDING row + prompt.
   if (!connector) {
     connector = await ensurePendingConnector(userId, GCALENDAR_APP);
-    await sendConnectorPrompt(userId, GCALENDAR_APP);
+    await sendConnectorPrompt(userId, GCALENDAR_APP, promptText);
     return { status: "prompted" };
   }
 
   if (connector.appSupport === "PENDING") {
     // Row already exists in PENDING state — could be from a previous prompt
     // the user never answered. Re-prompt so they can act now.
-    await sendConnectorPrompt(userId, GCALENDAR_APP);
+    await sendConnectorPrompt(userId, GCALENDAR_APP, promptText);
     return { status: "prompted" };
   }
 
@@ -59,7 +61,7 @@ export async function ensureGCalendarReady(userId) {
   }
 
   // ENABLED -> refresh the access token if needed.
-  const fresh = await ensureFreshAccessToken(userId);
+  const fresh = await ensureFreshAccessToken(userId, GCALENDAR_APP);
   if (fresh.needsReauth) {
     // refresh.js already flipped the connector to DISABLED on invalid_grant.
     // For any other reason (e.g. missing refresh_token somehow), the
@@ -70,6 +72,6 @@ export async function ensureGCalendarReady(userId) {
   return {
     status: "ready",
     accessToken: fresh.accessToken,
-    calendarId: fresh.calendarId
+    calendarId: fresh.appData?.calendarId ?? null
   };
 }

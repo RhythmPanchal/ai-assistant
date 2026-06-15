@@ -1,15 +1,16 @@
 /**
  * The OAuth redirect URI must be byte-for-byte identical in three places:
- *   1. the Authorized redirect URI registered in the Google Cloud console
+ *   1. the Authorized redirect URI registered in the provider's console
+ *      (e.g. Google Cloud / Notion integration settings)
  *   2. the redirect_uri param on the consent URL   (getAuthUrl)
- *   3. the redirect_uri param on the token exchange (exchangeCode)
+ *   3. the redirect_uri param on the token exchange (exchangeCodeForTokens)
  *
  * Deriving it from a single source here guarantees 2 and 3 never drift, and
  * keeps the path in lock-step with the Express routes mounted in index.js.
  *
- * Path is /auth/callback to match the redirect URI already registered in the
- * Google Cloud console. /auth/start is our own internal kickoff endpoint and
- * does NOT need to be registered with Google.
+ * Same paths serve every connector — the dispatch is by appName carried in
+ * the state token, not by URL path — so we don't need a per-provider
+ * redirect URI to register multiple times.
  */
 
 export const OAUTH_CALLBACK_PATH = "/auth/callback";

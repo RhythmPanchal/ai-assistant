@@ -1,14 +1,17 @@
 /**
- * Express handlers for the gCalendar OAuth flow.
+ * Generic Express handlers for the OAuth flow. Dispatch is by `appName`
+ * carried in the one-time state token, not by URL path — so the same two
+ * routes serve every connector (gCalendar today, notion / microsoft later).
  *
  *   GET /auth/start?token=<state>
  *     - resolves the one-time state token to a (userId, appName)
- *     - 302-redirects to Google's consent screen
+ *     - 302-redirects to the provider's consent screen
  *
  *   GET /auth/callback?code=...&state=...
  *     - verifies state, exchanges code for tokens
  *     - flips the connector to ENABLED with tokens stored
- *     - sends a Telegram confirmation message back to the user
+ *     - runs the provider's onConnected hook (confirmation message,
+ *       provisioning, etc.)
  *     - renders a tiny "you can close this tab" page
  *
  * Errors are rendered as plain text so the user sees what went wrong; we
@@ -19,13 +22,8 @@
 import { peekOAuthState, consumeOAuthState } from "./oauthState.js";
 import { getAuthUrl } from "./getAuthUrl.js";
 import { exchangeCodeForTokens } from "./exchangeCode.js";
-import {
-  getConnector,
-  enableConnectorWithTokens
-} from "../../mongo/operation/connector.js";
-import { sendMessage } from "../../telegram/sendMessage.js";
-
-const GCALENDAR_APP = "gCalendar";
+import { getProvider } from "./providerRegistry.js";
+import { enableConnectorWithTokens } from "../mongo/operation/connector.js";
 
 export async function handleOAuthStart(req, res) {
   try {
@@ -41,7 +39,8 @@ export async function handleOAuthStart(req, res) {
         .send("This link has expired or was already used. Ask the bot to send a fresh Connect button.");
     }
 
-    const authUrl = getAuthUrl(token);
+    const { appName } = resolved;
+    const authUrl = getAuthUrl(appName, token);
     return res.redirect(302, authUrl);
   } catch (err) {
     console.error("[handleOAuthStart]", err);
@@ -56,7 +55,7 @@ export async function handleOAuthCallback(req, res) {
     if (error) {
       return res
         .status(400)
-        .send(`Google returned an error: ${error}. You can close this tab and try again.`);
+        .send(`Provider returned an error: ${escapeHtml(error)}. You can close this tab and try again.`);
     }
     if (!code || !state) {
       return res.status(400).send("Missing code or state.");
@@ -69,29 +68,29 @@ export async function handleOAuthCallback(req, res) {
         .send("Invalid or expired state. Ask the bot to send a fresh Connect button.");
     }
     const { userId, appName } = resolved;
-    if (appName !== GCALENDAR_APP) {
-      // Same callback URL today serves only gCalendar; refuse anything else
-      // so we don't silently mis-route a future integration.
-      return res.status(400).send(`Unsupported appName "${appName}".`);
-    }
 
-    const tokens = await exchangeCodeForTokens(code);
+    // Will throw if the appName isn't registered — defensive guard against
+    // mis-routing a future integration the OAuth core doesn't know about.
+    const provider = getProvider(appName);
+
+    const tokens = await exchangeCodeForTokens(appName, code);
     await enableConnectorWithTokens(userId, appName, tokens);
 
-    // Best-effort confirmation back into the chat — non-fatal if it fails.
-    try {
-      await sendMessage(
-        userId,
-        "✅ Google Calendar connected. Your future schedules will sync here automatically."
-      );
-    } catch (err) {
-      console.warn("[handleOAuthCallback] confirmation message failed:", err.message);
+    // Provider-specific extras: confirmation message, resource provisioning,
+    // etc. Treated as best-effort — if the hook fails the connection itself
+    // is still good (tokens are already persisted), we just log and move on.
+    if (provider.onConnected) {
+      try {
+        await provider.onConnected(userId, tokens);
+      } catch (err) {
+        console.warn(`[handleOAuthCallback] ${appName}.onConnected hook failed:`, err.message);
+      }
     }
 
     return res.send(
       `<html><body style="font-family: sans-serif; padding: 2rem;">
          <h2>✅ Connected</h2>
-         <p>Google Calendar is now linked. You can close this tab and return to Telegram.</p>
+         <p>${escapeHtml(appName)} is now linked. You can close this tab and return to Telegram.</p>
        </body></html>`
     );
   } catch (err) {
@@ -100,4 +99,17 @@ export async function handleOAuthCallback(req, res) {
       .status(500)
       .send("Something went wrong completing the OAuth flow. Check server logs.");
   }
+}
+
+// Tiny HTML escape — only used on values we render straight from query/state
+// (provider error strings, appName) so injection is impossible even if a
+// future provider name contained user-influenced characters.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  }[c]));
 }
