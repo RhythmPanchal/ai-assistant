@@ -25,6 +25,7 @@
 
 import "dotenv/config";
 import { getDB } from "../tools/mongo/mongoClient.js";
+import { getUserProfile } from "../agent/userManager.js";
 import { goodNightJob } from "../scheduler/jobs/goodNightJob.js";
 import { runAgent } from "../agent/agent.js";
 import { ACTIVE_FLOWS } from "../tools/mongo/schema/activeFlowsSchema.js";
@@ -61,8 +62,12 @@ function summarizeFlow(flow) {
 }
 
 async function main() {
+  const realUser = await getUserProfile(1021482398);
+  const apiKeys = realUser ? realUser.apiKeys : undefined;
+  const user = { userId: USER_ID, name: "Rhythm", dailySchedule: "9 AM to 6 PM", lifestyle: "Productive", timezone: "Asia/Kolkata", apiKeys };
+
   divider("STEP 1 — trigger goodNightJob (open flow + send opener)");
-  const jobRes = await goodNightJob();
+  const jobRes = await goodNightJob(user);
   console.log(
     "telegram send:",
     jobRes && typeof jobRes === "object" && "ok" in jobRes
@@ -77,14 +82,14 @@ async function main() {
   const replyText =
     "had idli sambhar for breakfast and dal-rice for dinner, finished 3 tasks today, spent 200 on auto rickshaw";
   console.log("user  >>", replyText);
-  const agentReply1 = await runAgent(USER_ID, replyText);
+  const agentReply1 = await runAgent(USER_ID, replyText, user);
   console.log("\nagent <<", agentReply1);
   console.log("\nflow row after reply 1:", summarizeFlow(await getLatestGoodNightFlow()));
 
   divider("STEP 3 — simulate user wrap-up (should trigger completeFlow)");
   const wrapText = "that's all, going to sleep, gn";
   console.log("user  >>", wrapText);
-  const agentReply2 = await runAgent(USER_ID, wrapText);
+  const agentReply2 = await runAgent(USER_ID, wrapText, user);
   console.log("\nagent <<", agentReply2);
   console.log("\nflow row after wrap-up:", summarizeFlow(await getLatestGoodNightFlow()));
 

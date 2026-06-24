@@ -1,3 +1,4 @@
+import { USERS, usersSchema } from './schema/usersSchema.js';
 import chatHistorySchema, { CHAT_HISTORY } from "./schema/chatHistorySchema.js";
 import taskCalendarSchema, { TASK_CALENDAR } from "./schema/taskCalendarSchema.js";
 import triggerJobSchema, { TRIGGER_JOB } from "./schema/triggerJobSchema.js";

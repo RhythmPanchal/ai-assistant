@@ -2,19 +2,64 @@ import cron from "node-cron";
 import { getDB } from "../tools/mongo/mongoClient.js";
 import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
 import executeTriggerJob from "./executeTriggerJob.js";
-
+import { getAllUsersWithTriggers } from "../agent/userManager.js";
+import { goodMorningJob } from "./jobs/goodMorningJob.js";
+import { goodNightJob } from "./jobs/goodNightJob.js";
 
 export default function initCron() {
-	let state = 1;
-
+	// 1. Existing DB-based triggers executor
 	cron.schedule("* * * * *", async () => {
 		try {
-			triggerExecutor();
+			await triggerExecutor();
 		} catch (err) {
 			console.error("Cron execution error:", err);
 		}
 	});
 
+	// 2. Multi-user Global Morning Job (Runs every hour at minute 0)
+	// Instead of one DB trigger, we iterate over all users and check if 
+	// their local time matches their preferred morning schedule (default 9 AM).
+	cron.schedule("0 * * * *", async () => {
+		try {
+			await globalUserRoutineExecutor("morning", 9); // 9 AM local
+		} catch (err) {
+			console.error("Morning Routine Cron error:", err);
+		}
+	});
+
+	// 3. Multi-user Global Night Job (Runs every hour at minute 0)
+	cron.schedule("0 * * * *", async () => {
+		try {
+			await globalUserRoutineExecutor("night", 23); // 11 PM local
+		} catch (err) {
+			console.error("Night Routine Cron error:", err);
+		}
+	});
+}
+
+async function globalUserRoutineExecutor(routineType, targetLocalHour) {
+	const users = await getAllUsersWithTriggers();
+	
+	for (const user of users) {
+		const tz = user.timezone || "Asia/Kolkata";
+		// Get current hour in the user's timezone
+		const formatter = new Intl.DateTimeFormat("en-US", {
+			timeZone: tz,
+			hour: "numeric",
+			hour12: false
+		});
+		
+		const currentLocalHour = parseInt(formatter.format(new Date()), 10);
+		
+		if (currentLocalHour === targetLocalHour) {
+			console.log(`[Routine] Triggering ${routineType} for user ${user.userId} (${tz})`);
+			if (routineType === "morning") {
+				goodMorningJob(user).catch(err => console.error(`[Routine] Error morning job for ${user.userId}:`, err));
+			} else {
+				goodNightJob(user).catch(err => console.error(`[Routine] Error night job for ${user.userId}:`, err));
+			}
+		}
+	}
 }
 
 async function triggerExecutor() {
@@ -28,7 +73,6 @@ async function triggerExecutor() {
 			nextExecutionAt: { $lte: now } })
 		.toArray();
 
-	// console.log(`[Trigger Executor] found ${pendingTriggers.length} pending triggers. [ ${pendingTriggers.join(" ")} ] at ${now}`);
 	return processTriggers(pendingTriggers);
 }
 

@@ -18,6 +18,17 @@ export default async function executeTriggerJob(job) {
     const collection = db.collection(TRIGGER_JOB);
     const now = new Date();
     console.log(job);
+
+    // ─── Pre-execution Expiry Check ──────────────────────────────────────────
+    if (job.expiryDate && now > job.expiryDate) {
+        await collection.updateOne(
+            { _id: job._id },
+            { $set: { status: "completed", updatedAt: now } }
+        );
+        console.log(`[executeTriggerJob] Job ${job._id} skipped and marked completed because it has expired.`);
+        return true;
+    }
+
     // ─── 1. Mark as processing ───────────────────────────────────────────────
     const updatedJob = await collection.findOneAndUpdate(
         { _id: job._id, status: "active" },
@@ -36,15 +47,23 @@ export default async function executeTriggerJob(job) {
         console.log("[executeTriggerJob] job function result",res); 
         //TODO : handle the results. 
         // ─── 3a. Success ─────────────────────────────────────────────────────
-        const nextExecutionAt = updatedJob.recurring
+        let nextExecutionAt = updatedJob.recurring
             ? getNextCronDate(updatedJob.cronPattern, updatedJob.timeZone)
             : null;
+
+        let status = updatedJob.recurring ? "active" : "completed";
+
+        if (updatedJob.recurring && updatedJob.expiryDate && nextExecutionAt && nextExecutionAt > updatedJob.expiryDate) {
+            status = "completed";
+            nextExecutionAt = null;
+            console.log(`[executeTriggerJob] Job ${job._id} has reached its expiryDate. Marking as completed.`);
+        }
 
         await collection.updateOne(
             { _id: job._id },
             {
                 $set: {
-                    status: updatedJob.recurring ? "active" : "completed",
+                    status,
                     lastExecutedAt: now,
                     attempts: 0,
                     nextExecutionAt,
@@ -113,6 +132,7 @@ export default async function executeTriggerJob(job) {
                     },
                 }
             );
+            console.error(JSON.stringify({level:"CRITICAL", event:"trigger_job_permanently_failed", jobId: job._id, title: job.title, error: error.message}));
 
             console.error(`[executeTriggerJob] Job ${job._id} permanently failed after ${attempts} attempts.`);
         }
@@ -126,7 +146,8 @@ export function getNextCronDate(cronPattern, timeZone) {
     if (!cronPattern) return null;
 
     try{
-        const interval = CronExpressionParser.parse(cronPattern, { tz: "Asia/Kolkata", });
+        const tz = timeZone || "Asia/Kolkata";
+        const interval = CronExpressionParser.parse(cronPattern, { tz });
         const nextExecutionAt = interval.next();
         const nextEexcutionAtDate = nextExecutionAt.toDate();
 

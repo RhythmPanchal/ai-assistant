@@ -17,7 +17,7 @@ const MAX_HISTORY_TURNS = 15;
  *   assistant/fc  → { role: "model",    parts: [{ functionCall: { name, args } }, …] }
  *   tool          → { role: "function", parts: [{ functionResponse: { name, response } }] }
  */
-function formatChatHistoryForGemini(conversations) {
+function formatChatHistoryForGeneric(conversations) {
     const history = [];
 
     for (const conv of conversations) {
@@ -25,31 +25,21 @@ function formatChatHistoryForGemini(conversations) {
             if (msg.role === "user") {
                 history.push({
                     role: "user",
-                    parts: [{ text: msg.content }],
+                    content: msg.content,
                 });
-            } else if (msg.role === "assistant" && msg.functionCalls) {
-                history.push({
-                    role: "model",
-                    parts: msg.functionCalls.map(fc => ({
-                        functionCall: { name: fc.name, args: fc.args },
-                    })),
-                });
-            } else if (msg.role === "assistant" && msg.content) {
-                history.push({
-                    role: "model",
-                    parts: [{ text: msg.content }],
-                });
+            } else if (msg.role === "assistant") {
+                // Only include text replies in history.
+                // Tool-call turns MUST be paired with their tool-result turns or providers
+                // like Mistral reject the whole request. Since we skip tool results to save
+                // context, we must also skip the matching assistant tool-call turns.
+                if (msg.content) {
+                    history.push({
+                        role: "assistant",
+                        content: msg.content,
+                    });
+                }
             } else if (msg.role === "tool") {
-                // history.push({
-                //     role: "user",
-                //     parts: [{
-                //         functionResponse: {
-                //             name: msg.toolName,
-                //             response: { result: msg.result },
-                //         },
-                //     }],
-                // });
-                //skip this, as convo history is getting so long. 
+                // skip — see assistant comment above.
             }
         }
     }
@@ -96,5 +86,5 @@ async function fetchTodayChatRecords(userId) {
  */
 export default async function chatHistoryKnowledge(userId) {
     const conversations = await fetchTodayChatRecords(userId);
-    return formatChatHistoryForGemini(conversations);
+    return formatChatHistoryForGeneric(conversations);
 }

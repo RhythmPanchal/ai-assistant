@@ -1,38 +1,26 @@
+import { runAgent } from "../../agent/agent.js";
+import { getDB } from "../../tools/mongo/mongoClient.js";
 import { sendMessage } from "../../tools/telegram/sendMessage.js";
 import { openFlow } from "../flows/activeFlowsRepo.js";
 import { goodNightFlow } from "../../agent/flows/goodNightFlow.js";
 
-export async function goodNightJob() {
-  // TODO: iterate real users once multi-user support lands
-  const userId = 1136575387;
+export async function goodNightJob(user) {
+  const userId = user.userId;
 
+  // Flow must be open BEFORE runAgent so the night overlay applies to
+  // the draft turn as well as every follow-up confirmation turn.
   await openFlow({
     userId,
     flowType: goodNightFlow.flowType,
     ttlMinutes: goodNightFlow.ttlMinutes,
   });
 
-  return sendMessage(userId, goodNightFlow.openerMessage);
-}
+  const triggerPrompt = goodNightFlow.buildTriggerPrompt();
 
-/* current job in mongo
-{
-  "title": "Good Night Routine",
-  "userId": -1,
-  "type": "recurring",
-  "recurring": true,
-  "cronPattern": "0 23 * * *",
-  "timeZone": "Asia/Kolkata",
-  "actionType": "goodNightJob",
-  "payload": {},
-  "status": "active",
-  "attempts": 0,
-  "maxAttempts": 3,
-  "lastExecutedAt": null,
-  "nextExecutionAt": { "$date": "2026-03-30T22:30:00.000Z" },
-  "expiryDate": null,
-  "failedAt": null,
-  "createdAt": { "$date": "2026-03-30T00:00:00.000Z" },
-  "updatedAt": { "$date": "2026-03-30T00:00:00.000Z" }
+  try {
+    const draftMessage = await runAgent(userId, triggerPrompt, user);
+    return await sendMessage(userId, draftMessage);
+  } catch (error) {
+    throw new Error(`Caught error while running Good night job for user ${userId}: ${error.message}`);
+  }
 }
-*/

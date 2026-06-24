@@ -5,9 +5,8 @@ import { sendMessage } from "../../tools/telegram/sendMessage.js";
 import { openFlow } from "../flows/activeFlowsRepo.js";
 import { goodMorningFlow } from "../../agent/flows/goodMorningFlow.js";
 
-export async function goodMorningJob() {
-  // TODO: iterate real users once multi-user support lands
-  const userId = 1136575387;
+export async function goodMorningJob(user) {
+  const userId = user.userId;
 
   const [pendingTasks, taskLogs] = await Promise.all([
     pendingTasksKnowledge(userId),
@@ -28,31 +27,9 @@ export async function goodMorningJob() {
   });
 
   try {
-    const draftMessage = await runAgent(userId, triggerPrompt);
-    return sendMessage(userId, draftMessage);
+    const draftMessage = await runAgent(userId, triggerPrompt, user);
+    return await sendMessage(userId, draftMessage);
   } catch (error) {
-    throw new Error(`Caught error while running Good morning job: ${error.message}`);
+    throw new Error(`Caught error while running Good morning job for user ${userId}: ${error.message}`);
   }
 }
-
-/* current job in mongo
-{
-  "title": "Good Morning Routine",
-  "userId": -1,
-  "type": "recurring",
-  "recurring": true,
-  "cronPattern": "0 9 * * *",
-  "timeZone": "Asia/Kolkata",
-  "actionType": "goodMorningJob",
-  "payload": {},
-  "status": "active",
-  "attempts": 0,
-  "maxAttempts": 3,
-  "lastExecutedAt": null,
-  "nextExecutionAt": { "$date": "2026-03-31T08:30:00.000Z" },
-  "expiryDate": null,
-  "failedAt": null,
-  "createdAt": { "$date": "2026-03-30T00:00:00.000Z" },
-  "updatedAt": { "$date": "2026-03-30T00:00:00.000Z" }
-}
-*/

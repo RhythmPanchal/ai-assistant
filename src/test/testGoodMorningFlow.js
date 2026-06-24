@@ -27,6 +27,7 @@
 
 import "dotenv/config";
 import { getDB } from "../tools/mongo/mongoClient.js";
+import { getUserProfile } from "../agent/userManager.js";
 import { goodMorningJob } from "../scheduler/jobs/goodMorningJob.js";
 import { runAgent } from "../agent/agent.js";
 import { ACTIVE_FLOWS } from "../tools/mongo/schema/activeFlowsSchema.js";
@@ -89,12 +90,16 @@ function summarizeSchedule(schedule) {
 }
 
 async function main() {
+  const realUser = await getUserProfile(1021482398);
+  const apiKeys = realUser ? realUser.apiKeys : undefined;
+  const user = { userId: USER_ID, name: "Rhythm", dailySchedule: "9 AM to 6 PM", lifestyle: "Productive", timezone: "Asia/Kolkata", apiKeys };
+
   divider("STEP 1 — trigger goodMorningJob (open flow + draft schedule via agent + send to telegram)");
   // Note: goodMorningJob does the runAgent call internally with the
   // morning trigger prompt, so this single call covers both the flow
   // open and the LLM draft. Expect 5-15s while the agent reasons over
   // pendingTasks + 7-day history.
-  const jobRes = await goodMorningJob();
+  const jobRes = await goodMorningJob(user);
   console.log(
     "telegram send:",
     jobRes && typeof jobRes === "object" && "ok" in jobRes
@@ -108,7 +113,7 @@ async function main() {
   divider("STEP 2 — simulate user confirmation (should insertSchedule then completeFlow)");
   const confirmText = "looks good, confirm and lock it in";
   console.log("user  >>", confirmText);
-  const agentReply = await runAgent(USER_ID, confirmText);
+  const agentReply = await runAgent(USER_ID, confirmText, user);
   console.log("\nagent <<", agentReply);
   console.log("\nflow row after confirm:", summarizeFlow(await getLatestGoodMorningFlow()));
 

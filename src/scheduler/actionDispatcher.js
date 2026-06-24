@@ -56,15 +56,6 @@ export const ACTION_MAP = {
     params: []
   },
 
-  goodMorningJob: {
-    fn: goodMorningJob,
-    params: []
-  },
-
-  goodNightJob: {
-    fn: goodNightJob,
-    params: []
-  },
 
   completeFlow: {
     fn: completeFlow,

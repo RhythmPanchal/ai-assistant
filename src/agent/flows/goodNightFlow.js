@@ -165,7 +165,10 @@ Call completeFlow with reason:
 
 NEVER use reason "skipped" because items lacked detail — ask for the detail and keep the flow open.
 -------------------------------------
-`.trim()
+`.trim(),
+  buildTriggerPrompt: function() {
+    return `Initiate the Good Night wrap-up. Send the opener message below exactly, then wait for their reply:\n\n${this.openerMessage}`;
+  }
 };
 
 export default goodNightFlow;

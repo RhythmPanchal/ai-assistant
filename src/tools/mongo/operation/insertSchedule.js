@@ -61,7 +61,7 @@ export async function insertSchedule(userId, date, slots, summary, motivationalN
 
     // Validate against schema
     try {
-        ValidateSchema(USER_SCHEDULE, record);
+        await ValidateSchema(USER_SCHEDULE, record);
     } catch (e) {
         return { success: false, error: `Schema validation failed: ${e.message}` };
     }

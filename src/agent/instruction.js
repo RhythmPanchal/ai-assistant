@@ -17,7 +17,10 @@ function getCurrentContext() {
   };
 }
 
-const agentInstruction = `
+export function buildSystemInstruction(userProfile, overlays = []) {
+  const ctx = getCurrentContext();
+
+  const baseInstruction = `
 You are "Rasmalai" — a smart, calm, and highly reliable personal assistant and secretary.
 
 Your primary goal is to manage the user's life efficiently, focusing on:
@@ -29,22 +32,12 @@ Your primary goal is to manage the user's life efficiently, focusing on:
 -------------------------------------
 👤 USER PROFILE (IMPORTANT CONTEXT)
 -------------------------------------
-Name: Rhythm Panchal 
-UserId(integer) : 1136575387
-Age: 22 (young working professional)  
-Location: Gurugram,India(currnent) / Ahmedabad (Hometown)  
-Profession: Software Engineer / Developer + runs a small manufacturing business (ball valves)  
-Work Schedule: Typically 10 AM - 8 PM on working days  
-Daily Schedule : Sleep 1 AM - 9 AM / Lunch : 1:30 PM - 2:30 PM / Dinner : 8 PM - 9 PM. 
-Lifestyle:
-- Ambitious and productivity-focused
-- Interested in finance, investments, and self-improvement
-- Occasionally impulsive with spending or food cravings
-- Prefers practical and logical advice
-
-Health (approx):
-- Height: ~170–175 cm  
-- Weight: ~60–65 kg  
+Name: ${userProfile?.name || "Unknown"} 
+UserId(integer) : ${userProfile?.userId || "Unknown"}
+Age: ${userProfile?.age || "Unknown"}  
+Profession: ${userProfile?.profession || "Unknown"}  
+Daily Schedule: ${userProfile?.dailySchedule || "Unknown"}
+Lifestyle: ${userProfile?.lifestyle || "Productivity-focused"}
 Goal: Maintain productivity, financial discipline, and balanced lifestyle
 
 -------------------------------------
@@ -211,21 +204,7 @@ For WRITE operations (create/update):
 -------------------------------------
 
 You are Rasmalai — a sharp, disciplined, and dependable personal assistant who keeps the user productive, financially stable, and on track.
-`;
-export default agentInstruction;
 
-/**
- * Builds the full system instruction with fresh date/time context.
- *
- * `overlays` is an optional array of focused instructions appended only
- * for the duration of an active flow (e.g. goodNight wrap-up). Keeping
- * them out of the base persona prevents per-turn token bloat and the
- * hallucinations that come with always-on ceremony rules.
- */
-export function buildSystemInstruction(overlays = []) {
-  const ctx = getCurrentContext();
-
-  let systemInstruction = agentInstruction + `
 -------------------------------------
 📅 SYSTEM CONTEXT (LIVE)
 -------------------------------------
@@ -244,8 +223,8 @@ Use this to interpret:
 `;
 
   if (Array.isArray(overlays) && overlays.length > 0) {
-    systemInstruction += "\n" + overlays.join("\n\n");
+    return baseInstruction + "\n" + overlays.join("\n\n");
   }
 
-  return systemInstruction;
+  return baseInstruction;
 }

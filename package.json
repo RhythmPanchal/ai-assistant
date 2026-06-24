@@ -1,18 +1,16 @@
 {
-  "name": "projects",
+  "name": "ai-assistant",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon src/index.js"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "main": "src/index.js",
   "type": "module",
+  "scripts": {
+    "test": "node --test src/test/test*.js",
+    "test:workflows": "node src/test/runAgentTests.js",
+    "dev": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon src/index.js"
+  },
   "dependencies": {
-    "@google/genai": "^1.41.0",
+    "@google/genai": "^0.1.1",
     "cron": "^4.4.0",
     "cron-parser": "^5.5.0",
     "dotenv": "^17.3.1",
@@ -22,6 +20,7 @@
     "node-telegram-bot-api": "^0.67.0"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "nodemon": "^3.1.11"
   }
 }

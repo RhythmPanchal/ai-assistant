@@ -12,7 +12,7 @@ export async function createOneTimeReminder(title, userId, nextExecutionAt, mess
     timeZone: "Asia/Kolkata",
     actionType: "sendMessage",
     payload : {
-        chatId : 1136575387,
+        chatId : userId,
         text : "[*REMINDER*]" + message
     },
     status: "active",
@@ -25,7 +25,6 @@ export async function createOneTimeReminder(title, userId, nextExecutionAt, mess
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  console.log(record);
   return await createRecord( TRIGGER_JOB, record);
 }
 
@@ -39,7 +38,7 @@ export async function createMultiTimeReminder(title, userId, cron, nextExecution
     timeZone: "Asia/Kolkata",
     actionType: "sendMessage",
     payload : {
-        chatId : 1136575387,
+        chatId : userId,
         text : "[*REMINDER*]" + message
     },
     status: "active",
@@ -52,6 +51,5 @@ export async function createMultiTimeReminder(title, userId, cron, nextExecution
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  console.log(record);
   return await createRecord( TRIGGER_JOB, record);
 }
