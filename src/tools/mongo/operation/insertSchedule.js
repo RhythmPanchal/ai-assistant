@@ -2,6 +2,8 @@ import { getDB } from "../mongoClient.js";
 import { USER_SCHEDULE } from "../schema/userScheduleSchema.js";
 import ValidateSchema from "../validateSchema.js";
 import { toIST } from "../dateUtils.js";
+import { connectorButton } from "../../telegram/connectorPromptButton.js";
+import { insertTodaySchedule } from "../../../connectors/gCalendar/insertTodaySchedule.js";
 
 /**
  * Insert a new daily schedule for the user.
@@ -71,5 +73,48 @@ export async function insertSchedule(userId, date, slots, summary, motivationalN
 
     const result = await collection.insertOne(record);
     console.log("[insertSchedule] Created schedule for", date);
+
+    // Fire calendar sync in the background — no await so the agent response
+    // is not delayed. Errors are logged but never surface to the caller.
+    syncScheduleToCalendar(userId).catch(err =>
+      console.error("[insertSchedule] Background calendar sync failed:", err)
+    );
+
     return { success: true, insertedId: result.insertedId };
+}
+
+const GCALENDAR_CONNECT_TEXT =
+  "📅 Would you like Rasmalai to manage your Google Calendar? " +
+  "By connecting, your daily schedule will be automatically uploaded to your Google Calendar. " +
+  "Tap *Connect* to authorise, or *Do not ask again* if you prefer to manage it yourself.";
+
+async function syncScheduleToCalendar(userId) {
+    const db = await getDB();
+    const connection = await db.collection("connection").findOne({ userId, appName: "gCalendar" });
+    const status = connection?.status;
+
+    if (status === "DISABLED") {
+        return;
+    }
+
+    if (!connection || status === "PENDING") {
+        const buttonResult = await connectorButton(userId, "gCalendar", GCALENDAR_CONNECT_TEXT);
+        const telegramMessageId = buttonResult?.result?.message_id ?? null;
+
+        // Store the Telegram message ID so the OAuth callback can edit this
+        // message later (e.g. to remove the inline keyboard after connect/dismiss).
+        if (telegramMessageId) {
+            await db.collection("connection").updateOne(
+                { userId, appName: "gCalendar" },
+                { $set: { telegramMessageId, updatedAt: Date.now() } }
+            );
+        }
+        // Sync happens via insertTodaySchedule triggered from the OAuth callback,
+        // not here — no wait, no re-check needed.
+        return;
+    }
+
+    if (status === "ACTIVE") {
+        await insertTodaySchedule(userId);
+    }
 }

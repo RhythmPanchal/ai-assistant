@@ -9,7 +9,7 @@ let lastUpdateId = 0;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-export async function startTelegramPolling(onMessage) {
+export async function startTelegramPolling(onMessage, onCallbackQuery) {
   console.log("Starting Telegram long polling...");
 
   while (true) {
@@ -31,6 +31,8 @@ export async function startTelegramPolling(onMessage) {
 
         if (update.message?.text) {
           await onMessage(update.message);
+        } else if (update.callback_query && onCallbackQuery) {
+          await onCallbackQuery(update.callback_query);
         }
       }
     } catch (err) {
