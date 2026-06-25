@@ -75,7 +75,8 @@ export async function sendMessage(chatId, text) {
  * @param {number}        messageId  - message_id returned by sendMessage
  * @param {string}        text       - new text content
  */
-export async function editMessage(chatId, messageId, text) {
+// options: any extra Telegram editMessageText fields (e.g. { reply_markup: { inline_keyboard: [] } })
+export async function editMessage(chatId, messageId, text, options = {}) {
   const htmlText = markdownToTelegramHTML(text);
 
   const response = await fetch(`${TELEGRAM_API}/editMessageText`, {
@@ -86,6 +87,7 @@ export async function editMessage(chatId, messageId, text) {
       message_id: messageId,
       text: htmlText,
       parse_mode: "HTML",
+      ...options,
     }),
   });
 
@@ -101,6 +103,7 @@ export async function editMessage(chatId, messageId, text) {
         chat_id: chatId,
         message_id: messageId,
         text: text,
+        ...options,
       }),
     });
     return await fallback.json();
@@ -124,6 +127,14 @@ export async function editMessage(chatId, messageId, text) {
  * @param {number|string} chatId
  * @returns {Promise<{ messageId: number|null, stop: () => void }>}
  */
+export async function answerCallbackQuery(callbackQueryId, text = "") {
+  await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
+  });
+}
+
 export async function createThinkingAnimation(chatId) {
   let stopped = false;
 

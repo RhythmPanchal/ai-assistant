@@ -3,15 +3,16 @@ import { runAgent } from "../agent/agent.js";
 import { startTelegramPolling } from "../tools/telegram/telegramPoller.js";
 import { handleTelegramMessage } from "../tools/telegram/telegramHandler.js";
 import { sendMessage } from "../tools/telegram/sendMessage.js";
+import { connectorButton } from "../tools/telegram/connectorPromptButton.js";
 
 
+let userId = 1136575387 ; 
 async function test() {
    await startTelegramPolling(handleTelegramMessage);
    console.log("Test ended");
 }
 
 async function _testSendMessage(){
-   const chatId = 1136575387; 
 const message = `I have noted your tasks and added them to your task registry\\. Here are the details and their respective IDs for tracking:
 
 *Tasks:*
@@ -36,4 +37,14 @@ I have noted the urgency of your *Iron clothes* task \\(deadline: tomorrow\\)\\.
    sendMessage(chatId, message); 
 }
 
-_testSendMessage();
+async function _testConnectorButton(){
+  const userId =1136575387 ; 
+  const appName = "gCalendar" ; 
+  const text = "please connecto to google calendar" ;
+
+  const res = await connectorButton(userId, appName, text); 
+
+  console.log(res); 
+}
+
+_testConnectorButton(); 

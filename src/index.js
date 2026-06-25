@@ -3,8 +3,9 @@ import express from "express";
 
 import { getDB } from "./tools/mongo/mongoClient.js";
 import { startTelegramPolling } from "./tools/telegram/telegramPoller.js";
-import { handleTelegramMessage } from "./tools/telegram/telegramHandler.js"
+import { handleTelegramMessage, handleCallbackQuery } from "./tools/telegram/telegramHandler.js"
 import initCron from "./scheduler/initCron.js";
+import oauthRouter from "./oauthRestAPI.js";
 
 const app = express();
 app.use(express.json());
@@ -15,7 +16,7 @@ async function initService(){
     // executor runs against an uninitialized client.
     await getDB();
     initCron();
-    await startTelegramPolling(handleTelegramMessage);
+    await startTelegramPolling(handleTelegramMessage, handleCallbackQuery);
 
   }catch (e){
     console.log("Bot chatting is down : ", e);
@@ -28,6 +29,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'Telegram LLM Bot is running!' });
 });
 
+app.use(oauthRouter);
 
 app.listen(PORT, () => {
   initService(); 

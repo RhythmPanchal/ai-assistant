@@ -1,6 +1,47 @@
 import { runAgent } from "../../agent/agent.js";
-import { sendMessage, editMessage, createThinkingAnimation } from "./sendMessage.js";
+import { sendMessage, editMessage, createThinkingAnimation, answerCallbackQuery } from "./sendMessage.js";
+import { dismissCallbackHandler } from "../../connectors/oauth/dismissCallbackHandler.js";
 
+
+// Callback query format: "<code>:<appName>:<userId>"
+// codes: ["dismiss"]
+export async function handleCallbackQuery(callbackQuery) {
+  const { id: callbackQueryId, data, message } = callbackQuery;
+  const chatId = message?.chat?.id;
+  const messageId = message?.message_id;
+
+  if (!data) {
+    await answerCallbackQuery(callbackQueryId, "Something went wrong!");
+    return;
+  }
+
+  const [code, appName, userIdStr] = data.split(":");
+  // callback_data values are always strings after split; userId is a Telegram
+  // chat id (int) in the DB so we must parse it before any DB query.
+  const userId = parseInt(userIdStr, 10);
+
+  if (code === "dismiss") {
+    try {
+      await dismissCallbackHandler(appName, userId);
+      await answerCallbackQuery(callbackQueryId, "Got it, won't ask again.");
+      if (chatId && messageId) {
+        await editMessage(
+          chatId,
+          messageId,
+          `Understood! I won't connect *${appName}* for now. You can always connect later by asking me.`,
+          { reply_markup: { inline_keyboard: [] } }
+        );
+      }
+    } catch (err) {
+      console.error("[handleCallbackQuery] dismiss failed:", err);
+      await answerCallbackQuery(callbackQueryId, "Something went wrong.");
+    }
+    return;
+  }
+
+  console.warn(`[handleCallbackQuery] Unknown callback code: ${code}`);
+  await answerCallbackQuery(callbackQueryId);
+}
 
 export async function handleTelegramMessage(message) {
   const chatId = message.chat.id;

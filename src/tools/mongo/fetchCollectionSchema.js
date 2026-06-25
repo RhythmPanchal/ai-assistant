@@ -43,7 +43,7 @@ const COLLECTION_REGISTRY = Object.freeze({
         collectionName: "userSchedule",
         schema: userScheduleSchema,
         writeable: true
-    },
+    }
 });
 
 export default function fetchCollectionNameAndSchema() {
