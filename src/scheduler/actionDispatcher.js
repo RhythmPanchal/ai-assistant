@@ -9,6 +9,8 @@ import { insertSchedule } from "../tools/mongo/operation/insertSchedule.js";
 import { goodMorningJob } from "./jobs/goodMorningJob.js";
 import { goodNightJob } from "./jobs/goodNightJob.js";
 import { completeFlow } from "./flows/completeFlow.js";
+import { connectApp } from "../connectors/oauth/connectApp.js";
+import { disconnectApp } from "../connectors/oauth/disconnectApp.js";
 
 export const ACTION_MAP = {
   createOneTimeReminder: {
@@ -69,7 +71,17 @@ export const ACTION_MAP = {
   completeFlow: {
     fn: completeFlow,
     params: ["userId", "flowType", "reason"]
-  }
+  },
+
+  connectApp: {
+    fn: connectApp,
+    params: ["userId", "appName"]
+  },
+
+  disconnectApp: {
+    fn: disconnectApp,
+    params: ["userId", "appName"]
+  },
 
 };
 

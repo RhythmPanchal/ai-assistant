@@ -308,7 +308,43 @@ export const tools = [
                     },
                     required: ["title", "userId", "cron", "nextExecutionAt", "message", "expiryDate"],
                 },
-            }
+            },
+            {
+                name: "connectApp",
+                description: "Sends a Connect button so the user can authorize a third-party app. Use whenever the user wants to connect, link, or re-enable an app (e.g. 'connect Google Calendar', 'I accidentally dismissed calendar, reconnect it'). Validates that the app is supported before sending.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        userId: {
+                            type: "integer",
+                            description: "Telegram chat ID of the user.",
+                        },
+                        appName: {
+                            type: "string",
+                            description: "App identifier to connect. Currently supported: gCalendar.",
+                        },
+                    },
+                    required: ["userId", "appName"],
+                },
+            },
+            {
+                name: "disconnectApp",
+                description: "Disconnects a third-party app for the user — disables the connection and removes all stored tokens. Use when the user explicitly asks to disconnect, unlink, or revoke access for an app.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        userId: {
+                            type: "integer",
+                            description: "Telegram chat ID of the user.",
+                        },
+                        appName: {
+                            type: "string",
+                            description: "App identifier to disconnect. Currently supported: gCalendar.",
+                        },
+                    },
+                    required: ["userId", "appName"],
+                },
+            },
         ],
     },
 ];

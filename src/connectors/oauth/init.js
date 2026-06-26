@@ -1,7 +1,7 @@
 import { getDB } from "../../tools/mongo/mongoClient.js";
 import { GCalendarOauthProvider } from "../gCalendar/gCalendarOauthProvider.js";
 
-const PROVIDER_MAP = {
+export const PROVIDER_MAP = {
   gCalendar: GCalendarOauthProvider,
 };
 

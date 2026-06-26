@@ -120,8 +120,9 @@ export async function callbackOauth(code, state, res) {
     );
 
     notifyUser(connection, true).catch(() => {});
-    insertTodaySchedule(connection.userId).catch(err =>
-      console.error("[callbackOauth] insertTodaySchedule failed:", err)
+
+    provider.onConnectionEstablished(connection.userId).catch(err =>
+      console.error("[callbackOauth] onConnectionEstablished failed:", err)
     );
     return sendHtml(200, true, connection.appName);
   } catch (err) {

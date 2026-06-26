@@ -1,4 +1,5 @@
 import { BaseOAuthProvider } from "../oauth/oauthProvider.js";
+import { insertTodaySchedule } from "./insertTodaySchedule.js";
 
 export class GCalendarOauthProvider extends BaseOAuthProvider {
   authorizationURI = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -33,6 +34,10 @@ export class GCalendarOauthProvider extends BaseOAuthProvider {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
     };
+  }
+
+  async onConnectionEstablished(userId) {
+    await insertTodaySchedule(userId);
   }
 
   // Google token refresh: same endpoint, swap grant_type and pass refresh_token.

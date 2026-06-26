@@ -39,4 +39,8 @@ export class BaseOAuthProvider {
   buildRefreshRequest(_refreshToken) {
     throw new Error(`buildRefreshRequest() must be implemented by ${this.constructor.name}.`);
   }
+
+  // Called once after OAuth tokens are successfully stored.
+  // Override in each provider to run post-connection setup (e.g. initial data sync).
+  async onConnectionEstablished(_userId) {}
 }
