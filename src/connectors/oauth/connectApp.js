@@ -4,6 +4,7 @@ import { getDB } from "../../tools/mongo/mongoClient.js";
 
 const CONNECT_TEXTS = {
   gCalendar: "📅 Connect your Google Calendar to let Rasmalai sync your daily schedules automatically. Tap *Connect* to authorize, or *Do not ask again* to skip.",
+  notion: "📝 Connect your Notion workspace to let Rasmalai read and write your Notion pages and databases. Tap *Connect* to authorize, or *Do not ask again* to skip.",
 };
 
 export async function connectApp(userId, appName) {

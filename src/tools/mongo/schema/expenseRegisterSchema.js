@@ -20,7 +20,7 @@ const expenseRegisterSchema = {
     },
     category: {
       bsonType: "string",
-      enum: ["Food","Travel","Shopping","Health","Bills","Entertainment","Misc"]
+      enum: ["Food","Travel","Shopping","Medical","Bills","Entertainment","Misc"]
     },
     paymentMethod: {
       bsonType: "string",

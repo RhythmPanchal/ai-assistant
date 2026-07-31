@@ -321,7 +321,7 @@ export const tools = [
                         },
                         appName: {
                             type: "string",
-                            description: "App identifier to connect. Currently supported: gCalendar.",
+                            description: "App identifier to connect. Currently supported: gCalendar, notion.",
                         },
                     },
                     required: ["userId", "appName"],
@@ -339,7 +339,7 @@ export const tools = [
                         },
                         appName: {
                             type: "string",
-                            description: "App identifier to disconnect. Currently supported: gCalendar.",
+                            description: "App identifier to disconnect. Currently supported: gCalendar, notion.",
                         },
                     },
                     required: ["userId", "appName"],

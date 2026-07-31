@@ -1,8 +1,10 @@
 import { getDB } from "../../tools/mongo/mongoClient.js";
 import { GCalendarOauthProvider } from "../gCalendar/gCalendarOauthProvider.js";
+import { NotionOauthProvider } from "../notion/notionOauthProvider.js";
 
 export const PROVIDER_MAP = {
   gCalendar: GCalendarOauthProvider,
+  notion: NotionOauthProvider,
 };
 
 // Fetches credentials from oauthConnector collection and returns an
