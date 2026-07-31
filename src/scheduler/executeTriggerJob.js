@@ -3,6 +3,7 @@ import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
 import { ObjectId } from "mongodb";
 import { dispatchAction } from "./actionDispatcher.js";
 import { CronExpressionParser } from "cron-parser";
+import { classifyQuotaError } from "../agent/llm/usageMeter.js";
 
 // Exponential backoff between in-process retries:
 // attempt 1 → 2s, attempt 2 → 4s, attempt 3 → 8s.
@@ -60,6 +61,34 @@ export default async function executeTriggerJob(job) {
 
         const attempts = (updatedJob.attempts ?? 0) + 1;
         const maxAttempts = updatedJob.maxAttempts ?? 3;
+
+        // ─── 3a-bis. Daily LLM quota — retrying cannot help ──────────────────
+        // Jobs that call runAgent (goodMorningJob) cost many requests per run.
+        // Retrying re-runs the WHOLE agent loop, so one exhausted morning job
+        // became three, each burning what little quota was left. Reschedule
+        // instead of retrying.
+        if (classifyQuotaError(err).kind === "RPD") {
+            const nextExecutionAt = updatedJob.recurring
+                ? getNextCronDate(updatedJob.cronPattern, updatedJob.timeZone)
+                : new Date(Date.now() + 60 * 60 * 1000); // don't lose a one-time job
+
+            await collection.updateOne(
+                { _id: job._id },
+                {
+                    $set: {
+                        status: "active",
+                        attempts: 0,
+                        failedAt: new Date(),
+                        nextExecutionAt,
+                        updatedAt: new Date(),
+                    },
+                }
+            );
+            console.warn(
+                `[executeTriggerJob] Job ${job._id} hit the daily LLM quota — not retrying. Next run: ${nextExecutionAt}`
+            );
+            return false;
+        }
 
         // ─── 3b. Failure — retry if attempts remaining ───────────────────────
         if (attempts < maxAttempts) {

@@ -2,37 +2,59 @@ import { runAgent } from "../../agent/agent.js";
 import pendingTasksKnowledge from "../../knowledge/pendingTasksKnowledge.js";
 import taskLogKnowledge from "../../knowledge/taskLogKnowledge.js";
 import { sendMessage } from "../../tools/telegram/sendMessage.js";
-import { openFlow } from "../flows/activeFlowsRepo.js";
+import { openFlow, hasFlowStartedToday } from "../flows/activeFlowsRepo.js";
 import { goodMorningFlow } from "../../agent/flows/goodMorningFlow.js";
+import { resolveRoutineTargets } from "../../agent/userManager.js";
 
-export async function goodMorningJob() {
-  // TODO: iterate real users once multi-user support lands
-  const userId = 1136575387;
+/**
+ * @param {Object} [user] fire for just this user; omit to fire for everyone
+ *                        opted in (or the legacy user if none are).
+ */
+export async function goodMorningJob(user) {
+  const targets = await resolveRoutineTargets(user);
+  const results = [];
 
-  const [pendingTasks, taskLogs] = await Promise.all([
-    pendingTasksKnowledge(userId),
-    taskLogKnowledge(userId),
-  ]);
+  for (const target of targets) {
+    const { userId } = target;
+    const timeZone = target.timezone || "Asia/Kolkata";
 
-  // Flow must be open BEFORE runAgent so the morning overlay applies to
-  // the draft turn as well as every follow-up confirmation turn.
-  await openFlow({
-    userId,
-    flowType: goodMorningFlow.flowType,
-    ttlMinutes: goodMorningFlow.ttlMinutes,
-  });
+    // This job is the most expensive thing the agent does. Running it twice
+    // in a day is pure waste, and both a restart and a legacy triggerJob row
+    // can re-enter here.
+    if (await hasFlowStartedToday(userId, goodMorningFlow.flowType, timeZone)) {
+      console.log(`[goodMorningJob] already ran today for ${userId} — skipping`);
+      continue;
+    }
 
-  const triggerPrompt = goodMorningFlow.buildTriggerPrompt({
-    pendingTasks,
-    taskLogs,
-  });
+    try {
+      const [pendingTasks, taskLogs] = await Promise.all([
+        pendingTasksKnowledge(userId),
+        taskLogKnowledge(userId),
+      ]);
 
-  try {
-    const draftMessage = await runAgent(userId, triggerPrompt, "goodMorningJob");
-    return sendMessage(userId, draftMessage);
-  } catch (error) {
-    throw new Error(`Caught error while running Good morning job: ${error.message}`);
+      // Flow must be open BEFORE runAgent so the morning overlay applies to
+      // the draft turn as well as every follow-up confirmation turn.
+      await openFlow({
+        userId,
+        flowType: goodMorningFlow.flowType,
+        ttlMinutes: goodMorningFlow.ttlMinutes,
+      });
+
+      const draftMessage = await runAgent(
+        userId,
+        goodMorningFlow.buildTriggerPrompt({ pendingTasks, taskLogs }),
+        "goodMorningJob"
+      );
+      results.push(await sendMessage(userId, draftMessage));
+    } catch (error) {
+      // One user's failure must not stop the rest, but the error still has to
+      // reach executeTriggerJob so a quota block is classified and rescheduled.
+      console.error(`[goodMorningJob] failed for ${userId}:`, error.message);
+      if (targets.length === 1) throw error;
+    }
   }
+
+  return results;
 }
 
 /* current job in mongo

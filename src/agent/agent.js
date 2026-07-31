@@ -1,6 +1,7 @@
 import { tools } from "./toolOperator.js";
 import { gemini_ai, gemini_model } from "./geminiClient.js";
 import { startTurn } from "./llm/usageMeter.js";
+import { agentConfig } from "../config/agent.config.js";
 import { createRecord } from "../tools/mongo/createRecord.js";
 import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHistorySchema.js";
 import { buildSystemInstruction } from "./instruction.js";
@@ -67,8 +68,15 @@ export async function runAgent(userId, userInstruction, source = "telegram") {
         console.log("User Query:", userInstruction);
         let response = await send(userInstruction);
 
-        // 6. Agentic tool-call loop
+        // 6. Agentic tool-call loop.
+        // Capped: every iteration is one request against a 500/day budget, so
+        // an unbounded loop can eat the whole day on a single confused turn.
+        let steps = 0;
         while (response.functionCalls && response.functionCalls.length > 0) {
+            if (++steps > agentConfig.llm.maxSteps) {
+                console.warn(`[runAgent] hit maxSteps (${agentConfig.llm.maxSteps}) — stopping`);
+                break;
+            }
             console.log("---------------------------------");
             console.log("\nLLM response (function calls):");
             console.dir(response, { depth: null, colors: true });

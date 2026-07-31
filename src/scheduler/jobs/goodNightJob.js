@@ -1,18 +1,39 @@
 import { sendMessage } from "../../tools/telegram/sendMessage.js";
-import { openFlow } from "../flows/activeFlowsRepo.js";
+import { openFlow, hasFlowStartedToday } from "../flows/activeFlowsRepo.js";
 import { goodNightFlow } from "../../agent/flows/goodNightFlow.js";
+import { resolveRoutineTargets } from "../../agent/userManager.js";
 
-export async function goodNightJob() {
-  // TODO: iterate real users once multi-user support lands
-  const userId = 1136575387;
+/**
+ * @param {Object} [user] fire for just this user; omit to fire for everyone
+ *                        opted in (or the legacy user if none are).
+ */
+export async function goodNightJob(user) {
+  const targets = await resolveRoutineTargets(user);
+  const results = [];
 
-  await openFlow({
-    userId,
-    flowType: goodNightFlow.flowType,
-    ttlMinutes: goodNightFlow.ttlMinutes,
-  });
+  for (const target of targets) {
+    const { userId } = target;
+    const timeZone = target.timezone || "Asia/Kolkata";
 
-  return sendMessage(userId, goodNightFlow.openerMessage);
+    if (await hasFlowStartedToday(userId, goodNightFlow.flowType, timeZone)) {
+      console.log(`[goodNightJob] already ran today for ${userId} — skipping`);
+      continue;
+    }
+
+    try {
+      await openFlow({
+        userId,
+        flowType: goodNightFlow.flowType,
+        ttlMinutes: goodNightFlow.ttlMinutes,
+      });
+      results.push(await sendMessage(userId, goodNightFlow.openerMessage));
+    } catch (error) {
+      console.error(`[goodNightJob] failed for ${userId}:`, error.message);
+      if (targets.length === 1) throw error;
+    }
+  }
+
+  return results;
 }
 
 /* current job in mongo

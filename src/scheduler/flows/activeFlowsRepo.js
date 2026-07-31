@@ -65,6 +65,27 @@ export async function closeFlowByAgent({ userId, flowType, reason = "done" }) {
 }
 
 /**
+ * Has this routine already opened for the user today, in their own timezone?
+ *
+ * The only thing standing between a process restart and a second full morning
+ * agent run (~13 requests). Checked against the DB, not memory, so it survives
+ * restarts and holds even if both the hourly executor and a legacy triggerJob
+ * row fire for the same user.
+ */
+export async function hasFlowStartedToday(userId, flowType, timeZone = "Asia/Kolkata") {
+  const db = await getDB();
+  const localDate = new Date().toLocaleDateString("en-CA", { timeZone }); // YYYY-MM-DD
+  const localMidnight = new Date(`${localDate}T00:00:00`);
+
+  const existing = await db.collection(ACTIVE_FLOWS).findOne({
+    userId,
+    flowType,
+    startedAt: { $gte: localMidnight },
+  });
+  return Boolean(existing);
+}
+
+/**
  * Return the user's currently-open flows. Any flow whose `expiresAt` has
  * passed is lazily marked `expired` before returning, so callers never see
  * stale-open flows. Lazy expiry replaces a dedicated sweeper for v1.

@@ -7,6 +7,14 @@ export function buildMorningTriggerPrompt({ pendingTasks, taskLogs }) {
   return `
 Draft an optimal schedule for the user today, with a short motivational good-morning message.
 
+🛑 DATA IS ALREADY BELOW — DO NOT FETCH IT.
+Both datasets you need are inlined in this message, already read from the
+database moments ago. Do NOT call fetchCollectionNameAndSchema, and do NOT
+call fetchRecord for taskCalendar or taskRegister. This overrides the general
+"always fetch fresh from the database" rule for this message only — that rule
+exists for ad-hoc chat, where nothing has been pre-loaded.
+Drafting this schedule needs NO tool calls at all. Reply with the timeline.
+
 Pending tasks:
 ${pendingTasks}
 

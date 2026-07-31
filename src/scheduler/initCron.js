@@ -2,19 +2,54 @@ import cron from "node-cron";
 import { getDB } from "../tools/mongo/mongoClient.js";
 import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
 import executeTriggerJob from "./executeTriggerJob.js";
+import { resolveRoutineTargets } from "../agent/userManager.js";
+import { goodMorningJob } from "./jobs/goodMorningJob.js";
+import { goodNightJob } from "./jobs/goodNightJob.js";
 
+// Local hour at which each routine fires, in each user's own timezone.
+const ROUTINE_HOURS = { morning: 9, night: 23 };
 
 export default function initCron() {
-	let state = 1;
-
 	cron.schedule("* * * * *", async () => {
 		try {
-			triggerExecutor();
+			await triggerExecutor();
 		} catch (err) {
 			console.error("Cron execution error:", err);
 		}
 	});
 
+	// Hourly so each user's routine can fire at their own local hour. Safe to
+	// run alongside the legacy triggerJob rows: both paths funnel through
+	// hasFlowStartedToday, so a user gets at most one routine per local day.
+	cron.schedule("0 * * * *", async () => {
+		try {
+			await routineExecutor();
+		} catch (err) {
+			console.error("Routine cron error:", err);
+		}
+	});
+}
+
+async function routineExecutor() {
+	const users = await resolveRoutineTargets();
+
+	for (const user of users) {
+		const timeZone = user.timezone || "Asia/Kolkata";
+		// hourCycle h23 — "en-US" with hour12:false reports midnight as 24.
+		const hour = Number(
+			new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", hourCycle: "h23" })
+				.format(new Date())
+		);
+
+		const job =
+			hour === ROUTINE_HOURS.morning ? goodMorningJob :
+			hour === ROUTINE_HOURS.night ? goodNightJob : null;
+		if (!job) continue;
+
+		await job(user).catch(err =>
+			console.error(`[routineExecutor] ${job.name} failed for ${user.userId}:`, err.message)
+		);
+	}
 }
 
 async function triggerExecutor() {
