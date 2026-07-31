@@ -1,6 +1,8 @@
-// import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
+import { agentConfig } from "../config/agent.config.js";
 
-// const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-export const gemini_ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY});
-export const gemini_model = "gemini-2.5-flash"
+export const gemini_ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// Single source of truth with the provider layer, so the live path and the
+// ported ProviderManager can never drift onto different models.
+export const gemini_model = agentConfig.llm.models.gemini;

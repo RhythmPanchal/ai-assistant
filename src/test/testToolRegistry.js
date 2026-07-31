@@ -1,0 +1,95 @@
+/**
+ * Hand-run:  node src/test/testToolRegistry.js
+ *
+ * Guards the toolOperator -> ToolRegistry port: the registry must expose every
+ * tool the old declarations did, with the same names and required params. A
+ * dropped tool is silent at boot and only shows up as the model being unable
+ * to do something it used to.
+ *
+ * Needs .env for MONGO_DB_URI (mongoClient builds its client at import), but
+ * never connects.
+ */
+import "dotenv/config";
+import assert from "node:assert";
+import { tools as legacyTools } from "../agent/toolOperator.js";
+import toolRegistry from "../agent/tools/definitions/index.js";
+
+// Registered after the port, absent from toolOperator. Anything NOT listed here
+// showing up as an extra means an unreviewed capability reached the model.
+const INTENTIONAL_ADDITIONS = new Set(["updateFlowScratchpad"]);
+// Present in toolOperator but deliberately dropped.
+const INTENTIONAL_REMOVALS = new Set();
+
+const legacy = new Map(legacyTools[0].functionDeclarations.map((d) => [d.name, d]));
+const ported = new Map(toolRegistry.getToolDeclarations().map((d) => [d.name, d]));
+
+const tests = [];
+const test = (n, f) => tests.push([n, f]);
+
+test("static `name` shadows the class name, so registry keys are wire names", () => {
+    // BaseTool keys off this.constructor.name; that only yields "createRecord"
+    // because `static name = ...` overrides Function.prototype.name.
+    assert.ok(ported.has("createRecord"), `keys were: ${[...ported.keys()].join(", ")}`);
+    assert.ok(!ported.has("CreateRecordTool"), "registry keyed on class name, not wire name");
+});
+
+test("every legacy tool survived the port", () => {
+    const missing = [...legacy.keys()].filter((n) => !ported.has(n) && !INTENTIONAL_REMOVALS.has(n));
+    assert.deepStrictEqual(missing, [], `dropped by the port: ${missing.join(", ")}`);
+});
+
+test("the OAuth tools master deleted are back", () => {
+    assert.ok(ported.has("connectApp"));
+    assert.ok(ported.has("disconnectApp"));
+});
+
+test("no unreviewed tool was added", () => {
+    const extra = [...ported.keys()].filter((n) => !legacy.has(n) && !INTENTIONAL_ADDITIONS.has(n));
+    assert.deepStrictEqual(extra, [], `unexpected new tools: ${extra.join(", ")}`);
+});
+
+test("sendMessage stays scheduler-only", () => {
+    assert.ok(!ported.has("sendMessage"), "model must not be able to send arbitrary Telegram messages");
+});
+
+test("required params unchanged for every shared tool", () => {
+    const drift = [];
+    for (const [name, decl] of ported) {
+        const old = legacy.get(name);
+        if (!old) continue;
+        const a = [...(old.parameters?.required || [])].sort();
+        const b = [...(decl.parameters?.required || [])].sort();
+        if (JSON.stringify(a) !== JSON.stringify(b)) drift.push(`${name}: ${JSON.stringify(a)} -> ${JSON.stringify(b)}`);
+    }
+    assert.deepStrictEqual(drift, [], `required-param drift:\n  ${drift.join("\n  ")}`);
+});
+
+test("every tool has a non-empty description and is executable", () => {
+    for (const t of toolRegistry.getAllTools()) {
+        const d = t.toFunctionDeclaration();
+        assert.ok(d.description?.length > 20, `${d.name} has a thin description`);
+        assert.strictEqual(typeof t.execute, "function", `${d.name} is not executable`);
+    }
+});
+
+test("descriptions are clean UTF-8 (master shipped mojibake em-dashes)", () => {
+    const bad = toolRegistry
+        .getToolDeclarations()
+        .filter((d) => /â€|Ã¢|﻿/.test(JSON.stringify(d)))
+        .map((d) => d.name);
+    assert.deepStrictEqual(bad, [], `corrupted text in: ${bad.join(", ")}`);
+});
+
+let pass = 0;
+for (const [name, fn] of tests) {
+    try {
+        await fn();
+        console.log(`PASS  ${name}`);
+        pass++;
+    } catch (e) {
+        console.log(`FAIL  ${name}\n      ${e.message}`);
+    }
+}
+console.log(`\nlegacy=${legacy.size} ported=${ported.size}`);
+console.log(`${pass}/${tests.length} passed`);
+process.exit(pass === tests.length ? 0 : 1);
