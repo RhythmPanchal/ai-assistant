@@ -1,5 +1,6 @@
 import { tools } from "./toolOperator.js";
 import { gemini_ai, gemini_model } from "./geminiClient.js";
+import { startTurn } from "./llm/usageMeter.js";
 import { createRecord } from "../tools/mongo/createRecord.js";
 import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHistorySchema.js";
 import { buildSystemInstruction } from "./instruction.js";
@@ -16,7 +17,12 @@ const FLOW_OVERLAYS = {
     [goodMorningFlow.flowType]: goodMorningFlow.instruction,
 };
 
-export async function runAgent(userId, userInstruction) {
+export async function runAgent(userId, userInstruction, source = "telegram") {
+    // Counts the API calls this ONE turn costs. Google no longer publishes
+    // free-tier per-model limits, so measured calls/turn is the only ground
+    // truth for how far a daily quota actually stretches.
+    const meter = startTurn(userId, source, gemini_model);
+
     try {
         // 1. Fetch chat history from DB
         const chatHistory = await chatHistoryKnowledge(userId);
@@ -45,9 +51,21 @@ export async function runAgent(userId, userInstruction) {
         const conversation = new ConversationBuilder(userId);
         conversation.addUserMessage(userInstruction);
 
+        // Every sendMessage is one billable request against the daily quota —
+        // route them all through here so none are counted by accident.
+        const send = async (message) => {
+            meter.recordCall();
+            try {
+                return await chat.sendMessage({ message });
+            } catch (err) {
+                meter.recordError(err);
+                throw err;
+            }
+        };
+
         // 5. Send user's query via chat (clean separation)
         console.log("User Query:", userInstruction);
-        let response = await chat.sendMessage({ message: userInstruction });
+        let response = await send(userInstruction);
 
         // 6. Agentic tool-call loop
         while (response.functionCalls && response.functionCalls.length > 0) {
@@ -89,7 +107,7 @@ export async function runAgent(userId, userInstruction) {
             });
 
             // Send tool results back — chat object auto-tracks conversation turns
-            response = await chat.sendMessage({ message: functionResponseParts });
+            response = await send(functionResponseParts);
         }
 
         // 7. Final text response
@@ -100,9 +118,13 @@ export async function runAgent(userId, userInstruction) {
         conversation.addAssistantMessage(LLMresponse);
         await createRecord(CHAT_HISTORY, conversation.build());
 
+        await meter.finish("ok");
         return LLMresponse;
     } catch (error) {
         console.error("❌ Error in runAgent:", error);
+        // Record the partial turn too — a turn that died at call 7 of a quota
+        // blowout is exactly the data point worth keeping.
+        await meter.finish("error");
         throw error;
     }
 }

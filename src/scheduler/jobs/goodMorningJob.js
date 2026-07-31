@@ -28,7 +28,7 @@ export async function goodMorningJob() {
   });
 
   try {
-    const draftMessage = await runAgent(userId, triggerPrompt);
+    const draftMessage = await runAgent(userId, triggerPrompt, "goodMorningJob");
     return sendMessage(userId, draftMessage);
   } catch (error) {
     throw new Error(`Caught error while running Good morning job: ${error.message}`);
