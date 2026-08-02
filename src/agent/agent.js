@@ -1,12 +1,12 @@
-import { tools } from "./toolOperator.js";
-import { gemini_ai, gemini_model } from "./geminiClient.js";
+import toolRegistry from "./tools/definitions/index.js";
+import { ProviderManager } from "./llm/createProvider.js";
 import { startTurn } from "./llm/usageMeter.js";
 import { agentConfig } from "../config/agent.config.js";
+import { getUserProfile } from "./userManager.js";
 import { createRecord } from "../tools/mongo/createRecord.js";
 import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHistorySchema.js";
 import { buildSystemInstruction } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
-import { dispatchAction } from "../scheduler/actionDispatcher.js";
 import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
 import goodMorningFlow from "./flows/goodMorningFlow.js";
@@ -18,111 +18,127 @@ const FLOW_OVERLAYS = {
     [goodMorningFlow.flowType]: goodMorningFlow.instruction,
 };
 
+// A tool that never returns would hang the turn forever, holding the Telegram
+// "thinking" animation open with no way out.
+function withTimeout(promise, ms, toolName) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Tool "${toolName}" timed out after ${ms}ms`)), ms)
+        ),
+    ]);
+}
+
 export async function runAgent(userId, userInstruction, source = "telegram") {
-    // Counts the API calls this ONE turn costs. Google no longer publishes
-    // free-tier per-model limits, so measured calls/turn is the only ground
-    // truth for how far a daily quota actually stretches.
-    const meter = startTurn(userId, source, gemini_model);
+    const meter = startTurn(userId, source, agentConfig.llm.models[agentConfig.llm.defaultProvider]);
 
     try {
-        // 1. Fetch chat history from DB
+        // 1. Today's history, provider-neutral: [{ role, content }]
         const chatHistory = await chatHistoryKnowledge(userId);
 
-        // 2. Pull any active flow overlays for this user (goodNight, goodMorning, …).
-        //    Lazy expiry inside getOpenFlowsForUser keeps stale flows from leaking.
+        // 2. Active flow overlays. Lazy expiry inside getOpenFlowsForUser
+        //    keeps stale flows from leaking.
         const openFlows = await getOpenFlowsForUser(userId);
-        const overlays = openFlows
-            .map(flow => FLOW_OVERLAYS[flow.flowType])
-            .filter(Boolean);
+        const overlays = openFlows.map(f => FLOW_OVERLAYS[f.flowType]).filter(Boolean);
 
-        // 3. Build dynamic system instruction (agent persona + live time + overlays)
+        // 3. Persona + live IST time + overlays. Rebuilt every turn.
         const systemInstruction = buildSystemInstruction(overlays);
 
-        // 3. Create SDK-managed chat with history & system instruction
-        const chat = gemini_ai.chats.create({
-            model: gemini_model,
-            history: chatHistory,  // structured [{role, parts}] from DB
-            config: {
-                systemInstruction,
-                tools,
-            },
-        });
+        // 4. The user's own API keys, if they supplied any. Absent keys fall
+        //    through to the internal env keys inside each provider factory.
+        let userProfile = null;
+        try {
+            userProfile = await getUserProfile(userId);
+        } catch (e) {
+            console.warn("[runAgent] user profile lookup failed, using internal keys:", e.message);
+        }
 
-        // 4. Start building conversation document
+        const messages = [
+            { role: "system", content: systemInstruction },
+            ...chatHistory,
+            { role: "user", content: userInstruction },
+        ];
+
         const conversation = new ConversationBuilder(userId);
         conversation.addUserMessage(userInstruction);
 
-        // Every sendMessage is one billable request against the daily quota —
-        // route them all through here so none are counted by accident.
-        const send = async (message) => {
-            meter.recordCall();
+        const providerManager = new ProviderManager(userProfile?.apiKeys || {});
+        const toolDeclarations = toolRegistry.getToolDeclarations();
+        const toolTimeoutMs = agentConfig.llm.toolTimeoutMs;
+
+        console.log("User Query:", userInstruction);
+
+        let LLMresponse = "";
+        let steps = 0;
+
+        // Each iteration is at least one billable request against a 500/day
+        // budget, so the loop is bounded.
+        while (steps < agentConfig.llm.maxSteps) {
+            steps++;
+
+            let response;
             try {
-                return await chat.sendMessage({ message });
+                response = await providerManager.chatWithFallback(messages, toolDeclarations, {
+                    onAttempt: (provider) => meter.recordCall(provider),
+                });
             } catch (err) {
                 meter.recordError(err);
                 throw err;
             }
-        };
 
-        // 5. Send user's query via chat (clean separation)
-        console.log("User Query:", userInstruction);
-        let response = await send(userInstruction);
-
-        // 6. Agentic tool-call loop.
-        // Capped: every iteration is one request against a 500/day budget, so
-        // an unbounded loop can eat the whole day on a single confused turn.
-        let steps = 0;
-        while (response.functionCalls && response.functionCalls.length > 0) {
-            if (++steps > agentConfig.llm.maxSteps) {
-                console.warn(`[runAgent] hit maxSteps (${agentConfig.llm.maxSteps}) — stopping`);
+            if (!response.hasToolCalls()) {
+                LLMresponse = response.text || "";
                 break;
             }
-            console.log("---------------------------------");
-            console.log("\nLLM response (function calls):");
-            console.dir(response, { depth: null, colors: true });
 
-            // Record assistant function calls
-            conversation.addAssistantFunctionCalls(response.functionCalls);
+            console.log(`--- step ${steps} via ${response.provider} ---`);
+            response.toolCalls.forEach(tc => console.log(`  ${tc.name}(${JSON.stringify(tc.args)})`));
 
-            // Run independent tool calls in parallel. Order of the response
-            // array is preserved so it still lines up with response.functionCalls
-            // when we ship results back to Gemini.
-            const toolResults = await Promise.all(
-                response.functionCalls.map(async (functionCall) => {
-                    const { name, args } = functionCall;
+            conversation.addAssistantFunctionCalls(response.toolCalls);
+            messages.push({
+                role: "assistant",
+                content: response.text || null,
+                toolCalls: response.toolCalls,
+            });
+
+            // Independent calls run in parallel. toolRegistry.execute already
+            // converts a throw into a failed ToolResult, so only the timeout
+            // needs catching here.
+            const results = await Promise.all(
+                response.toolCalls.map(async (tc) => {
                     try {
-                        const result = await dispatchAction(name, args);
-                        return { name, result };
+                        const result = await withTimeout(
+                            toolRegistry.execute(tc.name, tc.args), toolTimeoutMs, tc.name
+                        );
+                        return { ...tc, result };
                     } catch (err) {
-                        // Surface the error to the LLM as a tool result so it
-                        // can self-correct instead of crashing the whole turn.
-                        console.error(`[runAgent] tool "${name}" failed:`, err);
-                        return { name, result: { error: err.message || String(err) } };
+                        return { ...tc, result: { success: false, message: err.message } };
                     }
                 })
             );
 
-            const functionResponseParts = toolResults.map(({ name, result }) => {
-                console.log("\nExecuted function response:", result);
-                console.log("---------------------------------");
-                conversation.addToolResult(name, result);
-                return {
-                    functionResponse: {
-                        name,
-                        response: { result },
-                    },
-                };
-            });
-
-            // Send tool results back — chat object auto-tracks conversation turns
-            response = await send(functionResponseParts);
+            for (const r of results) {
+                console.log(`  -> ${r.name}:`, r.result?.message ?? r.result);
+                conversation.addToolResult(r.name, r.result);
+                // Whole ToolResult, not just .data — otherwise a failure's
+                // message never reaches the model and it cannot self-correct.
+                messages.push({
+                    role: "tool_result",
+                    toolCallId: r.id,
+                    toolName: r.name,
+                    content: r.result,
+                });
+            }
         }
 
-        // 7. Final text response
-        const LLMresponse = response.text;
+        if (steps >= agentConfig.llm.maxSteps && !LLMresponse) {
+            console.warn(`[runAgent] hit maxSteps (${agentConfig.llm.maxSteps})`);
+            LLMresponse =
+                "I had to stop — that took more steps than expected. Here's where I got to; ask me to continue if you'd like.";
+        }
+
         console.log("FINAL LLM RESPONSE:", LLMresponse);
 
-        // 8. Record final assistant reply & persist entire conversation
         conversation.addAssistantMessage(LLMresponse);
         await createRecord(CHAT_HISTORY, conversation.build());
 

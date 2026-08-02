@@ -8,49 +8,28 @@ import { CHAT_HISTORY } from "../tools/mongo/schema/chatHistorySchema.js";
 const MAX_HISTORY_TURNS = 15;
 
 /**
- * Converts conversation documents (new nested format) into
- * Gemini-compatible chat history: [{ role, parts }]
+ * Converts conversation documents into the provider-neutral shape every
+ * LLM provider translates: [{ role: "user" | "assistant", content }].
  *
- * Mapping:
- *   user          → { role: "user",     parts: [{ text }] }
- *   assistant/text→ { role: "model",    parts: [{ text }] }
- *   assistant/fc  → { role: "model",    parts: [{ functionCall: { name, args } }, …] }
- *   tool          → { role: "function", parts: [{ functionResponse: { name, response } }] }
+ * Was Gemini-specific ([{ role, parts }]). Now that runAgent can fall back to
+ * Groq/OpenRouter, the history must not be pre-shaped for one vendor —
+ * GeminiProvider and OpenAICompatibleProvider each convert it themselves.
  */
-function formatChatHistoryForGemini(conversations) {
+function formatChatHistoryForGeneric(conversations) {
     const history = [];
 
     for (const conv of conversations) {
         for (const msg of conv.messages) {
             if (msg.role === "user") {
-                history.push({
-                    role: "user",
-                    parts: [{ text: msg.content }],
-                });
-            } else if (msg.role === "assistant" && msg.functionCalls) {
-                history.push({
-                    role: "model",
-                    parts: msg.functionCalls.map(fc => ({
-                        functionCall: { name: fc.name, args: fc.args },
-                    })),
-                });
-            } else if (msg.role === "assistant" && msg.content) {
-                history.push({
-                    role: "model",
-                    parts: [{ text: msg.content }],
-                });
-            } else if (msg.role === "tool") {
-                // history.push({
-                //     role: "user",
-                //     parts: [{
-                //         functionResponse: {
-                //             name: msg.toolName,
-                //             response: { result: msg.result },
-                //         },
-                //     }],
-                // });
-                //skip this, as convo history is getting so long. 
+                history.push({ role: "user", content: msg.content });
+            } else if (msg.role === "assistant") {
+                // Text replies only. A tool-call turn is only valid when
+                // immediately followed by its tool results, and we drop those
+                // to save context — so the matching call must go too, or
+                // strict providers reject the whole request.
+                if (msg.content) history.push({ role: "assistant", content: msg.content });
             }
+            // msg.role === "tool" — skipped, see above.
         }
     }
 
@@ -91,10 +70,8 @@ async function fetchTodayChatRecords(userId) {
     return recent.reverse();
 }
 
-/**
- * Returns structured chat history for ai.chats.create({ history }).
- */
+/** Returns provider-neutral chat history for ProviderManager. */
 export default async function chatHistoryKnowledge(userId) {
     const conversations = await fetchTodayChatRecords(userId);
-    return formatChatHistoryForGemini(conversations);
+    return formatChatHistoryForGeneric(conversations);
 }

@@ -62,10 +62,17 @@ export function startTurn(userId, source = "telegram", model = "unknown") {
   const startedAt = Date.now();
   let calls = 0;
   const errors = [];
+  const byProvider = {};
 
   return {
-    recordCall() {
+    /**
+     * One outbound request. Called per provider ATTEMPT, not per agent step —
+     * a single step that falls Gemini -> Groq is two real requests, and
+     * counting steps would undercount the quota actually consumed.
+     */
+    recordCall(provider = "unknown") {
       calls += 1;
+      byProvider[provider] = (byProvider[provider] || 0) + 1;
       return calls;
     },
 
@@ -94,8 +101,9 @@ export function startTurn(userId, source = "telegram", model = "unknown") {
       const durationMs = Date.now() - startedAt;
       const { istDate, ptDate } = dayKeys();
 
+      const mix = Object.entries(byProvider).map(([p, c]) => `${p}:${c}`).join(" ") || "none";
       console.log(
-        `[usage] turn done: calls=${calls} model=${model} source=${source} ` +
+        `[usage] turn done: calls=${calls} (${mix}) source=${source} ` +
           `outcome=${outcome} ${durationMs}ms`
       );
 
@@ -113,6 +121,9 @@ export function startTurn(userId, source = "telegram", model = "unknown") {
               calls,
               [`bySource.${source}`]: calls,
               [`byModel.${model}`]: calls,
+              ...Object.fromEntries(
+                Object.entries(byProvider).map(([p, c]) => [`byProvider.${p}`, c])
+              ),
               [`errors.${errors.length ? errors[errors.length - 1].kind : "none"}`]:
                 errors.length ? 1 : 0,
             },

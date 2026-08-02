@@ -39,6 +39,13 @@ export function listProviders() {
     return Object.keys(PROVIDER_FACTORIES);
 }
 
+/** Build a single provider by name. Throws if it has no usable API key. */
+export function createProvider(name, apiKey) {
+    const factory = PROVIDER_FACTORIES[name];
+    if (!factory) throw new Error(`Unknown provider "${name}". Known: ${listProviders().join(", ")}`);
+    return factory(apiKey);
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class ProviderManager {
@@ -52,7 +59,13 @@ export class ProviderManager {
         return [defaultProvider, ...fallbackChain.filter((p) => p !== defaultProvider)];
     }
 
-    async chatWithFallback(messages, tools) {
+    /**
+     * @param {Object}   [opts]
+     * @param {Function} [opts.onAttempt] called with the provider name before
+     *        every outbound request, so callers can meter real quota spend
+     *        rather than agent steps.
+     */
+    async chatWithFallback(messages, tools, { onAttempt } = {}) {
         const { maxAttempts, backoffMs } = agentConfig.llm.retry;
         const failures = [];
 
@@ -71,7 +84,10 @@ export class ProviderManager {
 
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
-                    return await provider.chat(messages, tools);
+                    onAttempt?.(name);
+                    const res = await provider.chat(messages, tools);
+                    res.provider = name;
+                    return res;
                 } catch (err) {
                     const { kind } = classifyQuotaError(err);
 
