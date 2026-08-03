@@ -1,11 +1,8 @@
 import { getDB } from "../tools/mongo/mongoClient.js";
 import { CHAT_HISTORY } from "../tools/mongo/schema/chatHistorySchema.js";
 
-// Cap the number of past turns we replay to Gemini. Each turn is one
-// runAgent call (one chatHistory doc). 15 turns is enough recall for
-// same-day context without ballooning the prompt — compaction of the
-// older window will land in a follow-up PR.
-const MAX_HISTORY_TURNS = 15;
+
+const MAX_HISTORY_TURNS = 50;
 
 /**
  * Converts conversation documents into the provider-neutral shape every

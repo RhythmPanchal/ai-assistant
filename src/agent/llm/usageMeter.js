@@ -58,21 +58,26 @@ function dayKeys() {
  * @param {string} source  "telegram" | "goodMorningJob" | "goodNightJob" | ...
  * @param {string} model
  */
-export function startTurn(userId, source = "telegram", model = "unknown") {
+// Mongo reads dots in an $inc path as nested fields, and every model id has
+// them ("gemini-3.5-flash-lite" would become byModel.gemini-3 → 5-flash-lite).
+const safeKey = (s) => String(s).replace(/\./g, "_");
+
+export function startTurn(userId, source = "telegram") {
   const startedAt = Date.now();
   let calls = 0;
   const errors = [];
-  const byProvider = {};
+  const byModel = {};
 
   return {
     /**
-     * One outbound request. Called per provider ATTEMPT, not per agent step —
-     * a single step that falls Gemini -> Groq is two real requests, and
-     * counting steps would undercount the quota actually consumed.
+     * One outbound request, labelled "provider:model". Called per ATTEMPT, not
+     * per agent step — a step that falls gemini -> groq is two real requests,
+     * and each model has its own daily bucket, so per-model is the granularity
+     * that actually predicts exhaustion.
      */
-    recordCall(provider = "unknown") {
+    recordCall(label = "unknown") {
       calls += 1;
-      byProvider[provider] = (byProvider[provider] || 0) + 1;
+      byModel[label] = (byModel[label] || 0) + 1;
       return calls;
     },
 
@@ -101,9 +106,9 @@ export function startTurn(userId, source = "telegram", model = "unknown") {
       const durationMs = Date.now() - startedAt;
       const { istDate, ptDate } = dayKeys();
 
-      const mix = Object.entries(byProvider).map(([p, c]) => `${p}:${c}`).join(" ") || "none";
+      const mix = Object.entries(byModel).map(([m, c]) => `${m}×${c}`).join(" ") || "none";
       console.log(
-        `[usage] turn done: calls=${calls} (${mix}) source=${source} ` +
+        `[usage] turn done: calls=${calls} [${mix}] source=${source} ` +
           `outcome=${outcome} ${durationMs}ms`
       );
 
@@ -119,10 +124,9 @@ export function startTurn(userId, source = "telegram", model = "unknown") {
             $inc: {
               turns: 1,
               calls,
-              [`bySource.${source}`]: calls,
-              [`byModel.${model}`]: calls,
+              [`bySource.${safeKey(source)}`]: calls,
               ...Object.fromEntries(
-                Object.entries(byProvider).map(([p, c]) => [`byProvider.${p}`, c])
+                Object.entries(byModel).map(([m, c]) => [`byModel.${safeKey(m)}`, c])
               ),
               [`errors.${errors.length ? errors[errors.length - 1].kind : "none"}`]:
                 errors.length ? 1 : 0,

@@ -1,5 +1,5 @@
 import toolRegistry from "./tools/definitions/index.js";
-import { ProviderManager } from "./llm/createProvider.js";
+import { ProviderManager, resolveMaxSteps, resolveTaskChain } from "./llm/createProvider.js";
 import { startTurn } from "./llm/usageMeter.js";
 import { agentConfig } from "../config/agent.config.js";
 import { getUserProfile } from "./userManager.js";
@@ -18,6 +18,20 @@ const FLOW_OVERLAYS = {
     [goodMorningFlow.flowType]: goodMorningFlow.instruction,
 };
 
+/**
+ * Which model chain this turn should use.
+ *
+ * Only the morning JOB maps to `goodMorning` — that is the one-shot, tool-free
+ * draft. The user's follow-up refine turns still call insertSchedule and the
+ * user is waiting on them, so they stay ordinary `conversation`.
+ */
+export function resolveTask({ source, openFlows = [], override = null }) {
+    if (override) return override;
+    if (source === "goodMorningJob") return "goodMorning";
+    if (openFlows.some(f => f.flowType === "goodNight")) return "goodNight";
+    return "conversation";
+}
+
 // A tool that never returns would hang the turn forever, holding the Telegram
 // "thinking" animation open with no way out.
 function withTimeout(promise, ms, toolName) {
@@ -29,15 +43,13 @@ function withTimeout(promise, ms, toolName) {
     ]);
 }
 
-export async function runAgent(userId, userInstruction, source = "telegram") {
-    const meter = startTurn(userId, source, agentConfig.llm.models[agentConfig.llm.defaultProvider]);
+export async function runAgent(userId, userInstruction, source = "telegram", taskOverride = null) {
+    const meter = startTurn(userId, source);
 
     try {
-        // 1. Today's history, provider-neutral: [{ role, content }]
         const chatHistory = await chatHistoryKnowledge(userId);
 
-        // 2. Active flow overlays. Lazy expiry inside getOpenFlowsForUser
-        //    keeps stale flows from leaking.
+        // Active flow overlays. Lazy expiry inside getOpenFlowsForUser. keeps stale flows from leaking.
         const openFlows = await getOpenFlowsForUser(userId);
         const overlays = openFlows.map(f => FLOW_OVERLAYS[f.flowType]).filter(Boolean);
 
@@ -62,24 +74,30 @@ export async function runAgent(userId, userInstruction, source = "telegram") {
         const conversation = new ConversationBuilder(userId);
         conversation.addUserMessage(userInstruction);
 
-        const providerManager = new ProviderManager(userProfile?.apiKeys || {});
+        const task = resolveTask({ source, openFlows, override: taskOverride });
+        const maxSteps = resolveMaxSteps(task);
+
+        const providerManager = new ProviderManager(userProfile?.apiKeys || {}, task);
         const toolDeclarations = toolRegistry.getToolDeclarations();
         const toolTimeoutMs = agentConfig.llm.toolTimeoutMs;
 
+        const chain = resolveTaskChain(task).map(e => `${e.provider}:${e.model}`).join(" -> ");
+        console.log(`[runAgent] task=${task} maxSteps=${maxSteps}\n  chain: ${chain}`);
         console.log("User Query:", userInstruction);
 
         let LLMresponse = "";
         let steps = 0;
 
-        // Each iteration is at least one billable request against a 500/day
-        // budget, so the loop is bounded.
-        while (steps < agentConfig.llm.maxSteps) {
+        // Each iteration is at least one billable request against a 500/day budget, so the loop is bounded.
+        while (steps < maxSteps) {
             steps++;
 
             let response;
             try {
                 response = await providerManager.chatWithFallback(messages, toolDeclarations, {
-                    onAttempt: (provider) => meter.recordCall(provider),
+                    // Per MODEL, not per provider — each has its own daily
+                    // bucket, so that is the granularity worth tracking.
+                    onAttempt: (provider, model) => meter.recordCall(`${provider}:${model}`),
                 });
             } catch (err) {
                 meter.recordError(err);
@@ -131,8 +149,8 @@ export async function runAgent(userId, userInstruction, source = "telegram") {
             }
         }
 
-        if (steps >= agentConfig.llm.maxSteps && !LLMresponse) {
-            console.warn(`[runAgent] hit maxSteps (${agentConfig.llm.maxSteps})`);
+        if (steps >= maxSteps && !LLMresponse) {
+            console.warn(`[runAgent] hit maxSteps (${maxSteps})`);
             LLMresponse =
                 "I had to stop — that took more steps than expected. Here's where I got to; ask me to continue if you'd like.";
         }

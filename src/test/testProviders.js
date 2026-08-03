@@ -85,12 +85,26 @@ test("splits system out and pops the newest turn for sendMessage", () => {
 });
 
 // ── Fallback policy ────────────────────────────────────────────────────────
+// Swaps the `conversation` chain for a two-entry groq -> openrouter one, so
+// the fallback policy can be driven with a stubbed fetch and no API keys.
 function withChain(fn) {
-    const saved = { ...agentConfig.llm };
-    agentConfig.llm.defaultProvider = "groq";
-    agentConfig.llm.fallbackChain = ["groq", "openrouter"];
+    const savedTasks = agentConfig.llm.tasks;
+    const savedRetry = agentConfig.llm.retry;
+    agentConfig.llm.tasks = {
+        ...savedTasks,
+        conversation: {
+            chain: [
+                { provider: "groq", model: "groq/compound" },
+                { provider: "openrouter", model: "openrouter/free" },
+            ],
+            maxSteps: 5,
+        },
+    };
     agentConfig.llm.retry = { maxAttempts: 3, backoffMs: 1 };
-    return fn().finally(() => Object.assign(agentConfig.llm, saved));
+    return fn().finally(() => {
+        agentConfig.llm.tasks = savedTasks;
+        agentConfig.llm.retry = savedRetry;
+    });
 }
 
 test("RPD on the primary skips retries and moves on immediately", () =>
@@ -129,7 +143,12 @@ test("all providers failing reports every reason", () =>
         global.fetch = async () => fail(500, "boom");
         await assert.rejects(
             () => new ProviderManager({ groq: "k", openrouter: "k" }).chatWithFallback(MESSAGES, TOOLS),
-            (e) => /All configured LLM providers failed/.test(e.message) && /Groq/.test(e.message) && /OpenRouter/.test(e.message)
+            (e) =>
+                /All models failed for task "conversation"/.test(e.message) &&
+                // Names the exact model, not just the provider — with several
+                // models per provider, "groq failed" would not say which.
+                /groq\/compound/.test(e.message) &&
+                /openrouter\/free/.test(e.message)
         );
     }));
 
