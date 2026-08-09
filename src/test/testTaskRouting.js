@@ -66,8 +66,30 @@ test("conversation avoids 5-RPM tiers — a user is waiting on it", () => {
     assert.deepStrictEqual(slow, [], "cerebras (5 RPM) must not serve interactive chat");
 });
 
-test("cerebras leads summarize — 1M/day is the best bulk budget available", () => {
-    assert.strictEqual(resolveTaskChain("summarize")[0].provider, "cerebras");
+test("every chain contains only eval-verified models", () => {
+    // evalModels.js: only these completed the two-step tool loop. Cerebras
+    // returned 402 (free tier needs credits) and Groq 429 on TPM, so neither
+    // may appear until that changes.
+    const VERIFIED = new Set([
+        "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
+        "gemini-2.5-flash", "gemini-2.5-flash-lite", "openrouter/free",
+    ]);
+    const bad = [];
+    for (const task of Object.keys(agentConfig.llm.tasks))
+        for (const e of resolveTaskChain(task))
+            if (!VERIFIED.has(e.model)) bad.push(`${task} → ${e.provider}:${e.model}`);
+    assert.deepStrictEqual(bad, [], `unverified models in chains:\n  ${bad.join("\n  ")}`);
+});
+
+test("no task is left without a model that scored 9/9", () => {
+    // 2.5-flash-lite only scored 4/9, so it cannot be a chain's sole hope.
+    const STRONG = new Set([
+        "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash",
+    ]);
+    for (const task of Object.keys(agentConfig.llm.tasks)) {
+        const ok = resolveTaskChain(task).some((e) => STRONG.has(e.model));
+        assert.ok(ok, `${task} has no fully-verified model`);
+    }
 });
 
 test("conversation has the most daily capacity of any task", () => {
