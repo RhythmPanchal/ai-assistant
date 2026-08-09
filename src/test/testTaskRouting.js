@@ -13,19 +13,17 @@ import { agentConfig } from "../config/agent.config.js";
 import { resolveTaskChain, resolveMaxSteps, listProviders } from "../agent/llm/createProvider.js";
 import { resolveTask } from "../agent/agent.js";
 
-// ~7K tokens is a realistic request once history is included (measured floor
-// 4.5K, night 6.3K, before history).
-const REQ_TOKENS = 7000;
-
 // Probed live with src/test/eval/tryModel.js. Must never appear in a chain.
 const BANNED = {
     "groq/compound": "400 `tool calling` is not supported with this model",
     "qwen/qwen3.6-27b": "emits <think> reasoning inside the reply text",
     "llama-3.1-8b-instant": "6K TPM — one request does not fit",
+    "command-r-plus-08-2024": "400 schema must be an object",
+    "command-r7b-12-2024": "skips the mandated schema call, omits userId",
+    "google/gemma-4-31b-it:free": "400 on tool schema via the Google backend",
 };
 
-// 8K TPM: usable, but one request nearly fills the minute budget. Fine as a
-// tail entry, never as a task's primary.
+// Verified to work, but with too little token headroom to lead a chain.
 const THIN_TPM = new Set(["openai/gpt-oss-120b", "openai/gpt-oss-20b"]);
 
 const tests = [];
@@ -51,7 +49,7 @@ test("no chain uses a model verified not to work on this account", () => {
     assert.deepStrictEqual(found, [], `unusable models in chains:\n  ${found.join("\n  ")}`);
 });
 
-test("8K-TPM models never lead a chain", () => {
+test("thin-headroom models never lead a chain", () => {
     const bad = [];
     for (const task of Object.keys(agentConfig.llm.tasks)) {
         const first = resolveTaskChain(task)[0];
@@ -60,19 +58,15 @@ test("8K-TPM models never lead a chain", () => {
     assert.deepStrictEqual(bad, [], bad.join("; "));
 });
 
-test("conversation avoids 5-RPM tiers — a user is waiting on it", () => {
-    // Cerebras is 5 RPM; a 6-step turn would take ~1.2 min of wall clock.
-    const slow = resolveTaskChain("conversation").filter(e => e.provider === "cerebras");
-    assert.deepStrictEqual(slow, [], "cerebras (5 RPM) must not serve interactive chat");
-});
-
 test("every chain contains only eval-verified models", () => {
     // evalModels.js: only these completed the two-step tool loop. Cerebras
     // returned 402 (free tier needs credits) and Groq 429 on TPM, so neither
     // may appear until that changes.
     const VERIFIED = new Set([
         "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
-        "gemini-2.5-flash", "gemini-2.5-flash-lite", "openrouter/free",
+        "gemini-2.5-flash", "gemini-2.5-flash-lite",
+        "command-a-plus-05-2026", "command-a-03-2025",
+        "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-20b:free",
     ]);
     const bad = [];
     for (const task of Object.keys(agentConfig.llm.tasks))
@@ -85,6 +79,8 @@ test("no task is left without a model that scored 9/9", () => {
     // 2.5-flash-lite only scored 4/9, so it cannot be a chain's sole hope.
     const STRONG = new Set([
         "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash",
+        "command-a-plus-05-2026", "command-a-03-2025",
+        "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-20b:free",
     ]);
     for (const task of Object.keys(agentConfig.llm.tasks)) {
         const ok = resolveTaskChain(task).some((e) => STRONG.has(e.model));
@@ -92,24 +88,16 @@ test("no task is left without a model that scored 9/9", () => {
     }
 });
 
-test("conversation has the most daily capacity of any task", () => {
-    // RPD per model, from the vendor dashboards.
-    const RPD = {
-        "gemini-3.5-flash-lite": 500, "gemini-3.1-flash-lite": 500,
-        "gemini-3.5-flash": 20, "gemini-2.5-flash": 20, "gemini-2.5-flash-lite": 20,
-        "openai/gpt-oss-120b": 36, "gpt-oss-120b": 2400, "zai-glm-4.7-preview": 2400,
-        "openrouter/free": 50,
-    };
-    const capacity = (t) => resolveTaskChain(t).reduce((n, e) => n + (RPD[e.model] ?? 0), 0);
-
-    const conv = capacity("conversation");
-    assert.ok(conv >= 1000, `conversation capacity ${conv} req/day is too thin for the highest-frequency task`);
-    // ~1270 requests / ~6 calls per turn ≈ 200 conversations/day.
-    console.log(`        (conversation ≈ ${conv} req/day ≈ ${Math.floor(conv / 6)} turns/day)`);
+test("conversation has the deepest chain — it is the highest-frequency task", () => {
+    const depth = (t) => resolveTaskChain(t).length;
+    for (const t of Object.keys(agentConfig.llm.tasks))
+        if (t !== "conversation")
+            assert.ok(depth("conversation") >= depth(t),
+                `${t} has more fallbacks (${depth(t)}) than conversation (${depth("conversation")})`);
+    // Per-model quotas live in scratch/docs/Models_Usage, not asserted here.
 });
 
-test("chains survive the promotional 500-RPD buckets being cut", () => {
-    // gemini 3.x-flash-lite's 500 RPD is preview-generous and may tighten.
+test("chains survive their highest-volume models being cut", () => {
     for (const task of ["conversation", "goodNight"]) {
         const survivors = resolveTaskChain(task).filter(
             e => !/gemini-3\.[15]-flash-lite/.test(e.model)

@@ -39,7 +39,7 @@ const TOOL_PROMPT = [
 const KEY_ENV = {
     gemini: "GEMINI_API_KEY",
     groq: "GROQ_API_KEY",
-    cerebras: "CEREBRAS_API_KEY",
+    cohere: "COHERE_API_KEY",
     openrouter: "OPENROUTER_API_KEY",
     ollama: null,
 };

@@ -8,7 +8,8 @@ export class GeminiProvider extends BaseLLMProvider {
         const key = apiKey || process.env.GEMINI_API_KEY;
         if (!key) throw new Error("Gemini API key is required");
         this._client = new GoogleGenAI({ apiKey: key });
-        this._model = model || "gemini-2.5-flash-lite";
+        if (!model) throw new Error("GeminiProvider requires a model id");
+        this._model = model;
         this._name = "Gemini";
     }
 

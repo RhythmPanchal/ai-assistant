@@ -74,7 +74,7 @@ test("surfaces HTTP status in the error message so 429s stay classifiable", asyn
 
 // ── Gemini history split ───────────────────────────────────────────────────
 test("splits system out and pops the newest turn for sendMessage", () => {
-    const g = new GeminiProvider({ apiKey: "test" });
+    const g = new GeminiProvider({ apiKey: "test", model: "test-model" });
     const { systemInstruction, history, latest } = g._split(MESSAGES);
 
     assert.strictEqual(systemInstruction, "you are rasmalai");

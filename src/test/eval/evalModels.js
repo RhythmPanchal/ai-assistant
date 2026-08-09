@@ -77,8 +77,11 @@ const MODELS = [
     ["gemini", "gemini-2.5-flash"], ["gemini", "gemini-2.5-flash-lite"],
     ["groq", "qwen/qwen3.6-27b"], ["groq", "openai/gpt-oss-120b"],
     ["groq", "openai/gpt-oss-20b"], ["groq", "groq/compound"],
-    ["cerebras", "gpt-oss-120b"], ["cerebras", "gemma-4-31b-preview"],
-    ["cerebras", "zai-glm-4.7-preview"],
+    ["cohere", "command-a-plus-05-2026"], ["cohere", "command-a-03-2025"],
+    ["cohere", "command-r-plus-08-2024"], ["cohere", "command-r7b-12-2024"],
+    ["openrouter", "nvidia/nemotron-3-super-120b-a12b:free"],
+    ["openrouter", "google/gemma-4-31b-it:free"],
+    ["openrouter", "openai/gpt-oss-20b:free"],
 ];
 
 const MAX_STEPS = 6;
@@ -87,7 +90,7 @@ const MAX_STEPS = 6;
 // next. TPM windows are per organisation, not per model: this eval burns ~9K
 // tokens per run and Groq's free tier caps at 8K/min, so back-to-back Groq
 // runs would fail for reasons that have nothing to do with the model.
-const PACE_SEC = { groq: 70, cerebras: 15, gemini: 3, openrouter: 3, ollama: 0 };
+const PACE_SEC = { groq: 70, cohere: 5, gemini: 3, openrouter: 5, ollama: 0 };
 const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
 const tools = toolRegistry.getToolDeclarations();
 const systemInstruction = buildSystemInstruction([]);
@@ -239,8 +242,6 @@ rule();
     "                   valid and pass in isolation. Scoping tools per task",
     "                   (~2.7K of the prompt is tool declarations) is what",
     "                   would make Groq viable.",
-    "Cerebras           402 Payment Required — the free tier needs purchased",
-    "                   credits. Not a free provider for this workload.",
     "gemini-3.1-flash   404, model does not exist on this account despite",
     "                   appearing in the dashboard notes.",
     "2.5-flash-lite     Reachable, but stops after the first tool call and",

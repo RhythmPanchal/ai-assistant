@@ -31,13 +31,6 @@ const PROVIDER_FACTORIES = {
             baseURL: "https://api.cohere.ai/compatibility/v1",
         }),
 
-    cerebras: (apiKey, model) =>
-        new OpenAICompatibleProvider({
-            name: "Cerebras",
-            model: model || agentConfig.llm.models.cerebras,
-            apiKey: apiKey || process.env.CEREBRAS_API_KEY,
-            baseURL: "https://api.cerebras.ai/v1",
-        }),
 
     openrouter: (apiKey, model) =>
         new OpenAICompatibleProvider({

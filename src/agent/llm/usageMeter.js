@@ -59,7 +59,7 @@ function dayKeys() {
  * @param {string} model
  */
 // Mongo reads dots in an $inc path as nested fields, and every model id has
-// them ("gemini-3.5-flash-lite" would become byModel.gemini-3 → 5-flash-lite).
+// version numbers in them, so "byModel.<id>" would split at the dot.
 const safeKey = (s) => String(s).replace(/\./g, "_");
 
 export function startTurn(userId, source = "telegram") {
