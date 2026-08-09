@@ -1,6 +1,6 @@
 /**
- * Hand-run:  node src/test/testAllProviders.js
- *            node src/test/testAllProviders.js conversation goodNight   (subset)
+ * Hand-run:  node src/test/eval/testAllProviders.js
+ *            node src/test/eval/testAllProviders.js conversation goodNight   (subset)
  *
  * ⚠️  MAKES REAL API CALLS — 2 per unique model across the task chains.
  *
@@ -10,8 +10,8 @@
  * a tool call, so text-only is useless for conversation/goodNight.
  */
 import "dotenv/config";
-import { createProvider, resolveTaskChain } from "../agent/llm/createProvider.js";
-import { agentConfig } from "../config/agent.config.js";
+import { createProvider, resolveTaskChain } from "../../agent/llm/createProvider.js";
+import { agentConfig } from "../../config/agent.config.js";
 
 const TEXT_PROMPT = [
     { role: "system", content: "You are a terse assistant. Answer in one word." },

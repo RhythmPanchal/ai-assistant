@@ -4,8 +4,8 @@
  * The agent loop issues one API request per ReAct step, not one per user
  * message. A single "logged dinner + ₹200 auto + 3 tasks" turn can be 3-8
  * requests (initial -> tool results -> more tools -> final text). That
- * multiplier is invisible from the Telegram side, which is why a 250 RPD
- * quota feels like "20 messages a day".
+ * multiplier is invisible from the Telegram side, which is why a daily
+ * request quota feels far smaller than its headline number.
  *
  * Nothing here changes agent behaviour — it only counts.
  */

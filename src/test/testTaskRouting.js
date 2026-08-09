@@ -5,7 +5,7 @@
  * agent module graph pulls in mongoClient at import.
  *
  * The capacity/TPM numbers asserted here come from scratch/docs/Models_Usage
- * (vendor dashboards) crossed with src/test/measurePromptSize.js.
+ * (vendor dashboards) crossed with src/test/eval/measurePromptSize.js.
  */
 import "dotenv/config";
 import assert from "node:assert";
@@ -17,7 +17,7 @@ import { resolveTask } from "../agent/agent.js";
 // 4.5K, night 6.3K, before history).
 const REQ_TOKENS = 7000;
 
-// Probed live with src/test/tryModel.js. Must never appear in a chain.
+// Probed live with src/test/eval/tryModel.js. Must never appear in a chain.
 const BANNED = {
     "groq/compound": "400 `tool calling` is not supported with this model",
     "qwen/qwen3.6-27b": "emits <think> reasoning inside the reply text",

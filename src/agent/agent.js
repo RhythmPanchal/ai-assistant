@@ -98,7 +98,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         let LLMresponse = "";
         let steps = 0;
 
-        // Each iteration is at least one billable request against a 500/day budget, so the loop is bounded.
+        // Each iteration is at least one billable request, so the loop is bounded.
         while (steps < maxSteps) {
             steps++;
 

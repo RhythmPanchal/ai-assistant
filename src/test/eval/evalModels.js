@@ -1,11 +1,11 @@
 /**
  * Model eval — one realistic query, every model in scratch/docs/Models_Usage.
  *
- *   node src/test/evalModels.js                 all models
- *   node src/test/evalModels.js gemini          one provider
- *   node src/test/evalModels.js gemini:gemini-3.5-flash
+ *   node src/test/eval/evalModels.js                 all models
+ *   node src/test/eval/evalModels.js gemini          one provider
+ *   node src/test/eval/evalModels.js gemini:gemini-3.5-flash
  *
- * Writes src/test/eval-results.txt.
+ * Writes src/test/eval/eval-results.txt.
  *
  * ⚠️  REAL API CALLS (~2-4 per model).
  *
@@ -17,9 +17,9 @@
  */
 import "dotenv/config";
 import fs from "fs";
-import { createProvider } from "../agent/llm/createProvider.js";
-import { buildSystemInstruction } from "../agent/instruction.js";
-import toolRegistry from "../agent/tools/definitions/index.js";
+import { createProvider } from "../../agent/llm/createProvider.js";
+import { buildSystemInstruction } from "../../agent/instruction.js";
+import toolRegistry from "../../agent/tools/definitions/index.js";
 
 const USER_ID = 1136575387;
 
@@ -269,6 +269,6 @@ for (const r of results) {
 }
 line();
 
-const out = "src/test/eval-results.txt";
+const out = "src/test/eval/eval-results.txt";
 fs.writeFileSync(out, L.join("\n"), "utf8");
 console.log(`\n${pass}/${results.length} fully correct → ${out}`);

@@ -21,6 +21,16 @@ const PROVIDER_FACTORIES = {
             baseURL: "https://api.groq.com/openai/v1",
         }),
 
+    // Cohere is not OpenAI-shaped natively; /compatibility/v1 is their
+    // OpenAI-compatible surface.
+    cohere: (apiKey, model) =>
+        new OpenAICompatibleProvider({
+            name: "Cohere",
+            model: model || agentConfig.llm.models.cohere,
+            apiKey: apiKey || process.env.COHERE_API_KEY,
+            baseURL: "https://api.cohere.ai/compatibility/v1",
+        }),
+
     cerebras: (apiKey, model) =>
         new OpenAICompatibleProvider({
             name: "Cerebras",

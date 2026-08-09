@@ -1,12 +1,12 @@
 /**
  * Probe one model, or every model a provider exposes.
  *
- *   node src/test/tryModel.js --providers
- *   node src/test/tryModel.js --list groq                  discover ids on this account
- *   node src/test/tryModel.js groq openai/gpt-oss-120b
- *   node src/test/tryModel.js gemini gemini-3.5-flash "why is the sky blue?"
- *   node src/test/tryModel.js --all groq                   every id the provider lists
- *   node src/test/tryModel.js --all groq --filter oss      only ids containing "oss"
+ *   node src/test/eval/tryModel.js --providers
+ *   node src/test/eval/tryModel.js --list groq                  discover ids on this account
+ *   node src/test/eval/tryModel.js groq openai/gpt-oss-120b
+ *   node src/test/eval/tryModel.js gemini gemini-3.5-flash "why is the sky blue?"
+ *   node src/test/eval/tryModel.js --all groq                   every id the provider lists
+ *   node src/test/eval/tryModel.js --all groq --filter oss      only ids containing "oss"
  *
  * ⚠️  REAL API CALLS. --all costs 3 per model, so --filter first.
  *
@@ -22,7 +22,7 @@
  * only here will loop forever inside runAgent rather than erroring cleanly.
  */
 import "dotenv/config";
-import { createProvider, listProviders } from "../agent/llm/createProvider.js";
+import { createProvider, listProviders } from "../../agent/llm/createProvider.js";
 
 const TOOL = {
     name: "getExpenseTotal",
@@ -132,9 +132,9 @@ const args = flagIdx >= 0 ? argv.filter((_, i) => i !== flagIdx && i !== flagIdx
 
 if (args[0] === "--providers" || args.length === 0) {
     console.log(`providers: ${listProviders().join(", ")}`);
-    console.log("usage: node src/test/tryModel.js <provider> <model> [query]");
-    console.log("       node src/test/tryModel.js --list <provider>");
-    console.log("       node src/test/tryModel.js --all <provider> [--filter <substr>]");
+    console.log("usage: node src/test/eval/tryModel.js <provider> <model> [query]");
+    console.log("       node src/test/eval/tryModel.js --list <provider>");
+    console.log("       node src/test/eval/tryModel.js --all <provider> [--filter <substr>]");
     process.exit(0);
 }
 

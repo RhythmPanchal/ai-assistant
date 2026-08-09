@@ -4,8 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon src/index.js"
+    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon src/index.js",
+    "test": "node src/test/testUsageMeter.js && node src/test/testProviders.js && node src/test/testToolRegistry.js && node src/test/testRoutineGuard.js && node src/test/testTaskRouting.js",
+    "eval": "node src/test/eval/evalModels.js",
+    "eval:size": "node src/test/eval/measurePromptSize.js",
+    "eval:chains": "node src/test/eval/testAllProviders.js",
+    "eval:model": "node src/test/eval/tryModel.js"
   },
   "keywords": [],
   "author": "",
