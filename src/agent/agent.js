@@ -18,18 +18,28 @@ const FLOW_OVERLAYS = {
     [goodMorningFlow.flowType]: goodMorningFlow.instruction,
 };
 
+// openFlow only supersedes flows of the SAME type, so two types can be open at
+// once and the mapping needs an explicit precedence. goodNight wins: it is the
+// schema-critical logging flow, and a stale morning flow (6h TTL) can still be
+// open at 23:00 if the user never engaged with it.
+const FLOW_TASK_PRECEDENCE = ["goodNight", "goodMorning"];
+
+// Jobs that open NO flow identify themselves by source instead.
+const SOURCE_TASKS = { summarizeJob: "summarize", slackIngest: "ingest" };
+
 /**
  * Which model chain this turn should use.
  *
- * Only the morning JOB maps to `goodMorning` — that is the one-shot, tool-free
- * draft. The user's follow-up refine turns still call insertSchedule and the
- * user is waiting on them, so they stay ordinary `conversation`.
+ * Flow-derived by default: a routine job only ever runs with its own flow
+ * already open, and that flow outlives the job to cover the user's follow-up
+ * turns — so the flow, not the caller, is the source of truth.
  */
 export function resolveTask({ source, openFlows = [], override = null }) {
     if (override) return override;
-    if (source === "goodMorningJob") return "goodMorning";
-    if (openFlows.some(f => f.flowType === "goodNight")) return "goodNight";
-    return "conversation";
+    for (const flowType of FLOW_TASK_PRECEDENCE) {
+        if (openFlows.some(f => f.flowType === flowType)) return flowType;
+    }
+    return SOURCE_TASKS[source] || "conversation";
 }
 
 // A tool that never returns would hang the turn forever, holding the Telegram

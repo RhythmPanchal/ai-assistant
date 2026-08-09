@@ -10,17 +10,20 @@
  *
  *   GROQ (console.groq.com)               TPM    TPD   RPM   RPD
  *     openai/gpt-oss-120b / -20b            8K   200K   30    1K   tools OK, thin
+ *     llama-3.3-70b-versatile                                      tools OK, limits unlisted
  *     groq/compound                        70K    inf   30   250   NO TOOL CALLING
- *     qwen-3.6-27b                                                 id 404s on this account
+ *     qwen/qwen3.6-27b                      8K   200K   30    1K   leaks <think> into text
  *
  *   CEREBRAS (cloud.cerebras.ai)          TPM    TPD   RPM   RPD
  *     gpt-oss-120b / gemma-4-31b /
  *     zai-glm-4.7-preview                  30K     1M    5   2.4K
  *
  * WHY GROQ ONLY EVER APPEARS LAST
- * groq/compound has the good TPM but returns 400 "`tool calling` is not
+ * Every id above was probed with src/test/tryModel.js (text -> tool call ->
+ * tool-result round trip). groq/compound returns 400 "`tool calling` is not
  * supported with this model" — it is a prebuilt agentic system, not a
- * function-calling model. Verified live, see src/test/testAllProviders.js.
+ * function-calling model. qwen/qwen3.6-27b passes all three stages but emits
+ * its "<think>" reasoning inside the text, which would reach Telegram.
  * That leaves gpt-oss-120b/20b, which do support tools but cap at 8K TPM.
  * Measured prompt weight (src/test/measurePromptSize.js) is ~4.5K tokens for
  * plain chat and ~6.3K for a night wrap-up before history, so one request

@@ -1,8 +1,14 @@
 export class ToolCall {
-    constructor(name, args, id = "") {
+    /**
+     * @param {Object} [meta] opaque provider data that must be echoed back
+     *        verbatim when the call is replayed (e.g. Gemini 3.x
+     *        thoughtSignature). Never inspected outside its own provider.
+     */
+    constructor(name, args, id = "", meta = null) {
         this.name = name;
         this.args = args;
         this.id = id;
+        this.meta = meta;
     }
 }
 
@@ -35,5 +41,10 @@ export class BaseLLMProvider {
 
     async chat(_messages, _tools) {
         throw new Error(`${this.constructor.name} must implement chat()`);
+    }
+
+    /** Model ids this account can actually reach. [] if unsupported. */
+    async listModels() {
+        return [];
     }
 }

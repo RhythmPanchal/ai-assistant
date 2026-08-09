@@ -17,12 +17,11 @@ import { resolveTask } from "../agent/agent.js";
 // 4.5K, night 6.3K, before history).
 const REQ_TOKENS = 7000;
 
-// Verified live against the account (testAllProviders.js). Must never appear.
+// Probed live with src/test/tryModel.js. Must never appear in a chain.
 const BANNED = {
     "groq/compound": "400 `tool calling` is not supported with this model",
-    "qwen-3.6-27b": "404 — id does not resolve on this account",
+    "qwen/qwen3.6-27b": "emits <think> reasoning inside the reply text",
     "llama-3.1-8b-instant": "6K TPM — one request does not fit",
-    "llama-3.3-70b-versatile": "not on the account's model list",
 };
 
 // 8K TPM: usable, but one request nearly fills the minute budget. Fine as a
@@ -97,17 +96,36 @@ test("chains survive the promotional 500-RPD buckets being cut", () => {
     }
 });
 
-test("resolveTask maps callers to the right chain", () => {
+test("resolveTask derives the chain from the open flow", () => {
     const night = [{ flowType: "goodNight" }];
     const morning = [{ flowType: "goodMorning" }];
 
-    assert.strictEqual(resolveTask({ source: "goodMorningJob" }), "goodMorning");
-    assert.strictEqual(resolveTask({ source: "telegram", openFlows: night }), "goodNight");
     assert.strictEqual(resolveTask({ source: "telegram", openFlows: [] }), "conversation");
-    // Morning REFINE turns call insertSchedule and the user is waiting, so they
-    // are ordinary conversation — only the job's tool-free draft is goodMorning.
-    assert.strictEqual(resolveTask({ source: "telegram", openFlows: morning }), "conversation");
+    assert.strictEqual(resolveTask({ source: "telegram", openFlows: night }), "goodNight");
+    // The job and the user's follow-up refine turns both sit under the same
+    // open flow, so both get the same chain — no per-caller special case.
+    assert.strictEqual(resolveTask({ source: "goodMorningJob", openFlows: morning }), "goodMorning");
+    assert.strictEqual(resolveTask({ source: "telegram", openFlows: morning }), "goodMorning");
+});
+
+test("both flow types open at once resolves deterministically", () => {
+    // openFlow supersedes only the SAME flowType, so this is reachable: a
+    // 6h morning flow the user ignored is still open when goodNight fires.
+    const both = [{ flowType: "goodMorning" }, { flowType: "goodNight" }];
+    assert.strictEqual(resolveTask({ source: "telegram", openFlows: both }), "goodNight");
+    assert.strictEqual(resolveTask({ source: "telegram", openFlows: [...both].reverse() }), "goodNight",
+        "precedence must not depend on array order");
+});
+
+test("taskOverride still covers jobs that open no flow", () => {
     assert.strictEqual(resolveTask({ source: "telegram", override: "ingest" }), "ingest");
+    assert.strictEqual(resolveTask({ source: "summarizeJob" }), "summarize");
+    assert.strictEqual(resolveTask({ source: "slackIngest" }), "ingest");
+    // Override beats a live flow — needed if a future job runs mid-flow.
+    assert.strictEqual(
+        resolveTask({ source: "telegram", openFlows: [{ flowType: "goodNight" }], override: "summarize" }),
+        "summarize"
+    );
 });
 
 test("per-task maxSteps is set and bounded", () => {

@@ -12,6 +12,16 @@ export class GeminiProvider extends BaseLLMProvider {
         this._name = "Gemini";
     }
 
+    async listModels() {
+        const out = [];
+        // The SDK returns an async pager, not an array.
+        for await (const m of await this._client.models.list()) {
+            const id = (m.name || "").replace(/^models\//, "");
+            if (id) out.push(id);
+        }
+        return out.sort();
+    }
+
     /** Neutral messages -> { systemInstruction, history, latest }. */
     _split(messages) {
         let systemInstruction;
@@ -26,7 +36,13 @@ export class GeminiProvider extends BaseLLMProvider {
                 const parts = [];
                 if (msg.content) parts.push({ text: msg.content });
                 for (const tc of msg.toolCalls || []) {
-                    parts.push({ functionCall: { name: tc.name, args: tc.args } });
+                    const part = {
+                        functionCall: { name: tc.name, args: tc.args, ...(tc.id && { id: tc.id }) },
+                    };
+                    // Gemini 3.x rejects a replayed call without its original
+                    // signature: "Function call is missing a thought_signature".
+                    if (tc.meta?.thoughtSignature) part.thoughtSignature = tc.meta.thoughtSignature;
+                    parts.push(part);
                 }
                 if (parts.length) history.push({ role: "model", parts });
             } else if (msg.role === "tool_result") {
@@ -36,6 +52,7 @@ export class GeminiProvider extends BaseLLMProvider {
                     parts: [
                         {
                             functionResponse: {
+                                ...(msg.toolCallId && { id: msg.toolCallId }),
                                 name: msg.toolName,
                                 response: { result: msg.content },
                             },
@@ -64,10 +81,24 @@ export class GeminiProvider extends BaseLLMProvider {
             message: onlyText ? latest.parts[0].text : latest.parts,
         });
 
-        // Gemini returns no call ids; synthesize them for the neutral shape.
-        const toolCalls = (response.functionCalls || []).map(
-            (fc) => new ToolCall(fc.name, fc.args, `call_${randomUUID().slice(0, 8)}`)
-        );
+        // Read the raw parts, not response.functionCalls — that accessor drops
+        // thoughtSignature, which 3.x demands back when the call is replayed.
+        const parts = response.candidates?.[0]?.content?.parts || [];
+        let toolCalls = parts
+            .filter((p) => p.functionCall)
+            .map((p) => new ToolCall(
+                p.functionCall.name,
+                p.functionCall.args,
+                p.functionCall.id || `call_${randomUUID().slice(0, 8)}`,
+                p.thoughtSignature ? { thoughtSignature: p.thoughtSignature } : null
+            ));
+
+        // Older models expose no parts array; fall back to the accessor.
+        if (!toolCalls.length && response.functionCalls?.length) {
+            toolCalls = response.functionCalls.map(
+                (fc) => new ToolCall(fc.name, fc.args, fc.id || `call_${randomUUID().slice(0, 8)}`)
+            );
+        }
 
         return new LLMResponse({
             text: toolCalls.length ? null : response.text || null,

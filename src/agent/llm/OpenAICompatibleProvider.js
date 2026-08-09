@@ -14,6 +14,17 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
         this._timeoutMs = timeoutMs || DEFAULT_TIMEOUT_MS;
     }
 
+    async listModels() {
+        const headers = this._apiKey ? { Authorization: `Bearer ${this._apiKey}` } : {};
+        const res = await fetch(`${this._baseURL}/models`, {
+            headers,
+            signal: AbortSignal.timeout(this._timeoutMs),
+        });
+        if (!res.ok) throw new Error(`[${this._name}] /models ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        return (data.data || data.models || []).map((m) => m.id || m.name).filter(Boolean).sort();
+    }
+
     _formatMessages(messages) {
         return messages.map((msg) => {
             if (msg.role === "tool_result") {
