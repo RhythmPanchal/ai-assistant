@@ -80,6 +80,52 @@ test("agent loop is bounded", async () => {
     assert.match(src, /maxSteps/, "unbounded loop can drain the daily quota in one turn");
 });
 
+test("flows expire on a real-world condition, not a stopwatch", async () => {
+    const { goodMorningFlow } = await import("../agent/flows/goodMorningFlow.js");
+    const { goodNightFlow } = await import("../agent/flows/goodNightFlow.js");
+    const hourIn = (d, tz) => Number(new Intl.DateTimeFormat("en-US",
+        { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(d));
+
+    // A schedule is useless once the working day is over.
+    assert.strictEqual(hourIn(goodMorningFlow.computeExpiry("Asia/Kolkata"), "Asia/Kolkata"), 18);
+    // The wrap-up may happen at 02:00; it survives the night.
+    assert.strictEqual(hourIn(goodNightFlow.computeExpiry("Asia/Kolkata"), "Asia/Kolkata"), 10);
+    assert.ok(goodNightFlow.computeExpiry("Asia/Kolkata") > goodMorningFlow.computeExpiry("Asia/Kolkata"));
+
+    // Cutoffs are the USER'S wall clock, not the server's.
+    assert.strictEqual(hourIn(goodMorningFlow.computeExpiry("America/New_York"), "America/New_York"), 18);
+    assert.notStrictEqual(
+        goodMorningFlow.computeExpiry("Asia/Kolkata").getTime(),
+        goodMorningFlow.computeExpiry("America/New_York").getTime()
+    );
+
+    assert.ok(!("ttlMinutes" in goodMorningFlow), "fixed TTL must be gone");
+    assert.ok(!("ttlMinutes" in goodNightFlow), "fixed TTL must be gone");
+});
+
+test("the morning job is what ends the night flow", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const src = await readFile(new URL("../scheduler/jobs/goodMorningJob.js", import.meta.url), "utf8");
+    assert.match(src, /closeFlow\(/, "morning job must close the night flow");
+    assert.ok(src.indexOf("closeFlow(") < src.indexOf("openFlow("),
+        "close the night flow BEFORE opening the morning one");
+});
+
+test("two-strike rule is stated and its state is visible to the model", async () => {
+    const { goodMorningFlow } = await import("../agent/flows/goodMorningFlow.js");
+    const { flowStateBlock } = await import("../agent/agent.js");
+
+    assert.match(goodMorningFlow.instruction, /FIRST unrelated message/);
+    assert.match(goodMorningFlow.instruction, /SECOND unrelated message/);
+    assert.match(goodMorningFlow.instruction, /updateFlowScratchpad/);
+
+    // The rule reads unrelatedReplies, so it must reach the prompt — otherwise
+    // the scratchpad is write-only and the second strike never fires.
+    assert.match(flowStateBlock({ flowType: "goodMorning", scratchpad: { unrelatedReplies: 1 } }),
+        /unrelatedReplies so far: 1/);
+    assert.match(flowStateBlock({ flowType: "goodMorning" }), /unrelatedReplies so far: 0/);
+});
+
 let pass = 0;
 for (const [name, fn] of tests) {
     try {

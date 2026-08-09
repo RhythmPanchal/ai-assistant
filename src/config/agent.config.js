@@ -1,8 +1,8 @@
 /**
  * Model chains per task class.
  *
- * Rate limits, model capabilities and test results are deliberately NOT
- * documented here — they go stale. See scratch/docs/Models_Usage.
+ * Provider limits, model availability and eval results are NOT restated here
+ * — they go stale. See scratch/docs/Models_Usage and src/test/eval/.
  *
  * Ordering rule: abundant models first for high-frequency tasks, scarce
  * high-quality ones for tasks that run once a day. Each model has its own
@@ -40,7 +40,7 @@ export const agentConfig = {
         tasks: {
             // High frequency, tool-heavy, writes to Mongo, user is waiting.
             // Needs the highest-volume models first. Schema mistakes here land
-            // silently as bad rows, so the most reliable models lead.
+            // silently as bad rows, so only verified models lead.
             conversation: {
                 chain: [g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), g(M.GEM_25_FL), ...LAST_RESORT],
                 maxSteps: 20,

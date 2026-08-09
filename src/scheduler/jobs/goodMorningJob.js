@@ -2,8 +2,9 @@ import { runAgent } from "../../agent/agent.js";
 import pendingTasksKnowledge from "../../knowledge/pendingTasksKnowledge.js";
 import taskLogKnowledge from "../../knowledge/taskLogKnowledge.js";
 import { sendMessage } from "../../tools/telegram/sendMessage.js";
-import { openFlow, hasFlowStartedToday } from "../flows/activeFlowsRepo.js";
+import { openFlow, closeFlow, hasFlowStartedToday } from "../flows/activeFlowsRepo.js";
 import { goodMorningFlow } from "../../agent/flows/goodMorningFlow.js";
+import { goodNightFlow } from "../../agent/flows/goodNightFlow.js";
 import { resolveRoutineTargets } from "../../agent/userManager.js";
 
 /**
@@ -34,10 +35,18 @@ export async function goodMorningJob(user) {
 
       // Flow must be open BEFORE runAgent so the morning overlay applies to
       // the draft turn as well as every follow-up confirmation turn.
+      // Last night's wrap-up is over the moment a new day is planned. This is
+      // what actually ends the night flow — its expiry is only a backstop.
+      await closeFlow({
+        userId,
+        flowType: goodNightFlow.flowType,
+        reason: "superseded by the new day",
+      });
+
       await openFlow({
         userId,
         flowType: goodMorningFlow.flowType,
-        ttlMinutes: goodMorningFlow.ttlMinutes,
+        expiresAt: goodMorningFlow.computeExpiry(timeZone),
       });
 
       const draftMessage = await runAgent(

@@ -1,3 +1,5 @@
+import { atLocalHour } from "../../tools/mongo/dateUtils.js";
+
 /**
  * One-shot prompt the morning job hands to runAgent so the agent drafts
  * today's schedule. The overlay instruction (below) then governs every
@@ -38,7 +40,13 @@ Important:
 
 export const goodMorningFlow = {
   flowType: "goodMorning",
-  ttlMinutes: 6 * 60, // 09:00 trigger → expires 15:00 if user never engages
+
+  /**
+   * Stays open until the user engages, ignores it twice, or the day is over.
+   * A schedule is worthless after the working day, so 18:00 local is the
+   * backstop — not a fixed number of hours from when the job fired.
+   */
+  computeExpiry: (timeZone) => atLocalHour(18, timeZone),
 
   buildTriggerPrompt: buildMorningTriggerPrompt,
 
@@ -87,7 +95,26 @@ Call completeFlow with flowType "goodMorning" right after insertSchedule succeed
 
 If the user explicitly opts out ("not today", "skip the schedule"), call completeFlow with reason "skipped" without inserting.
 
-Until insertSchedule has been called (or the user has skipped), keep the flow open and continue refining.
+-------------------------------------
+WHEN THE USER TALKS ABOUT SOMETHING ELSE
+-------------------------------------
+The user may reply about something unrelated to the schedule. Do NOT drag them back.
+
+FIRST unrelated message:
+1. Answer their actual question or do what they asked, normally and fully.
+2. Add ONE short, light line at the end asking about the schedule. Not a nag —
+   e.g. "Also, still want me to lock in that schedule?"
+3. Call updateFlowScratchpad with { "unrelatedReplies": 1 }.
+
+SECOND unrelated message (FLOW STATE below already shows unrelatedReplies >= 1):
+1. Answer them normally.
+2. Do NOT mention the schedule again.
+3. Call completeFlow with flowType "goodMorning" and reason "skipped".
+They have shown twice that today is not the day. Reopen only if they ask for a
+schedule themselves.
+
+Until insertSchedule has been called (or the user has skipped, or ignored it
+twice), keep the flow open and continue refining.
 -------------------------------------
 `.trim()
 };

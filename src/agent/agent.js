@@ -18,10 +18,26 @@ const FLOW_OVERLAYS = {
     [goodMorningFlow.flowType]: goodMorningFlow.instruction,
 };
 
+/**
+ * Per-flow state the overlay needs but cannot infer from the transcript.
+ * Without this the scratchpad is write-only and the two-strike rule in the
+ * goodMorning overlay can never fire.
+ */
+export function flowStateBlock(flow) {
+    const sp = flow.scratchpad || {};
+    return [
+        "-------------------------------------",
+        `📌 FLOW STATE (${flow.flowType})`,
+        `- unrelatedReplies so far: ${sp.unrelatedReplies ?? 0}`,
+        `- opened: ${flow.startedAt ? new Date(flow.startedAt).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) : "unknown"}`,
+        "-------------------------------------",
+    ].join("\n");
+}
+
 // openFlow only supersedes flows of the SAME type, so two types can be open at
 // once and the mapping needs an explicit precedence. goodNight wins: it is the
-// schema-critical logging flow, and a stale morning flow (6h TTL) can still be
-// open at 23:00 if the user never engaged with it.
+// schema-critical logging flow, and an unengaged morning flow stays open until
+// the evening cutoff, so it can still be open when goodNight fires.
 const FLOW_TASK_PRECEDENCE = ["goodNight", "goodMorning"];
 
 // Jobs that open NO flow identify themselves by source instead.
@@ -61,7 +77,9 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
 
         // Active flow overlays. Lazy expiry inside getOpenFlowsForUser. keeps stale flows from leaking.
         const openFlows = await getOpenFlowsForUser(userId);
-        const overlays = openFlows.map(f => FLOW_OVERLAYS[f.flowType]).filter(Boolean);
+        const overlays = openFlows
+            .filter(f => FLOW_OVERLAYS[f.flowType])
+            .map(f => `${FLOW_OVERLAYS[f.flowType]}\n\n${flowStateBlock(f)}`);
 
         // 3. Persona + live IST time + overlays. Rebuilt every turn.
         const systemInstruction = buildSystemInstruction(overlays);

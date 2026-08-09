@@ -18,3 +18,23 @@ export function toIST(s) {
 }
 
 export const IST_TIMEZONE = "Asia/Kolkata";
+
+/** That zone's UTC offset at that instant, as "+05:30". Honours DST. */
+function zoneOffset(timeZone, at) {
+  const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
+    .formatToParts(at)
+    .find((p) => p.type === "timeZoneName")?.value;
+  return name?.match(/GMT([+-]\d{2}:\d{2})/)?.[1] ?? "+00:00";
+}
+
+/**
+ * A Date at `hour`:00 wall-clock in `timeZone`, `dayOffset` days from now.
+ *
+ * Flow cutoffs are stated in the user's own day ("close it at 6pm, the day is
+ * over"), so they cannot be computed as a fixed number of hours from now.
+ */
+export function atLocalHour(hour, timeZone = IST_TIMEZONE, dayOffset = 0) {
+  const at = new Date(Date.now() + dayOffset * 86400000);
+  const ymd = at.toLocaleDateString("en-CA", { timeZone });
+  return new Date(`${ymd}T${String(hour).padStart(2, "0")}:00:00${zoneOffset(timeZone, at)}`);
+}

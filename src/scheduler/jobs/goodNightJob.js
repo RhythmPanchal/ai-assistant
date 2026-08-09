@@ -24,7 +24,7 @@ export async function goodNightJob(user) {
       await openFlow({
         userId,
         flowType: goodNightFlow.flowType,
-        ttlMinutes: goodNightFlow.ttlMinutes,
+        expiresAt: goodNightFlow.computeExpiry(timeZone),
       });
       results.push(await sendMessage(userId, goodNightFlow.openerMessage));
     } catch (error) {

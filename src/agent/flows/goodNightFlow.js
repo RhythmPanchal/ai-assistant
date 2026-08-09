@@ -1,6 +1,14 @@
+import { atLocalHour } from "../../tools/mongo/dateUtils.js";
+
 export const goodNightFlow = {
   flowType: "goodNight",
-  ttlMinutes: 120, // 23:00 trigger → expires ~01:00, just past usual sleep time
+
+  /**
+   * Stays open overnight. The user may wrap up at 23:10 or at 02:00, and a
+   * day's log is still worth capturing late. The morning job closes it
+   * explicitly; this is only the backstop if that job never runs.
+   */
+  computeExpiry: (timeZone) => atLocalHour(10, timeZone, 1),
 
   openerMessage:
     `Hey! 😊
@@ -164,6 +172,9 @@ Call completeFlow with reason:
 - "skipped" — the user explicitly opted out of the whole wrap-up ("skip", "not today", "don't feel like it") before engaging with any category.
 
 NEVER use reason "skipped" because items lacked detail — ask for the detail and keep the flow open.
+
+There is no rush. If the user goes quiet and comes back hours later, the flow
+is still open and you simply pick up where you left off.
 -------------------------------------
 `.trim()
 };

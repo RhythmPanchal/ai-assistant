@@ -10,7 +10,7 @@ export class UpdateFlowScratchpadTool extends BaseTool {
         properties: {
             userId: { type: "integer", description: "The user's Telegram ID" },
             flowType: { type: "string", description: "The type of flow (e.g. 'goodMorning', 'goodNight')" },
-            scratchpad: { type: "string", description: "The state or thoughts to save" }
+            scratchpad: { type: "object", description: "State to carry into later turns of this flow, e.g. { unrelatedReplies: 1 }" }
         },
         required: ["userId", "flowType", "scratchpad"]
     };
@@ -25,10 +25,11 @@ export class UpdateFlowScratchpadTool extends BaseTool {
             { returnDocument: "after" }
         );
 
+        // ToolResult has no static helpers — only a constructor.
         if (!result) {
-            return ToolResult.error(`No open flow of type "${flowType}" found for user ${userId}.`);
+            return new ToolResult(false, `No open flow of type "${flowType}" found for user ${userId}.`);
         }
 
-        return ToolResult.success(`Scratchpad updated for flow "${flowType}".`);
+        return new ToolResult(true, `Scratchpad updated for flow "${flowType}".`, { scratchpad });
     }
 }
