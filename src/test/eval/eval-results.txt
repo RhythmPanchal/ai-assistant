@@ -1,298 +1,98 @@
 RASMALAI — MODEL EVAL
 ══════════════════════════════════════════════════════════════════════════════
-Generated : 2026-08-09T20:38:15.801Z
-Models    : 17 (from scratch/docs/Models_Usage)
+Generated : 2026-08-09T21:52:57.872Z
 Prompt    : real system instruction + all 13 registry tool declarations
 Execution : STUBBED — deterministic grading, nothing written to Mongo
 
-USER QUERY
-──────────────────────────────────────────────────────────────────────────────
-  "How much did I spend on food this month?"
+SCENARIOS
+══════════════════════════════════════════════════════════════════════════════
 
-EXPECTED BEHAVIOUR
-──────────────────────────────────────────────────────────────────────────────
-  1. fetchCollectionNameAndSchema   (system prompt mandates it before any read)
-  2. fetchRecord                    collection=expenseRegister, filters include userId
-  3. final text answer stating the total: 1930
+[read]  user says: "How much did I spend on food this month?"
+  a correct agent:
+    - fetchRecord on expenseRegister (a schema lookup first is fine)
+    - answer stating the total 1930
+    - no writes
 
-  Stub data returned by fetchRecord (3 Food rows):
-    ₹  250  Lunch - thali  (2026-08-02)
-    ₹ 1200  Groceries  (2026-08-05)
-    ₹  480  Coffee  (2026-08-07)
-    total = 1930
+[log-clear]  user says: "spent 250 on lunch today"
+  a correct agent:
+    - createRecord into expenseRegister with amount 250, category Food
+    - confirm in one short line
+    - does NOT ask a question — every required detail was given
 
-GRADING
-──────────────────────────────────────────────────────────────────────────────
-  reachable          model responded at all
-  calledSchemaFirst  first call is fetchCollectionNameAndSchema (prompt mandates it)
-  calledFetchRecord  attempted the read
-  rightCollection    fetchRecord collection = expenseRegister
-  userIdInFilters    filters contain the userId (prompt mandates it)
-  noWrites           no create/update tool touched on a read-only query
-  noUnknownTools     never invented a tool name
-  answeredWithTotal  final text states 1930
-  cleanOutput        no <think> / control tokens leaked into the reply
+[log-ambiguous]  user says: "lunch was expensive today"
+  a correct agent:
+    - asks how much — the amount is required and was not given
+    - writes NOTHING; a guessed amount is the worst failure mode here
+
+[update-no-fabrication]  user says: "push my gym task to 7pm today"
+  a correct agent:
+    - fetchRecord on taskCalendar to obtain the real _id
+    - updateRecords using EXACTLY that _id
+    - deadline written as naive local time, no Z and no offset
+
+[reminder-date]  user says: "remind me tomorrow at 9pm to call mom"
+  a correct agent:
+    - createOneTimeReminder with nextExecutionAt for TOMORROW at 21:00
+    - naive local time — no trailing Z and no +05:30 offset
+    - userId included
 
 SUMMARY
 ══════════════════════════════════════════════════════════════════════════════
-  MODEL                              SCORE   STEPS  TIME     RESULT
-  gemini:gemini-3.5-flash            9/9     3      7608ms   PASS
-  gemini:gemini-3.5-flash-lite       9/9     3      3599ms   PASS
-  gemini:gemini-3.1-flash            2/9     1      211ms    ERROR
-  gemini:gemini-3.1-flash-lite       9/9     3      3788ms   PASS
-  gemini:gemini-2.5-flash            9/9     3      6937ms   PASS
-  gemini:gemini-2.5-flash-lite       4/9     2      2344ms   FAIL
-  groq:qwen/qwen3.6-27b              2/9     1      312ms    ERROR
-  groq:openai/gpt-oss-120b           2/9     1      268ms    ERROR
-  groq:openai/gpt-oss-20b            2/9     1      285ms    ERROR
-  groq:groq/compound                 2/9     1      289ms    ERROR
-  cohere:command-a-plus-05-2026      9/9     4      6951ms   PASS
-  cohere:command-a-03-2025           9/9     3      8771ms   PASS
-  cohere:command-r-plus-08-2024      2/9     1      526ms    ERROR
-  cohere:command-r7b-12-2024         6/9     2      4615ms   FAIL
-  openrouter:nvidia/nemotron-3-super-120b-a12b:free 9/9     3      12674ms  PASS
-  openrouter:google/gemma-4-31b-it:free 2/9     1      398ms    ERROR
-  openrouter:openai/gpt-oss-20b:free 9/9     3      34189ms  PASS
+  MODEL                                    read      log-clear log-ambig update-no reminder-  TOTAL
+  gemini:gemini-3.5-flash-lite             ERR       ERR       ERR       ERR       ERR        0/5
 
-  8/17 fully correct
-
-READING THE FAILURES
-──────────────────────────────────────────────────────────────────────────────
-  Groq (all ids)     TPM, not capability. Step 1 succeeds; step 2 returns
-                     429 'TPM: Limit 8000, Used 5776'. This prompt costs
-                     ~5K tokens for step 1 and ~4K more for step 2, so a
-                     two-step tool loop cannot fit in an 8K/min window.
-                     Under a saturated org-wide window Groq also reports a
-                     misleading 'invalid JSON schema' 400 — the schemas are
-                     valid and pass in isolation. Scoping tools per task
-                     (~2.7K of the prompt is tool declarations) is what
-                     would make Groq viable.
-  gemini-3.1-flash   404, model does not exist on this account despite
-                     appearing in the dashboard notes.
-  2.5-flash-lite     Reachable, but stops after the first tool call and
-                     never completes the read. Weak at multi-step loops.
-
-PER-MODEL DETAIL
+PER-RUN DETAIL
 ══════════════════════════════════════════════════════════════════════════════
 
-gemini:gemini-3.5-flash
+gemini:gemini-3.5-flash-lite  —  [read]
 ──────────────────────────────────────────────────────────────────────────────
-  score 9/9   steps 3   7608ms
+  0/1   steps 3   3168ms
+  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
   tool calls:
-    step 1  fetchCollectionNameAndSchema
-    step 2  fetchRecord
-             args {"collection":"expenseRegister","filters":{"category":"Food","date":{"$gte":"2026-08-01","$lt":"2026-09-01"},"userId":1136575387}}
-  final answer:
-    You have spent a total of *₹1,930* on food so far this month (August 2026). 
-    
-    Here is the breakdown of your expenses:
-    - *₹250* — Lunch - thali (2026-08-02)
-    - *₹1,200* — Groceries (2026-08-05)
-    - *₹480* — Coffee (2026-08-07)
-    
-    Would you like me to log any new expenses or help you review your budget?
-  failed checks: none
+    fetchCollectionNameAndSchema
+    fetchRecord
+        {"filters":{"date":"2026-08-01","category":"Food","userId":1136575387},"collection":"expenseRegister"}
+  reply:
+    (none)
+  failed: none
 
-gemini:gemini-3.5-flash-lite
+gemini:gemini-3.5-flash-lite  —  [log-clear]
 ──────────────────────────────────────────────────────────────────────────────
-  score 9/9   steps 3   3599ms
+  0/1   steps 2   1317ms
+  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
   tool calls:
-    step 1  fetchCollectionNameAndSchema
-    step 2  fetchRecord
-             args {"collection":"expenseRegister","filters":{"date":{"operator":"$gte","data":"2026-08-01T00:00:00"},"userId":1136575387,"category":"Food"}}
-  final answer:
-    You have spent a total of *₹1,930* on food this month (August 2026).
-    
-    Here is the breakdown:
-    - `Lunch - thali`: ₹250 (August 2)
-    - `Groceries`: ₹1,200 (August 5)
-    - `Coffee`: ₹480 (August 7)
-  failed checks: none
+    fetchCollectionNameAndSchema
+  reply:
+    (none)
+  failed: none
 
-gemini:gemini-3.1-flash
+gemini:gemini-3.5-flash-lite  —  [log-ambiguous]
 ──────────────────────────────────────────────────────────────────────────────
-  score 2/9   steps 1   211ms
-  ERROR: {"error":{"code":404,"message":"models/gemini-3.1-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported m
+  0/1   steps 1   334ms
+  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
   tool calls:
     (none)
-  final answer:
+  reply:
     (none)
-  failed checks: reachable, calledSchemaFirst, calledFetchRecord, rightCollection, userIdInFilters, answeredWithTotal, cleanOutput
+  failed: none
 
-gemini:gemini-3.1-flash-lite
+gemini:gemini-3.5-flash-lite  —  [update-no-fabrication]
 ──────────────────────────────────────────────────────────────────────────────
-  score 9/9   steps 3   3788ms
-  tool calls:
-    step 1  fetchCollectionNameAndSchema
-    step 2  fetchRecord
-             args {"filters":{"category":"Food","userId":1136575387,"date":{"$gte":"2026-08-01","$lt":"2026-09-01"}},"collection":"expenseRegister"}
-  final answer:
-    You have spent a total of **₹1,930** on food so far this month.
-    
-    Here is the breakdown:
-    - **₹1,200** for groceries (2026-08-05)
-    - **₹480** for coffee (2026-08-07)
-    - **₹250** for a lunch thali (2026-08-02)
-    
-    Keep an eye on these expenses, Rhythm. A significant portion of this is for non-essential items like coffee. Let's try to maintain better control over discretionary spending for the rest of the month.
-  failed checks: none
-
-gemini:gemini-2.5-flash
-──────────────────────────────────────────────────────────────────────────────
-  score 9/9   steps 3   6937ms
-  tool calls:
-    step 1  fetchCollectionNameAndSchema
-    step 2  fetchRecord
-             args {"filters":{"userId":1136575387,"category":"Food","date":{"$gte":"2026-08-01","$lt":"2026-09-01"}},"collection":"expenseRegister"}
-  final answer:
-    You've spent ₹1930 on food this month so far.
-  failed checks: none
-
-gemini:gemini-2.5-flash-lite
-──────────────────────────────────────────────────────────────────────────────
-  score 4/9   steps 2   2344ms
-  tool calls:
-    step 1  fetchCollectionNameAndSchema
-  final answer:
-    (none)
-  failed checks: calledFetchRecord, rightCollection, userIdInFilters, answeredWithTotal, cleanOutput
-
-groq:qwen/qwen3.6-27b
-──────────────────────────────────────────────────────────────────────────────
-  score 2/9   steps 1   312ms
-  ERROR: [Groq] API Error: 400 {"error":{"message":"invalid JSON schema for tool fetchCollectionNameAndSchema, tools[0].function.parameters: jsonschema file:///home/di/params.json compilation failed: '/type' does not validate wit
+  0/1   steps 1   260ms
+  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
   tool calls:
     (none)
-  final answer:
+  reply:
     (none)
-  failed checks: reachable, calledSchemaFirst, calledFetchRecord, rightCollection, userIdInFilters, answeredWithTotal, cleanOutput
+  failed: none
 
-groq:openai/gpt-oss-120b
+gemini:gemini-3.5-flash-lite  —  [reminder-date]
 ──────────────────────────────────────────────────────────────────────────────
-  score 2/9   steps 1   268ms
-  ERROR: [Groq] API Error: 400 {"error":{"message":"invalid JSON schema for tool fetchCollectionNameAndSchema, tools[0].function.parameters: jsonschema file:///home/di/params.json compilation failed: '/type' does not validate wit
+  0/1   steps 2   1426ms
+  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
   tool calls:
+    createOneTimeReminder
+        {"title":"Call mom","nextExecutionAt":"2026-08-11T21:00:00","userId":1136575387,"message":"Call mom"}
+  reply:
     (none)
-  final answer:
-    (none)
-  failed checks: reachable, calledSchemaFirst, calledFetchRecord, rightCollection, userIdInFilters, answeredWithTotal, cleanOutput
-
-groq:openai/gpt-oss-20b
-──────────────────────────────────────────────────────────────────────────────
-  score 2/9   steps 1   285ms
-  ERROR: [Groq] API Error: 400 {"error":{"message":"invalid JSON schema for tool fetchCollectionNameAndSchema, tools[0].function.parameters: jsonschema file:///home/di/params.json compilation failed: '/type' does not validate wit
-  tool calls:
-    (none)
-  final answer:
-    (none)
-  failed checks: reachable, calledSchemaFirst, calledFetchRecord, rightCollection, userIdInFilters, answeredWithTotal, cleanOutput
-
-groq:groq/compound
-──────────────────────────────────────────────────────────────────────────────
-  score 2/9   steps 1   289ms
-  ERROR: [Groq] API Error: 400 {"error":{"message":"invalid JSON schema for tool fetchCollectionNameAndSchema, tools[0].function.parameters: jsonschema file:///home/di/params.json compilation failed: '/type' does not validate wit
-  tool calls:
-    (none)
-  final answer:
-    (none)
-  failed checks: reachable, calledSchemaFirst, calledFetchRecord, rightCollection, userIdInFilters, answeredWithTotal, cleanOutput
-
-cohere:command-a-plus-05-2026
-──────────────────────────────────────────────────────────────────────────────
-  score 9/9   steps 4   6951ms
-  tool calls:
-    step 1  fetchCollectionNameAndSchema
-    step 2  fetchRecord
-             args {"collection":"expenseRegister","filters":{"userId":1136575387,"category":"Food","month":"08","year":2026}}
-    step 3  fetchRecord
-             args {"collection":"expenseRegister","filters":{"userId":1136575387,"category":"Food"}}
-  final answer:
-    You spent **₹1,930** on food this month (August 2026).
-    
-    Breakdown:
-    - Lunch - thali (Aug 2): ₹250
-    - Groceries (Aug 5): ₹1,200
-    - Coffee (Aug 7): ₹480
-    
-    This is about ₹643 per day average so far. Want me to track your daily food budget for the rest of the month?
-  failed checks: none
-
-cohere:command-a-03-2025
-──────────────────────────────────────────────────────────────────────────────
-  score 9/9   steps 3   8771ms
-  tool calls:
-    step 1  fetchCollectionNameAndSchema
-    step 2  fetchRecord
-             args {"collection":"expenseRegister","filters":{"userId":1136575387,"category":"Food","date":{"$gte":"2026-08-01","$lt":"2026-09-01"}}}
-  final answer:
-    You have spent a total of **₹1,930** on food this month, broken down as follows:
-    
-    - **Lunch - thali**: ₹250
-    - **Groceries**: ₹1,200
-    - **Coffee**: ₹480
-  failed checks: none
-
-cohere:command-r-plus-08-2024
-──────────────────────────────────────────────────────────────────────────────
-  score 2/9   steps 1   526ms
-  ERROR: [Cohere] API Error: 400 {"id":"55fac3a0-7be4-4b52-b6a9-775552a7251f","message":"schema must be an object"}
-  tool calls:
-    (none)
-  final answer:
-    (none)
-  failed checks: reachable, calledSchemaFirst, calledFetchRecord, rightCollection, userIdInFilters, answeredWithTotal, cleanOutput
-
-cohere:command-r7b-12-2024
-──────────────────────────────────────────────────────────────────────────────
-  score 6/9   steps 2   4615ms
-  tool calls:
-    step 1  fetchRecord
-             args {"collection":"expenseRegister","filters":{"category":"Food","date":{"$gte":"2026-08-01","$lt":"2026-09-01"}},"limit":50}
-  final answer:
-    You spent ₹1,830 on food this month.
-    
-    Here's a breakdown:
-    - ₹250 on 2nd August
-    - ₹1,200 on 5th August
-    - ₹480 on 7th August
-  failed checks: calledSchemaFirst, userIdInFilters, answeredWithTotal
-
-openrouter:nvidia/nemotron-3-super-120b-a12b:free
-──────────────────────────────────────────────────────────────────────────────
-  score 9/9   steps 3   12674ms
-  tool calls:
-    step 1  fetchCollectionNameAndSchema
-    step 2  fetchRecord
-             args {"collection":"expenseRegister","filters":{"userId":1136575387,"category":"Food","month":"August","year":2026}}
-  final answer:
-    
-    You've spent **₹1,930** on food this month (August 2026).
-    
-    Breakdown:
-    - Lunch - thali: ₹250 (Aug 2)
-    - Groceries: ₹1,200 (Aug 5)
-    - Coffee: ₹480 (Aug 7)
-  failed checks: none
-
-openrouter:google/gemma-4-31b-it:free
-──────────────────────────────────────────────────────────────────────────────
-  score 2/9   steps 1   398ms
-  ERROR: [OpenRouter] API Error: 400 {"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"{\n \"error\": {\n \"code\": 400,\n \"message\": \"* GenerateContentRequest.tools[0].function_declarations[1].parame
-  tool calls:
-    (none)
-  final answer:
-    (none)
-  failed checks: reachable, calledSchemaFirst, calledFetchRecord, rightCollection, userIdInFilters, answeredWithTotal, cleanOutput
-
-openrouter:openai/gpt-oss-20b:free
-──────────────────────────────────────────────────────────────────────────────
-  score 9/9   steps 3   34189ms
-  tool calls:
-    step 1  fetchCollectionNameAndSchema
-    step 2  fetchRecord
-             args {"collection":"expenseRegister","filters":{"category":"Food","month":"August","userId":1136575387,"year":2026},"limit":100}
-  final answer:
-    **Food spend for August 2026:** ₹1,930
-    
-    *(3 records found: ₹250 + ₹1,200 + ₹480)*
-  failed checks: none
+  failed: none
