@@ -16,7 +16,9 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 
 // Registered after the port, absent from toolOperator. Anything NOT listed here
 // showing up as an extra means an unreviewed capability reached the model.
-const INTENTIONAL_ADDITIONS = new Set(["updateFlowScratchpad"]);
+// deleteRecord is scoped to the three day registers only — see
+// DELETABLE_COLLECTIONS in tools/mongo/deleteRecord.js.
+const INTENTIONAL_ADDITIONS = new Set(["updateFlowScratchpad", "deleteRecord"]);
 // Present in toolOperator but deliberately dropped.
 const INTENTIONAL_REMOVALS = new Set();
 

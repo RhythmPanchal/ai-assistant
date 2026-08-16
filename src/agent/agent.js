@@ -5,7 +5,7 @@ import { agentConfig } from "../config/agent.config.js";
 import { getUserProfile } from "./userManager.js";
 import { createRecord } from "../tools/mongo/createRecord.js";
 import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHistorySchema.js";
-import { buildSystemInstruction } from "./instruction.js";
+import { buildSystemInstruction, NO_REPLY } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
 import { localDateOf, IST_TIMEZONE } from "../tools/mongo/dateUtils.js";
 import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
@@ -192,6 +192,18 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
             console.warn(`[runAgent] hit maxSteps (${maxSteps})`);
             LLMresponse =
                 "I had to stop — that took more steps than expected. Here's where I got to; ask me to continue if you'd like.";
+        }
+
+        // A blank reply has reached Telegram ten times since June, always on a
+        // confirmation or wrap-up turn. There is no case where an empty bubble
+        // is the right output: either the model meant to close the exchange,
+        // which NO_REPLY expresses, or it failed, which must be visible.
+        if (!LLMresponse || !LLMresponse.trim()) {
+            const didWork = conversation.messages.some(m => m.role === "tool" && m.result?.success);
+            console.warn(`[runAgent] empty response — substituting ${didWork ? "a fallback" : "NO_REPLY"}`);
+            LLMresponse = didWork
+                ? "Done — saved. Ask me if you want the details."
+                : NO_REPLY;
         }
 
         console.log("FINAL LLM RESPONSE:", LLMresponse);

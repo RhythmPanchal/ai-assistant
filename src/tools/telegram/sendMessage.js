@@ -69,6 +69,30 @@ export async function sendMessage(chatId, text) {
 }
 
 /**
+ * Removes a message. Used to clear the "Thinking…" placeholder on a turn that
+ * ends with no reply, so it does not sit there looking stuck forever.
+ *
+ * Telegram refuses deletes older than 48h; that is not an error worth raising
+ * here, so failures are swallowed after a log line.
+ */
+export async function deleteMessage(chatId, messageId) {
+  if (!chatId || !messageId) return { ok: false };
+  try {
+    const response = await fetch(`${TELEGRAM_API}/deleteMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+    });
+    const data = await response.json();
+    if (!data.ok) console.warn("[deleteMessage] failed:", data.description);
+    return data;
+  } catch (err) {
+    console.warn("[deleteMessage] failed:", err.message);
+    return { ok: false };
+  }
+}
+
+/**
  * Edits an existing Telegram message in-place.
  *
  * @param {number|string} chatId

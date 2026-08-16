@@ -1,5 +1,6 @@
 import { createRecord } from "../tools/mongo/createRecord.js";
 import { updateRecords } from "../tools/mongo/updateRecord.js";
+import { deleteRecord } from "../tools/mongo/deleteRecord.js";
 import { fetchRecord } from "../tools/mongo/fetchRecords.js";
 import { sendMessage } from "../tools/telegram/sendMessage.js";
 import fetchCollectionNameAndSchema from "../tools/mongo/fetchCollectionSchema.js";
@@ -41,6 +42,11 @@ export const ACTION_MAP = {
   updateRecords: {
     fn: updateRecords,
     params: ["records"]
+  },
+
+  deleteRecord: {
+    fn: deleteRecord,
+    params: ["collectionName", "id", "userId", "reason"]
   },
 
   fetchRecord: {

@@ -139,5 +139,99 @@ await expectThrow(
     }
 }
 
+console.log("\nfetchRecord — bounds and filter validation");
+
+const { fetchRecord } = await import("../tools/mongo/fetchRecords.js");
+const USER = 1136575387;
+
+{
+    const r = await fetchRecord("dietRegister", { userId: USER });
+    check("an unscoped day-scoped query is bounded to 7 days", () =>
+        assert.ok(r.applied.some(a => a.includes("last 7 days")), JSON.stringify(r.applied)));
+    check("the bound is reported, not silent", () => assert.ok(r.applied.length > 0));
+}
+
+{
+    const r = await fetchRecord("dietRegister", { userId: USER, date: { $gte: "2026-01-01" } });
+    check("an explicit date filter is left alone", () =>
+        assert.equal(r.applied.filter(a => a.includes("7 days")).length, 0));
+}
+
+{
+    const r = await fetchRecord("taskCalendar", { userId: USER });
+    check("taskCalendar is not date-bounded (not day-scoped)", () =>
+        assert.equal(r.applied.filter(a => a.includes("7 days")).length, 0));
+}
+
+{
+    const r = await fetchRecord("expenseRegister", { userId: USER }, null, "desc", 5000);
+    check("an oversized limit is capped rather than refused", () =>
+        assert.ok(r.applied.some(a => a.includes("capped"))));
+}
+
+await expectThrow(
+    "a quoted filter key is an error, not an empty result",
+    () => fetchRecord("dietRegister", { '"date"': "2026-08-12", '"userId"': USER }),
+    "Unknown filter field"
+);
+
+await expectThrow(
+    "an invented filter key is an error",
+    () => fetchRecord("taskRegister", { userId: USER, Ref_date: "2026-08-11" }),
+    "Unknown filter field"
+);
+
+{
+    const r = await fetchRecord("triggerJob", { userId: USER });
+    check("triggerJob is now readable", () => assert.ok(Array.isArray(r.records)));
+}
+{
+    const r = await fetchRecord("userSchedule", { userId: USER });
+    check("userSchedule is now readable", () => assert.ok(Array.isArray(r.records)));
+}
+
+console.log("\ndeleteRecord — scope");
+
+const { deleteRecord } = await import("../tools/mongo/deleteRecord.js");
+
+await expectThrow(
+    "taskCalendar cannot be deleted",
+    () => deleteRecord("taskCalendar", "6a7c491946a2e8130aa344b9", USER, "test"),
+    "Cannot delete"
+);
+await expectThrow(
+    "chatHistory cannot be deleted",
+    () => deleteRecord("chatHistory", "6a7c491946a2e8130aa344b9", USER, "test"),
+    "Cannot delete"
+);
+await expectThrow(
+    "a non-hex id is rejected before touching the DB",
+    () => deleteRecord("dietRegister", "task_1", USER, "test"),
+    "not a 24-character hex"
+);
+await expectThrow(
+    "userId is required",
+    () => deleteRecord("dietRegister", "6a7c491946a2e8130aa344b9", null, "test"),
+    "userId is required"
+);
+await expectThrow(
+    "an id that does not exist for this user is an error, not a silent no-op",
+    () => deleteRecord("dietRegister", "000000000000000000000000", USER, "test"),
+    "No record"
+);
+
+console.log("\nNO_REPLY sentinel");
+
+const { NO_REPLY } = await import("../agent/instruction.js");
+const { buildSystemInstruction } = await import("../agent/instruction.js");
+
+check("the sentinel is a single constant, not a literal in prose", () =>
+    assert.equal(NO_REPLY, "[[NO_REPLY]]"));
+check("the prompt documents when to emit it", () => {
+    const p = buildSystemInstruction();
+    assert.ok(p.includes(NO_REPLY), "sentinel missing from prompt");
+    assert.ok(/never send an empty/i.test(p), "empty-reply ban missing from prompt");
+});
+
 console.log(`\n${pass} passed${process.exitCode ? " — SOME FAILED" : ""}\n`);
 process.exit(process.exitCode ?? 0);

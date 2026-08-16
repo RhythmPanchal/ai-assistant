@@ -1,6 +1,18 @@
 const TZ = "Asia/Kolkata";
 
 /**
+ * Emitted instead of a reply when nothing needs saying. The transport drops it
+ * rather than sending it, and it is stored in chatHistory so the transcript
+ * records that the turn closed deliberately.
+ *
+ * Double brackets because it must never collide with something the user could
+ * plausibly type, and it reads as an instruction to the system rather than as
+ * content. Changing it is a one-line change here — it is imported everywhere
+ * else, never spelled out again.
+ */
+export const NO_REPLY = "[[NO_REPLY]]";
+
+/**
  * Always anchor system context in the user's zone. An earlier version used
  * toISOString()/toLocaleTimeString(), which followed the HOST timezone — on a
  * UTC server that shifted TODAY_DATE near IST midnight and fed the model UTC
@@ -111,6 +123,26 @@ Short. Plain. No preamble, no restating the question.
 Simple Markdown only: *bold*, "-" bullets, \`code\` for ids and values.
 No tables. Dates as YYYY-MM-DD.
 Never escape characters — write naturally.
+
+WHEN NOTHING NEEDS SAYING
+  Reply with exactly ${NO_REPLY} and nothing else. It is not shown to the
+  user — it closes the exchange silently.
+
+  Use it when a reply would only be noise:
+    - They signed off and you already said goodnight. "gn" -> ${NO_REPLY}
+    - They acknowledged something you did. "ok", "thanks", "got it", "sorted",
+      "cool" with nothing else in the message -> ${NO_REPLY}
+    - They confirmed something you had already confirmed.
+
+  Do NOT use it when:
+    - They asked anything, however small.
+    - You ran a tool this turn. Say what you did, briefly.
+    - They told you something new — a fact, a plan, a feeling.
+    - You owe them a question to finish a routine.
+    - Anything went wrong. Say so.
+
+  Never send an empty or whitespace-only reply. If you have nothing to say,
+  that is what ${NO_REPLY} is for.
 `.trim();
 
 function nowBlock() {

@@ -1,5 +1,6 @@
 import { runAgent } from "../../agent/agent.js";
-import { sendMessage, editMessage, createThinkingAnimation, answerCallbackQuery } from "./sendMessage.js";
+import { NO_REPLY } from "../../agent/instruction.js";
+import { sendMessage, editMessage, deleteMessage, createThinkingAnimation, answerCallbackQuery } from "./sendMessage.js";
 import { dismissCallbackHandler } from "../../connectors/oauth/dismissCallbackHandler.js";
 
 
@@ -56,6 +57,15 @@ export async function handleTelegramMessage(message) {
 
     // Stop animation BEFORE editing — prevents race condition
     thinking.stop();
+
+    // The agent decided nothing needs saying. It is already recorded in
+    // chatHistory; here it just means clearing the placeholder and going quiet,
+    // rather than sending the sentinel to the user as text.
+    if (reply?.trim() === NO_REPLY) {
+      console.log("[handleTelegramMessage] NO_REPLY — closing silently");
+      await deleteMessage(chatId, thinking.messageId);
+      return;
+    }
 
     // Edit the placeholder with the actual response
     if (thinking.messageId) {

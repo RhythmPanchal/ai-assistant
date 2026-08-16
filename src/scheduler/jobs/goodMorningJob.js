@@ -1,4 +1,5 @@
 import { runAgent } from "../../agent/agent.js";
+import { NO_REPLY } from "../../agent/instruction.js";
 import pendingTasksKnowledge from "../../knowledge/pendingTasksKnowledge.js";
 import taskLogKnowledge from "../../knowledge/taskLogKnowledge.js";
 import { sendMessage } from "../../tools/telegram/sendMessage.js";
@@ -54,6 +55,15 @@ export async function goodMorningJob(user) {
         goodMorningFlow.buildTriggerPrompt({ pendingTasks, taskLogs }),
         "goodMorningJob"
       );
+
+      // The whole point of this job is to send a draft, so NO_REPLY here is a
+      // failure, not a decision — the user would otherwise get silence with no
+      // trace of why.
+      if (!draftMessage || draftMessage.trim() === NO_REPLY) {
+        console.error(`[goodMorningJob] agent returned no draft for ${userId} — nothing sent`);
+        continue;
+      }
+
       results.push(await sendMessage(userId, draftMessage));
     } catch (error) {
       // One user's failure must not stop the rest, but the error still has to
