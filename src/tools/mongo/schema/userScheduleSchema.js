@@ -93,3 +93,18 @@ const userScheduleSchema = {
 };
 
 export default userScheduleSchema;
+
+/**
+ * Serves:
+ *  - insertTodaySchedule — findOne({ userId, date: {$gte,$lt} }) on every
+ *    calendar sync
+ *
+ * unique: the collection description and insertSchedule's own comment both
+ * already claim "one record per user per day (unique index on userId + date)".
+ * The index was never actually created, so a second lock-in for the same day
+ * silently inserted a rival schedule and the calendar sync picked whichever
+ * findOne returned first.
+ */
+export const USER_SCHEDULE_INDEXES = [
+  { key: { userId: 1, date: -1 }, name: "userId_1_date_-1", unique: true },
+];

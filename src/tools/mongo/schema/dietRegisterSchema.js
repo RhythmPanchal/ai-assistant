@@ -92,3 +92,17 @@ const dietRegisterSchema = {
 };
 
 export default dietRegisterSchema;
+
+/**
+ * Serves:
+ *  - dietLogKnowledge — find({ userId, date: {$gte,$lt} }).sort({ date: -1 })
+ *  - fetchRecord      — { userId, date } equality, run on every wrap-up turn
+ *
+ * unique: the goodNight overlay states "ONE document per day per user" and
+ * updates the existing doc as more meals come in. Nothing enforced that, so
+ * a fetch that missed (a malformed filter, a date the model resolved wrongly)
+ * silently produced a second document for the same day instead of an error.
+ */
+export const DIET_REGISTER_INDEXES = [
+  { key: { userId: 1, date: -1 }, name: "userId_1_date_-1", unique: true },
+];

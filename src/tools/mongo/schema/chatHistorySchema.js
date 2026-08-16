@@ -65,6 +65,22 @@ const chatHistorySchema = {
 };
 export default chatHistorySchema;
 
+/**
+ * Serves both reads in chatHistoryKnowledge, which run before every single
+ * agent turn:
+ *  - today's turns  — find({ userId, createdAt: {$gte,$lte} })
+ *                     .sort({ createdAt: -1 }).limit(50)
+ *  - the fallback   — find({ userId }).sort({ createdAt: -1 }).limit(5)
+ *
+ * Descending on createdAt matches the sort, so the limit stops after reading
+ * exactly as many index entries as it needs. This is the collection that grows
+ * without bound, so it is the one where a missing index degrades worst over
+ * time — every turn would scan the whole history to find today's.
+ */
+export const CHAT_HISTORY_INDEXES = [
+  { key: { userId: 1, createdAt: -1 }, name: "userId_1_createdAt_-1" },
+];
+
 
 /**
  * Builder that accumulates messages for a single conversation turn

@@ -24,3 +24,12 @@ const oauthConnectorSchema = {
 };
 
 export default oauthConnectorSchema;
+
+/**
+ * Serves resolveProvider — findOne({ appName }), on every OAuth start and
+ * callback. unique: appName is the key the PROVIDER_MAP is looked up by, and
+ * two rows would mean the clientId used depends on document order.
+ */
+export const OAUTH_CONNECTOR_INDEXES = [
+  { key: { appName: 1 }, name: "appName_1", unique: true },
+];

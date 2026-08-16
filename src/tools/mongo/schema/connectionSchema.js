@@ -49,3 +49,20 @@ const connectionSchema = {
 };
 
 export default connectionSchema;
+
+/**
+ * Serves:
+ *  - getAccessToken       — findOne({ userId, appName, status: "ACTIVE" })
+ *  - generateConnectorLink — updateOne({ userId, appName }, …, { upsert: true })
+ *  - startOauth / callback — findOne({ stateToken })
+ *
+ * Both unique. The (userId, appName) pair is an upsert key, and the whole
+ * connector layer assumes one row per user per app — two would mean
+ * getAccessToken could refresh one token while the callback wrote another.
+ * stateToken is a CSRF nonce, so a collision must be impossible; sparse
+ * because it is nulled out between flows.
+ */
+export const CONNECTION_INDEXES = [
+  { key: { userId: 1, appName: 1 }, name: "userId_1_appName_1", unique: true },
+  { key: { stateToken: 1 }, name: "stateToken_1", unique: true, sparse: true },
+];

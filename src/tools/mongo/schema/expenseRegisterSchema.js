@@ -48,3 +48,15 @@ const expenseRegisterSchema = {
 };
 
 export default expenseRegisterSchema;
+
+/**
+ * Serves:
+ *  - expenseLogknowledge — find({ userId, date: {$gte,$lt} }).sort({ date: -1 })
+ *  - fetchRecord         — { userId, date } equality
+ *
+ * NOT unique, unlike the other two registers: one row per expense, so several
+ * documents legitimately share a (userId, date).
+ */
+export const EXPENSE_REGISTER_INDEXES = [
+  { key: { userId: 1, date: -1 }, name: "userId_1_date_-1" },
+];

@@ -66,3 +66,15 @@ const tasksRegisterSchema = {
 };
 
 export default tasksRegisterSchema;
+
+/**
+ * Serves:
+ *  - taskLogKnowledge — find({ userId, date: {$gte,$lt} }).sort({ date: -1 }),
+ *    read at the top of every morning job
+ *  - fetchRecord      — { userId, date } equality
+ *
+ * unique: one log document per day, appended to via performedTasks[].
+ */
+export const TASK_REGISTER_INDEXES = [
+  { key: { userId: 1, date: -1 }, name: "userId_1_date_-1", unique: true },
+];

@@ -60,3 +60,25 @@ const activeFlowsSchema = {
 };
 
 export default activeFlowsSchema;
+
+/**
+ * Serves, in order of how often each runs:
+ *  - getOpenFlowsForUser  — find({ userId, state: "open" }), once per agent turn
+ *  - openFlow / closeFlow — { userId, flowType, state: "open" }
+ *  - hasFlowStartedToday  — findOne({ userId, flowType, startedAt: {$gte} }),
+ *    the guard that stops a restart re-running a whole morning job
+ *
+ * Three indexes rather than one compound: Mongo can use a leading prefix of a
+ * compound index but cannot skip a middle field, so { userId, flowType, state }
+ * does not help the { userId, state } lookup — and that is the one on the
+ * per-turn path.
+ *
+ * Deliberately not unique on (userId, flowType, state). Two open flows of the
+ * same type is a bug openFlow already prevents by superseding, but enforcing it
+ * here would make a benign race throw inside a cron tick.
+ */
+export const ACTIVE_FLOWS_INDEXES = [
+  { key: { userId: 1, state: 1 }, name: "userId_1_state_1" },
+  { key: { userId: 1, flowType: 1, state: 1 }, name: "userId_1_flowType_1_state_1" },
+  { key: { userId: 1, flowType: 1, startedAt: -1 }, name: "userId_1_flowType_1_startedAt_-1" },
+];

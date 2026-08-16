@@ -100,3 +100,17 @@ const triggerJobSchema = {
 };
 
 export default triggerJobSchema;
+
+/**
+ * Serves:
+ *  - triggerExecutor — find({ status: "active", nextExecutionAt: {$lte: now} }),
+ *    which runs EVERY MINUTE, forever. The hottest query in the system and the
+ *    one most worth indexing: without it each tick is a full collection scan.
+ *    Equality on status first, then the range — an index can only range-scan on
+ *    its last used field.
+ *  - createReminders.findDuplicate — { userId, title, nextExecutionAt, status }
+ */
+export const TRIGGER_JOB_INDEXES = [
+  { key: { status: 1, nextExecutionAt: 1 }, name: "status_1_nextExecutionAt_1" },
+  { key: { userId: 1, title: 1, nextExecutionAt: 1 }, name: "userId_1_title_1_nextExecutionAt_1" },
+];

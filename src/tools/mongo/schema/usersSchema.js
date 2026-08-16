@@ -52,3 +52,17 @@ const usersSchema = {
 };
 
 export default usersSchema;
+
+/**
+ * Serves:
+ *  - getUserProfile        — findOne({ userId }), now on every agent turn since
+ *    the profile is read before the flow overlays are built
+ *  - resolveRoutineTargets — find({ "preferences.triggersOptIn": true }), the
+ *    hourly routine executor's fan-out list
+ *
+ * unique on userId: it is the identity of the record, and upserts key on it.
+ */
+export const USERS_INDEXES = [
+  { key: { userId: 1 }, name: "userId_1", unique: true },
+  { key: { "preferences.triggersOptIn": 1 }, name: "preferences.triggersOptIn_1" },
+];
