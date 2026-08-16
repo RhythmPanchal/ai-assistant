@@ -19,6 +19,27 @@ export function toIST(s) {
 
 export const IST_TIMEZONE = "Asia/Kolkata";
 
+/**
+ * The calendar date, in `timeZone`, that an instant falls on — "YYYY-MM-DD".
+ *
+ * A day label is not an instant. Which day a wrap-up belongs to is decided
+ * ONCE, when the routine opens, and must never be re-derived from the clock
+ * afterwards: a wrap-up typed at 02:47 still belongs to the day that ended.
+ * Letting the model resolve "today" against the live clock produced logs on
+ * the wrong day roughly half the time, and once on 2019-12-31.
+ *
+ * Emit this bare string to the model. A date-only string is also the one form
+ * `toIST` round-trips identically, so it cannot be shifted by a later parse.
+ */
+export function localDateOf(instant, timeZone = IST_TIMEZONE) {
+  // Checked before constructing: new Date(null) is epoch 0, not Invalid Date,
+  // so a missing startedAt would otherwise label the flow "1970-01-01".
+  if (instant == null) return null;
+  const d = instant instanceof Date ? instant : new Date(instant);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-CA", { timeZone });
+}
+
 /** That zone's UTC offset at that instant, as "+05:30". Honours DST. */
 function zoneOffset(timeZone, at) {
   const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })

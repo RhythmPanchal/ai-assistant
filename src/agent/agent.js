@@ -7,6 +7,7 @@ import { createRecord } from "../tools/mongo/createRecord.js";
 import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHistorySchema.js";
 import { buildSystemInstruction } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
+import { localDateOf, IST_TIMEZONE } from "../tools/mongo/dateUtils.js";
 import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
 import goodMorningFlow from "./flows/goodMorningFlow.js";
@@ -22,14 +23,23 @@ const FLOW_OVERLAYS = {
  * Per-flow state the overlay needs but cannot infer from the transcript.
  * Without this the scratchpad is write-only and the two-strike rule in the
  * goodMorning overlay can never fire.
+ *
+ * LOG DATE is the important one: it is the calendar day the flow OPENED on,
+ * not the current day. A goodNight flow opens at 23:00 and is often answered
+ * after midnight, when "today" in RIGHT NOW has already rolled over — so the
+ * day is decided here, once, and handed to the model as a literal.
  */
-export function flowStateBlock(flow) {
+export function flowStateBlock(flow, timeZone = IST_TIMEZONE) {
     const sp = flow.scratchpad || {};
+    const logDate = localDateOf(flow.startedAt, timeZone);
     return [
         "-------------------------------------",
         `📌 FLOW STATE (${flow.flowType})`,
+        `- LOG DATE: ${logDate ?? "unknown"}  ← the day this routine covers.`,
+        `  Copy it verbatim into every date field you write in this flow.`,
+        `  Do NOT use the date from RIGHT NOW, and do NOT add a time or "Z".`,
         `- unrelatedReplies so far: ${sp.unrelatedReplies ?? 0}`,
-        `- opened: ${flow.startedAt ? new Date(flow.startedAt).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) : "unknown"}`,
+        `- opened: ${flow.startedAt ? new Date(flow.startedAt).toLocaleString("en-GB", { timeZone }) : "unknown"}`,
         "-------------------------------------",
     ].join("\n");
 }
@@ -75,23 +85,24 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
     try {
         const chatHistory = await chatHistoryKnowledge(userId);
 
-        // Active flow overlays. Lazy expiry inside getOpenFlowsForUser. keeps stale flows from leaking.
-        const openFlows = await getOpenFlowsForUser(userId);
-        const overlays = openFlows
-            .filter(f => FLOW_OVERLAYS[f.flowType])
-            .map(f => `${FLOW_OVERLAYS[f.flowType]}\n\n${flowStateBlock(f)}`);
-
-        // 3. Persona + live IST time + overlays. Rebuilt every turn.
-        const systemInstruction = buildSystemInstruction(overlays);
-
-        // 4. The user's own API keys, if they supplied any. Absent keys fall
-        //    through to the internal env keys inside each provider factory.
+        // Fetched before the overlays because flowStateBlock needs the zone to
+        // resolve LOG DATE — the user's calendar day, not the host's.
         let userProfile = null;
         try {
             userProfile = await getUserProfile(userId);
         } catch (e) {
             console.warn("[runAgent] user profile lookup failed, using internal keys:", e.message);
         }
+        const timeZone = userProfile?.timezone || IST_TIMEZONE;
+
+        // Active flow overlays. Lazy expiry inside getOpenFlowsForUser. keeps stale flows from leaking.
+        const openFlows = await getOpenFlowsForUser(userId);
+        const overlays = openFlows
+            .filter(f => FLOW_OVERLAYS[f.flowType])
+            .map(f => `${FLOW_OVERLAYS[f.flowType]}\n\n${flowStateBlock(f, timeZone)}`);
+
+        // 3. Persona + live IST time + overlays. Rebuilt every turn.
+        const systemInstruction = buildSystemInstruction(overlays);
 
         const messages = [
             { role: "system", content: systemInstruction },

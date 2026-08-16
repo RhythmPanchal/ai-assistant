@@ -29,7 +29,13 @@ export class CreateOneTimeReminderTool extends BaseTool {
 
     async execute({ title, userId, nextExecutionAt, message }) {
         const result = await createOneTimeReminder(title, userId, nextExecutionAt, message);
-        return new ToolResult(true, `Created one-time reminder: "${title}".`, result);
+        // A duplicate is a deliberate no-op, not a creation — saying "Created"
+        // would tell the model it just scheduled a second reminder.
+        return new ToolResult(
+            true,
+            result.duplicate ? result.message : `Created one-time reminder: "${title}".`,
+            result
+        );
     }
 }
 
@@ -69,7 +75,11 @@ export class CreateMultiTimeReminderTool extends BaseTool {
 
     async execute({ title, userId, cron, nextExecutionAt, message, expiryDate }) {
         const result = await createMultiTimeReminder(title, userId, cron, nextExecutionAt, message, expiryDate);
-        return new ToolResult(true, `Created recurring reminder: "${title}" with cron ${cron}.`, result);
+        return new ToolResult(
+            true,
+            result.duplicate ? result.message : `Created recurring reminder: "${title}" with cron ${cron}.`,
+            result
+        );
     }
 }
 

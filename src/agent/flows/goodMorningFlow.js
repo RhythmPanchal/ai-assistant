@@ -72,7 +72,9 @@ REFINE LOOP:
 ON EXPLICIT CONFIRMATION (mandatory):
 Call insertSchedule with:
 - userId (integer)
-- date: today's date as ISO string (e.g. "2026-05-01")
+- date: the LOG DATE from the FLOW STATE block below, copied verbatim as a bare
+  date string (e.g. "2026-05-01"). No time component, no "Z", no offset. This is
+  the day the routine opened — do not re-derive it from RIGHT NOW.
 - slots: array of every scheduled time block, each with:
   • slotId: "slot_1", "slot_2", … (sequential)
   • startTime / endTime: "HH:mm" 24-hour
