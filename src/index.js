@@ -7,6 +7,7 @@ import { startTelegramPolling } from "./tools/telegram/telegramPoller.js";
 import { handleTelegramMessage, handleCallbackQuery } from "./tools/telegram/telegramHandler.js"
 import initCron from "./scheduler/initCron.js";
 import oauthRouter from "./oauthRestAPI.js";
+import adminRouter from "./adminRestAPI.js";
 
 const app = express();
 app.use(express.json());
@@ -35,12 +36,21 @@ async function initService(){
 }
 
 const PORT = process.env.PORT || 3000;
+const BOOTED_AT = new Date().toISOString();
 
 app.get('/', (req, res) => {
-  res.json({ message: 'Telegram LLM Bot is running!' });
+  // commit is what tells one deploy apart from the one before it. Render sets
+  // RENDER_GIT_COMMIT on every build, so polling this is how you know a push has
+  // actually gone live rather than guessing from the clock.
+  res.json({
+    message: 'Telegram LLM Bot is running!',
+    commit: process.env.RENDER_GIT_COMMIT ?? null,
+    startedAt: BOOTED_AT,
+  });
 });
 
 app.use(oauthRouter);
+app.use(adminRouter);
 
 app.listen(PORT, () => {
   initService(); 

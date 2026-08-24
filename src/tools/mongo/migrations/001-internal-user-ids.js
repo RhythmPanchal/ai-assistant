@@ -1,23 +1,21 @@
 /**
- * Hand-run:  node src/tools/mongo/migrations/001-internal-user-ids.js [--apply]
+ * Repoint every row owned by the original Telegram-chat-id user onto an internal
+ * incremental userId, and record the Telegram id as an identity row.
  *
- * DRY RUN BY DEFAULT. Without --apply it only reports what it would change.
+ * Two ways in:
+ *   node src/tools/mongo/migrations/001-internal-user-ids.js [--apply]
+ *   POST /admin/migrations/001-internal-user-ids[?apply=true]   (adminRestAPI.js)
  *
- * Repoints every row owned by the original Telegram-chat-id user onto an
- * internal incremental userId, and records the Telegram id as an identity row.
+ * DRY RUN BY DEFAULT in both. Without apply it only reports what it would change.
  *
  * RUN THIS BEFORE STARTING THE BOT on the identity-layer code. If the bot gets
  * here first, the legacy user's next message finds no identity, allocates a
  * fresh id, and opens an empty profile while every existing row still sits under
- * the old id. That is repairable — the script below adopts the id the bot minted
+ * the old id. That is repairable — the code below adopts the id the bot minted
  * and repoints onto it — but the clean path is to run this first.
  *
- * Read the checklist it prints at the end. Three code changes have to follow it,
- * in that order, or the bot writes new rows under the old id while reading under
- * the new one.
+ * Read the checklist in the result. Two code changes have to follow it.
  */
-import "dotenv/config";
-
 import { getDB } from "../mongoClient.js";
 import { ACTIVE_FLOWS } from "../schema/activeFlowsSchema.js";
 import { CHAT_HISTORY } from "../schema/chatHistorySchema.js";
@@ -32,9 +30,8 @@ import { USER_IDENTITY } from "../schema/userIdentitySchema.js";
 import { USER_SCHEDULE } from "../schema/userScheduleSchema.js";
 import { USERS } from "../schema/usersSchema.js";
 
-const LEGACY_TELEGRAM_ID = 1136575387;
+export const LEGACY_TELEGRAM_ID = 1136575387;
 const TARGET_USER_ID = 1;
-const APPLY = process.argv.includes("--apply");
 
 /**
  * Every collection storing userId as an OWNER reference.
@@ -51,10 +48,23 @@ const OWNED_COLLECTIONS = [
     TASK_CALENDAR, TASK_REGISTER, TRIGGER_JOB, USER_SCHEDULE, USERS, "llmUsage",
 ];
 
-async function main() {
+/**
+ * @param {object}  [options]
+ * @param {boolean} [options.apply] false (default) reports only; true writes.
+ * @returns {Promise<object>} structured report, safe to serialise to JSON
+ */
+export async function runIdentityMigration({ apply = false } = {}) {
     const db = await getDB();
-
-    console.log(APPLY ? "APPLYING\n" : "DRY RUN — pass --apply to write\n");
+    const report = {
+        apply,
+        database: db.databaseName,
+        legacyTelegramId: LEGACY_TELEGRAM_ID,
+        status: "pending",
+        counts: {},
+        total: 0,
+        steps: [],
+    };
+    const step = (m) => { report.steps.push(m); console.log(`[migration:001] ${m}`); };
 
     // ── where are we? ────────────────────────────────────────────────────────
     // An existing identity does NOT mean the migration ran. It far more likely
@@ -64,10 +74,11 @@ async function main() {
     const existingIdentity = await db.collection(USER_IDENTITY)
         .findOne({ channel: "telegram", externalId: String(LEGACY_TELEGRAM_ID) });
     const targetUserId = existingIdentity?.userId ?? TARGET_USER_ID;
+    report.targetUserId = targetUserId;
+    report.adoptedExistingIdentity = Boolean(existingIdentity);
 
     if (existingIdentity) {
-        console.log(`Identity exists: the bot allocated userId ${targetUserId} before this ran.`);
-        console.log("Repointing legacy rows onto it instead of minting a second user.\n");
+        step(`identity exists — the bot allocated userId ${targetUserId} before this ran; repointing onto it`);
     } else {
         const collision = await db.collection(USERS).findOne({ userId: targetUserId });
         if (collision) {
@@ -76,28 +87,27 @@ async function main() {
     }
 
     // ── report ───────────────────────────────────────────────────────────────
-    let total = 0;
     for (const name of OWNED_COLLECTIONS) {
-        const count = await db.collection(name).countDocuments({ userId: LEGACY_TELEGRAM_ID });
-        total += count;
-        console.log(`  ${String(count).padStart(6)}  ${name}`);
-    }
-    console.log(`  ${String(total).padStart(6)}  TOTAL\n`);
-
-    if (total === 0) {
-        console.log("No rows remain under the legacy id. Already migrated — nothing to do.");
-        return;
+        report.counts[name] = await db.collection(name).countDocuments({ userId: LEGACY_TELEGRAM_ID });
+        report.total += report.counts[name];
     }
 
-    const otherOwners = await db.collection(CHAT_HISTORY).distinct("userId", { userId: { $ne: LEGACY_TELEGRAM_ID } });
-    if (otherOwners.length) {
-        console.log(`NOTE: chatHistory also holds rows for ${otherOwners.join(", ")}.`);
-        console.log("      This migration only moves the legacy user; those need their own pass.\n");
+    report.otherOwners = await db.collection(CHAT_HISTORY)
+        .distinct("userId", { userId: { $ne: LEGACY_TELEGRAM_ID } });
+    if (report.otherOwners.length) {
+        step(`chatHistory also holds rows for ${report.otherOwners.join(", ")} — they need their own pass`);
     }
 
-    if (!APPLY) {
-        console.log("Dry run complete. Re-run with --apply to write.");
-        return;
+    if (report.total === 0) {
+        report.status = "nothing-to-do";
+        step("no rows remain under the legacy id — already migrated");
+        return report;
+    }
+
+    if (!apply) {
+        report.status = "dry-run";
+        step(`dry run: ${report.total} rows would move to userId ${targetUserId}`);
+        return report;
     }
 
     const now = new Date();
@@ -110,9 +120,7 @@ async function main() {
         // and the real legacy profile. Repointing the legacy row would violate
         // the unique index on userId, so the empty stub goes first.
         const removed = await db.collection(USERS).deleteOne({ userId: targetUserId });
-        if (removed.deletedCount) {
-            console.log(`users: removed the empty stub row for userId ${targetUserId}`);
-        }
+        if (removed.deletedCount) step(`users: removed the empty stub row for userId ${targetUserId}`);
     }
 
     if (!legacyProfile) {
@@ -129,13 +137,12 @@ async function main() {
             createdAt: now,
             updatedAt: now,
         });
-        console.log(`users: created row for userId ${targetUserId}`);
+        step(`users: created row for userId ${targetUserId}`);
     } else {
         await db.collection(USERS).updateOne(
             { userId: LEGACY_TELEGRAM_ID },
             { $set: { "preferences.triggersOptIn": true, updatedAt: now } }
         );
-        console.log("users: existing row will be repointed below");
     }
 
     // ── 2. the identity row ──────────────────────────────────────────────────
@@ -152,25 +159,26 @@ async function main() {
             updatedAt: now,
         });
     }
-    console.log(`userIdentity: telegram:${LEGACY_TELEGRAM_ID} → userId ${targetUserId}`);
+    step(`userIdentity: telegram:${LEGACY_TELEGRAM_ID} → userId ${targetUserId}`);
 
     // ── 3. repoint every owned row ───────────────────────────────────────────
+    report.moved = {};
     for (const name of OWNED_COLLECTIONS) {
         try {
             const res = await db.collection(name).updateMany(
                 { userId: LEGACY_TELEGRAM_ID },
                 { $set: { userId: targetUserId } }
             );
-            if (res.modifiedCount) console.log(`  ${String(res.modifiedCount).padStart(6)}  ${name}`);
+            if (res.modifiedCount) report.moved[name] = res.modifiedCount;
         } catch (err) {
             if (err?.code !== 11000) throw err;
             // Only reachable in the repair path: the bot wrote a row under the
             // new id that collides with a legacy row on a unique index — most
             // likely same (userId, date). Merging those needs a human decision,
-            // so stop here rather than guess which row survives.
+            // so stop rather than guess which row survives.
             throw new Error(
                 `${name}: a row written under userId ${targetUserId} collides with a legacy row ` +
-                `on a unique index. De-duplicate ${name} by hand, then re-run.\n  ${err.message}`
+                `on a unique index. De-duplicate ${name} by hand, then re-run. ${err.message}`
             );
         }
     }
@@ -183,27 +191,19 @@ async function main() {
         { $set: { seq: maxId } },
         { upsert: true }
     );
-    console.log(`\ncounters.${USER_ID_SEQUENCE}.seq = ${maxId} (next signup gets ${maxId + 1})`);
+    step(`counters.${USER_ID_SEQUENCE}.seq = ${maxId} (next signup gets ${maxId + 1})`);
 
-    console.log(`
-=====================================================================
-NOW DO THESE, IN THIS ORDER
-=====================================================================
-1. src/agent/instruction.js — nothing to do. The WHO YOU ARE HELPING block
-   is rendered per turn by userProfileKnowledge and already emits the
-   resolved userId, so there is no literal left to go stale. Confirm with
-   a real turn that the block reads "userId (integer): ${targetUserId}".
+    report.status = "applied";
+    report.checklist = [
+        `src/agent/instruction.js — nothing to do. WHO YOU ARE HELPING is rendered per turn by ` +
+        `userProfileKnowledge and already emits the resolved userId. Confirm on a real turn that ` +
+        `it reads "userId (integer): ${targetUserId}".`,
 
-2. src/agent/userManager.js — LEGACY_USER is now dead. resolveRoutineTargets
-   finds the real row via triggersOptIn. Delete it once routines have fired
-   once and you have seen them land.
+        `src/agent/userManager.js — LEGACY_USER is now dead. resolveRoutineTargets finds the real ` +
+        `row via triggersOptIn. Delete it once routines have fired and you have seen them land.`,
 
-3. Old triggerJob rows keep actionType "sendMessage" with a baked-in
-   payload.chatId. They still fire — the dispatcher keeps that path. New
-   reminders use "sendToUser". Nothing to change; just know why both exist.
-=====================================================================`);
+        `Old triggerJob rows keep actionType "sendMessage" with a baked-in payload.chatId. They ` +
+        `still fire — the dispatcher keeps that path. New reminders use "sendToUser".`,
+    ];
+    return report;
 }
-
-main()
-    .then(() => process.exit(0))
-    .catch(err => { console.error("\nMIGRATION FAILED:", err); process.exit(1); });
