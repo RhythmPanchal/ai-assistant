@@ -189,10 +189,10 @@ async function main() {
 =====================================================================
 NOW DO THESE, IN THIS ORDER
 =====================================================================
-1. src/agent/instruction.js — the PROFILE block still tells the model
-   "userId (integer): ${LEGACY_TELEGRAM_ID}". Until it says ${targetUserId}, every record
-   the LLM writes lands under the old id and is invisible to every read.
-   This is the one that silently loses data. Do it first.
+1. src/agent/instruction.js — nothing to do. The WHO YOU ARE HELPING block
+   is rendered per turn by userProfileKnowledge and already emits the
+   resolved userId, so there is no literal left to go stale. Confirm with
+   a real turn that the block reads "userId (integer): ${targetUserId}".
 
 2. src/agent/userManager.js — LEGACY_USER is now dead. resolveRoutineTargets
    finds the real row via triggersOptIn. Delete it once routines have fired

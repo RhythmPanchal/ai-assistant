@@ -7,6 +7,7 @@ import { createRecord } from "../tools/mongo/createRecord.js";
 import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHistorySchema.js";
 import { buildSystemInstruction, NO_REPLY } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
+import userProfileKnowledge from "../knowledge/userProfileKnowledge.js";
 import { localDateOf, IST_TIMEZONE } from "../tools/mongo/dateUtils.js";
 import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
@@ -102,7 +103,11 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
             .map(f => `${FLOW_OVERLAYS[f.flowType]}\n\n${flowStateBlock(f, timeZone)}`);
 
         // 3. Persona + live IST time + overlays. Rebuilt every turn.
-        const systemInstruction = buildSystemInstruction(overlays);
+        // The profile is rendered here rather than cached: facts change between
+        // turns, and a stale block is how the agent ends up telling someone they
+        // are still job hunting.
+        const profileBlock = await userProfileKnowledge(userId, userProfile);
+        const systemInstruction = buildSystemInstruction(overlays, { profile: profileBlock });
 
         const messages = [
             { role: "system", content: systemInstruction },

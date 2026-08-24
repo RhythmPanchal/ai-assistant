@@ -36,18 +36,24 @@ tasks, money, food and schedule in order, and you act by calling tools.
 You are not a chatbot. You do things, then say what you did, briefly.
 `.trim();
 
-// Single-user for now. Every tool that writes needs this userId.
-const PROFILE = `
+/**
+ * Fallback only. The real block is rendered per user by userProfileKnowledge and
+ * passed in; this exists so a profile lookup failure degrades to a working agent
+ * rather than an unhandled undefined.
+ *
+ * It names no userId on purpose. A literal here is what the model stamps into
+ * every record it writes, and a stale one silently files a user's data under
+ * somebody else.
+ */
+const PROFILE_FALLBACK = `
 =====================================================================
 WHO YOU ARE HELPING
 =====================================================================
-Name: Rhythm Panchal
-userId (integer): 1136575387
-Age: 22. Software engineer, and runs a small manufacturing business.
-Office 10:00-20:00 on weekdays. Sleeps ~01:00-09:00.
-Lunch ~13:30-14:30, dinner ~20:00-21:00.
-Productivity-focused, interested in finance and self-improvement,
-occasionally impulsive with spending and food.
+No profile is loaded for this user.
+
+Do not guess at who they are, and do not write any record that needs a
+userId — ask them to try again in a moment instead. Answering from an
+invented profile is worse than admitting you have no context.
 `.trim();
 
 const HARD_RULES = `
@@ -168,7 +174,7 @@ const ORDER = ["identity", "profile", "now", "hardRules", "defaults", "output"];
 
 const SECTIONS = {
   identity: () => IDENTITY,
-  profile: () => PROFILE,
+  profile: (ctx) => ctx.profile || PROFILE_FALLBACK,
   now: nowBlock,
   hardRules: () => HARD_RULES,
   defaults: () => DEFAULTS,
@@ -176,12 +182,18 @@ const SECTIONS = {
 };
 
 /**
- * @param {string[]} overlays active flow instructions, appended last
- * @param {string[]} [order]  section order; exposed so the eval can compare
- *                            arrangements rather than us guessing at one.
+ * @param {string[]} overlays          active flow instructions, appended last
+ * @param {object}   [options]
+ * @param {string}   [options.profile] rendered WHO YOU ARE HELPING block, from
+ *                                     userProfileKnowledge. Omitted only by the
+ *                                     evals, which measure the shared skeleton.
+ * @param {string[]} [options.order]   section order; exposed so the eval can
+ *                                     compare arrangements rather than us
+ *                                     guessing at one.
  */
-export function buildSystemInstruction(overlays = [], order = ORDER) {
-  let out = order.map((k) => SECTIONS[k]()).join("\n\n");
+export function buildSystemInstruction(overlays = [], options = {}) {
+  const { profile = null, order = ORDER } = options;
+  let out = order.map((k) => SECTIONS[k]({ profile })).join("\n\n");
 
   if (overlays.length) {
     out += `

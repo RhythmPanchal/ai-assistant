@@ -39,7 +39,7 @@ const tools = toolRegistry.getToolDeclarations();
 // --order lets a section arrangement be compared rather than assumed.
 const orderArg = process.argv.find((a) => a.startsWith("--order="));
 const ORDER = orderArg ? orderArg.split("=")[1].split(",") : undefined;
-const systemInstruction = buildSystemInstruction([], ORDER);
+const systemInstruction = buildSystemInstruction([], { order: ORDER });
 
 async function runScenario(providerName, model, scenario) {
     const started = Date.now();
