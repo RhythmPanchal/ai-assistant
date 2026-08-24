@@ -5,10 +5,12 @@ import { CHAT_HISTORY, CHAT_HISTORY_INDEXES } from "./schema/chatHistorySchema.j
 import { CONNECTION, CONNECTION_INDEXES } from "./schema/connectionSchema.js";
 import { DIET_REGISTER, DIET_REGISTER_INDEXES } from "./schema/dietRegisterSchema.js";
 import { EXPENSE_REGISTER, EXPENSE_REGISTER_INDEXES } from "./schema/expenseRegisterSchema.js";
+import { FACT_KEY, FACT_KEY_INDEXES } from "./schema/factKeySchema.js";
 import { OAUTH_CONNECTOR, OAUTH_CONNECTOR_INDEXES } from "./schema/oauthConnectorSchema.js";
 import { TASK_CALENDAR, TASK_CALENDAR_INDEXES } from "./schema/taskCalendarSchema.js";
 import { TASK_REGISTER, TASK_REGISTER_INDEXES } from "./schema/taskRegisterSchema.js";
 import { TRIGGER_JOB, TRIGGER_JOB_INDEXES } from "./schema/triggerJobSchema.js";
+import { USER_FACT, USER_FACT_INDEXES } from "./schema/userFactSchema.js";
 import { USER_SCHEDULE, USER_SCHEDULE_INDEXES } from "./schema/userScheduleSchema.js";
 import { USERS, USERS_INDEXES } from "./schema/usersSchema.js";
 
@@ -41,10 +43,12 @@ const INDEX_REGISTRY = [
     [CONNECTION, CONNECTION_INDEXES],
     [DIET_REGISTER, DIET_REGISTER_INDEXES],
     [EXPENSE_REGISTER, EXPENSE_REGISTER_INDEXES],
+    [FACT_KEY, FACT_KEY_INDEXES],
     [OAUTH_CONNECTOR, OAUTH_CONNECTOR_INDEXES],
     [TASK_CALENDAR, TASK_CALENDAR_INDEXES],
     [TASK_REGISTER, TASK_REGISTER_INDEXES],
     [TRIGGER_JOB, TRIGGER_JOB_INDEXES],
+    [USER_FACT, USER_FACT_INDEXES],
     [USER_SCHEDULE, USER_SCHEDULE_INDEXES],
     [USERS, USERS_INDEXES],
     // findOneAndUpdate({ userId, ptDate }, …, { upsert: true }) once per turn.
