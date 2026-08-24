@@ -1,4 +1,5 @@
 import { generateConnectorLink } from "../../connectors/oauth/connectorLink.js";
+import { resolveAddress } from "../../agent/userManager.js";
 
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -14,6 +15,13 @@ export async function connectorButton(userId, appName, text) {
   }
   if (!text) {
     return { ok: false, error: `[connectorButton] missing text : ${text}` };
+  }
+
+  // userId identifies the person (it keys the connection doc and rides in
+  // callback_data); the address is where the button actually gets delivered.
+  const address = await resolveAddress(userId);
+  if (!address) {
+    return { ok: false, error: `[connectorButton] no telegram identity for userId ${userId}` };
   }
 
   // URL the [Connect] button opens — provided by the OAuth connector layer.
@@ -32,7 +40,7 @@ export async function connectorButton(userId, appName, text) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      chat_id: userId,
+      chat_id: address,
       text,
       reply_markup,
     }),

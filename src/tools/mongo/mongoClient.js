@@ -3,6 +3,7 @@ import { MongoClient } from "mongodb";
 import { ACTIVE_FLOWS, ACTIVE_FLOWS_INDEXES } from "./schema/activeFlowsSchema.js";
 import { CHAT_HISTORY, CHAT_HISTORY_INDEXES } from "./schema/chatHistorySchema.js";
 import { CONNECTION, CONNECTION_INDEXES } from "./schema/connectionSchema.js";
+import { COUNTERS, COUNTERS_INDEXES } from "./schema/countersSchema.js";
 import { DIET_REGISTER, DIET_REGISTER_INDEXES } from "./schema/dietRegisterSchema.js";
 import { EXPENSE_REGISTER, EXPENSE_REGISTER_INDEXES } from "./schema/expenseRegisterSchema.js";
 import { FACT_KEY, FACT_KEY_INDEXES } from "./schema/factKeySchema.js";
@@ -11,6 +12,7 @@ import { TASK_CALENDAR, TASK_CALENDAR_INDEXES } from "./schema/taskCalendarSchem
 import { TASK_REGISTER, TASK_REGISTER_INDEXES } from "./schema/taskRegisterSchema.js";
 import { TRIGGER_JOB, TRIGGER_JOB_INDEXES } from "./schema/triggerJobSchema.js";
 import { USER_FACT, USER_FACT_INDEXES } from "./schema/userFactSchema.js";
+import { USER_IDENTITY, USER_IDENTITY_INDEXES } from "./schema/userIdentitySchema.js";
 import { USER_SCHEDULE, USER_SCHEDULE_INDEXES } from "./schema/userScheduleSchema.js";
 import { USERS, USERS_INDEXES } from "./schema/usersSchema.js";
 
@@ -41,6 +43,7 @@ const INDEX_REGISTRY = [
     [ACTIVE_FLOWS, ACTIVE_FLOWS_INDEXES],
     [CHAT_HISTORY, CHAT_HISTORY_INDEXES],
     [CONNECTION, CONNECTION_INDEXES],
+    [COUNTERS, COUNTERS_INDEXES],
     [DIET_REGISTER, DIET_REGISTER_INDEXES],
     [EXPENSE_REGISTER, EXPENSE_REGISTER_INDEXES],
     [FACT_KEY, FACT_KEY_INDEXES],
@@ -49,6 +52,7 @@ const INDEX_REGISTRY = [
     [TASK_REGISTER, TASK_REGISTER_INDEXES],
     [TRIGGER_JOB, TRIGGER_JOB_INDEXES],
     [USER_FACT, USER_FACT_INDEXES],
+    [USER_IDENTITY, USER_IDENTITY_INDEXES],
     [USER_SCHEDULE, USER_SCHEDULE_INDEXES],
     [USERS, USERS_INDEXES],
     // findOneAndUpdate({ userId, ptDate }, …, { upsert: true }) once per turn.

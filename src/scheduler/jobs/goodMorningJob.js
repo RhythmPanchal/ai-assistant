@@ -6,7 +6,7 @@ import { sendMessage } from "../../tools/telegram/sendMessage.js";
 import { openFlow, closeFlow, hasFlowStartedToday } from "../flows/activeFlowsRepo.js";
 import { goodMorningFlow } from "../../agent/flows/goodMorningFlow.js";
 import { goodNightFlow } from "../../agent/flows/goodNightFlow.js";
-import { resolveRoutineTargets } from "../../agent/userManager.js";
+import { resolveAddress, resolveRoutineTargets } from "../../agent/userManager.js";
 
 /**
  * @param {Object} [user] fire for just this user; omit to fire for everyone
@@ -64,7 +64,13 @@ export async function goodMorningJob(user) {
         continue;
       }
 
-      results.push(await sendMessage(userId, draftMessage));
+      // userId is an identity, not a chat id — resolve the address to send to.
+      const address = await resolveAddress(userId);
+      if (!address) {
+        console.error(`[goodMorningJob] no telegram identity for ${userId} — cannot deliver`);
+        continue;
+      }
+      results.push(await sendMessage(address, draftMessage));
     } catch (error) {
       // One user's failure must not stop the rest, but the error still has to
       // reach executeTriggerJob so a quota block is classified and rescheduled.

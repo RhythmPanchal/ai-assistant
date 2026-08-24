@@ -1,4 +1,5 @@
 import { runAgent } from "../../agent/agent.js";
+import { resolveUserByChannel } from "../../agent/userManager.js";
 import { NO_REPLY } from "../../agent/instruction.js";
 import { sendMessage, editMessage, deleteMessage, createThinkingAnimation, answerCallbackQuery } from "./sendMessage.js";
 import { dismissCallbackHandler } from "../../connectors/oauth/dismissCallbackHandler.js";
@@ -45,14 +46,34 @@ export async function handleCallbackQuery(callbackQuery) {
 }
 
 export async function handleTelegramMessage(message) {
+  // chatId is the ADDRESS replies go to. It is NOT the identity: in a group
+  // it is the group's id, shared by everyone in it.
   const chatId = message.chat.id;
   const text = message.text;
+
+  // Channel posts and service messages carry no sender. Nothing here can be
+  // attributed to a person, so there is nobody to answer as.
+  const externalId = message.from?.id;
+  if (!externalId) {
+    console.warn("[handleTelegramMessage] update has no message.from — ignoring");
+    return;
+  }
 
   // Send animated "Thinking..." placeholder + typing indicator
   const thinking = await createThinkingAnimation(chatId);
 
   try {
-    const reply = await runAgent(chatId, text);
+    // from.id, never chat.id — see resolveUserByChannel.
+    const { userId, isNew } = await resolveUserByChannel("telegram", externalId, {
+      address: chatId,
+      displayName: message.from?.first_name ?? null,
+    });
+
+    // TODO(onboarding): open the onboarding flow here once it exists. Until
+    // then a new user simply gets a working bot with an empty profile.
+    if (isNew) console.log(`[handleTelegramMessage] first contact — allocated userId ${userId}`);
+
+    const reply = await runAgent(userId, text);
     console.log("RUN AGENT COMPLETED WITH THIS REPLY");
 
     // Stop animation BEFORE editing — prevents race condition

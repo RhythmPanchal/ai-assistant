@@ -3,6 +3,7 @@ import { updateRecords } from "../tools/mongo/updateRecord.js";
 import { deleteRecord } from "../tools/mongo/deleteRecord.js";
 import { fetchRecord } from "../tools/mongo/fetchRecords.js";
 import { sendMessage } from "../tools/telegram/sendMessage.js";
+import { sendToUser } from "../tools/telegram/sendToUser.js";
 import fetchCollectionNameAndSchema from "../tools/mongo/fetchCollectionSchema.js";
 import { createOneTimeReminder, createMultiTimeReminder } from "./createReminders.js";
 import { createTask } from "../tools/mongo/operation/createTask.js";
@@ -54,9 +55,19 @@ export const ACTION_MAP = {
     params: ["collection", "filters", "sortBy", "sortOrder", "limit"]
   },
 
+  // Takes a raw chat id. Kept because triggerJob rows written before the
+  // identity split still carry actionType "sendMessage" with a baked-in
+  // payload.chatId, and they must keep firing.
   sendMessage: {
     fn: sendMessage,
     params: ["chatId", "text"]
+  },
+
+  // Takes an internal userId and resolves the address at fire time. What new
+  // reminders use.
+  sendToUser: {
+    fn: sendToUser,
+    params: ["userId", "text"]
   },
 
   fetchCollectionNameAndSchema: {

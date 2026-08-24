@@ -1,7 +1,7 @@
 import { sendMessage } from "../../tools/telegram/sendMessage.js";
 import { openFlow, hasFlowStartedToday } from "../flows/activeFlowsRepo.js";
 import { goodNightFlow } from "../../agent/flows/goodNightFlow.js";
-import { resolveRoutineTargets } from "../../agent/userManager.js";
+import { resolveRoutineTargets, resolveAddress } from "../../agent/userManager.js";
 
 /**
  * @param {Object} [user] fire for just this user; omit to fire for everyone
@@ -26,7 +26,14 @@ export async function goodNightJob(user) {
         flowType: goodNightFlow.flowType,
         expiresAt: goodNightFlow.computeExpiry(timeZone),
       });
-      results.push(await sendMessage(userId, goodNightFlow.openerMessage));
+      // userId is an identity, not a chat id. They were the same number for
+      // the original single user; sending to it now delivers nowhere.
+      const address = await resolveAddress(userId);
+      if (!address) {
+        console.error(`[goodNightJob] no telegram identity for ${userId} — cannot deliver`);
+        continue;
+      }
+      results.push(await sendMessage(address, goodNightFlow.openerMessage));
     } catch (error) {
       console.error(`[goodNightJob] failed for ${userId}:`, error.message);
       if (targets.length === 1) throw error;

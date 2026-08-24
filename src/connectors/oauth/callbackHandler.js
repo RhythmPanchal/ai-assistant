@@ -1,6 +1,7 @@
 import { getDB } from "../../tools/mongo/mongoClient.js";
 import { resolveProvider } from "./init.js";
 import { sendMessage, editMessage } from "../../tools/telegram/sendMessage.js";
+import { resolveAddress } from "../../agent/userManager.js";
 
 const BOT_URL = "https://web.telegram.org/k/#@TskMgrRhythmBot";
 
@@ -132,7 +133,12 @@ export async function callbackOauth(code, state, res) {
 }
 
 async function notifyUser(connection, success) {
-  const chatId = connection.userId;
+  // connection.userId is an internal identity, not a chat id.
+  const chatId = await resolveAddress(connection.userId);
+  if (!chatId) {
+    console.error(`[notifyUser] no telegram identity for userId ${connection.userId}`);
+    return;
+  }
   const messageId = connection.telegramMessageId ?? null;
   const appName = connection.appName;
 

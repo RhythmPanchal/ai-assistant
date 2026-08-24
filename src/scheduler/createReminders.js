@@ -56,9 +56,9 @@ export async function createOneTimeReminder(title, userId, nextExecutionAt, mess
     recurring: false,
     cronPattern: null,
     timeZone: "Asia/Kolkata",
-    actionType: "sendMessage",
+    actionType: "sendToUser",
     payload : {
-        chatId : 1136575387,
+        userId,
         text : "[*REMINDER*]" + message
     },
     status: "active",
@@ -96,9 +96,9 @@ export async function createMultiTimeReminder(title, userId, cron, nextExecution
     recurring: true,
     cronPattern: cron,
     timeZone: "Asia/Kolkata",
-    actionType: "sendMessage",
+    actionType: "sendToUser",
     payload : {
-        chatId : 1136575387,
+        userId,
         text : "[*REMINDER*]" + message
     },
     status: "active",
