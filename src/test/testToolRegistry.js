@@ -18,7 +18,11 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 // showing up as an extra means an unreviewed capability reached the model.
 // deleteRecord is scoped to the three day registers only — see
 // DELETABLE_COLLECTIONS in tools/mongo/deleteRecord.js.
-const INTENTIONAL_ADDITIONS = new Set(["updateFlowScratchpad", "deleteRecord"]);
+// rememberFact writes only to userFact, only for the userId it is given, and
+// every key it accepts must match KEY_PATTERN. It cannot reach any other
+// collection, and userFact is not in the fetchRecord whitelist, so the model can
+// write facts but cannot query them back — it sees them only as injected prompt.
+const INTENTIONAL_ADDITIONS = new Set(["updateFlowScratchpad", "deleteRecord", "rememberFact"]);
 // Present in toolOperator but deliberately dropped.
 const INTENTIONAL_REMOVALS = new Set();
 

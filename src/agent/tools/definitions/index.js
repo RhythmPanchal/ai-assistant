@@ -12,6 +12,7 @@ import { CreateOneTimeReminderTool, CreateMultiTimeReminderTool } from "./Remind
 import { CompleteFlowTool } from "./CompleteFlowTool.js";
 import { UpdateFlowScratchpadTool } from "./UpdateFlowScratchpadTool.js";
 import { ConnectAppTool, DisconnectAppTool } from "./ConnectorTools.js";
+import { RememberFactTool } from "./RememberFactTool.js";
 
 // Instantiate and register tools
 toolRegistry.register(new FetchCollectionNameAndSchemaTool());
@@ -28,6 +29,7 @@ toolRegistry.register(new CompleteFlowTool());
 toolRegistry.register(new UpdateFlowScratchpadTool());
 toolRegistry.register(new ConnectAppTool());
 toolRegistry.register(new DisconnectAppTool());
+toolRegistry.register(new RememberFactTool());
 
 // SendMessageTool deliberately NOT registered: on main sendMessage is
 // scheduler-only (via actionDispatcher). Exposing it would let the model send
