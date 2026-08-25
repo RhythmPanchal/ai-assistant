@@ -1,5 +1,6 @@
 import { getDB } from "../mongoClient.js";
 import { runIdentityMigration } from "./001-internal-user-ids.js";
+import { runPurgeAndRenumber } from "./002-purge-and-renumber.js";
 
 /**
  * Run pending data migrations at boot, before anything can read or write the
@@ -20,8 +21,11 @@ import { runIdentityMigration } from "./001-internal-user-ids.js";
 
 export const MIGRATION_LEDGER = "migrations";
 
+// Order matters and is the order of this array. 002 reads the identity row 001
+// writes, and refuses to run rather than guess if it is missing.
 const PENDING = [
     { name: "001-internal-user-ids", run: runIdentityMigration },
+    { name: "002-purge-and-renumber", run: runPurgeAndRenumber },
 ];
 
 /**
