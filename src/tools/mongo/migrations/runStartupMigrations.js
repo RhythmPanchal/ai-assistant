@@ -69,15 +69,15 @@ export default async function runStartupMigrations() {
                 { upsert: true }
             );
 
-            migrationStatus[name] = {
-                status: report.status,
-                ranAt: ranAt.toISOString(),
-                targetUserId: report.targetUserId,
-                total: report.total,
-                moved: report.moved ?? null,
-                adoptedExistingIdentity: report.adoptedExistingIdentity,
-                otherOwners: report.otherOwners ?? [],
-            };
+            // The whole report, minus the narration. Naming 001's fields here
+            // meant 002 reported `moved: null` and an empty owner list while it
+            // had in fact archived 36 rows and renumbered 568 — a readout that
+            // looked like a no-op after a migration that did the most
+            // consequential thing in this codebase. A per-migration shape cannot
+            // be right for the next migration, so pass through whatever it
+            // returns and let each one decide what is worth saying.
+            const { steps, ...summary } = report;
+            migrationStatus[name] = { ...summary, ranAt: ranAt.toISOString() };
             console.log(`[migrations] ${name}: ${report.status}`);
         } catch (err) {
             // A failed migration must not stop the bot from starting. The same
