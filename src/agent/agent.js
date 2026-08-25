@@ -1,4 +1,5 @@
 import toolRegistry from "./tools/definitions/index.js";
+import { LoadSkillTool } from "./tools/definitions/LoadSkillTool.js";
 import { ProviderManager, resolveMaxSteps, resolveTaskChain } from "./llm/createProvider.js";
 import { startTurn } from "./llm/usageMeter.js";
 import { agentConfig } from "../config/agent.config.js";
@@ -12,6 +13,50 @@ import { localDateOf, IST_TIMEZONE } from "../tools/mongo/dateUtils.js";
 import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
 import goodMorningFlow from "./flows/goodMorningFlow.js";
+
+// The wire name, taken from the class rather than repeated as a literal —
+// `static name` shadows the class name, so these cannot drift apart.
+const LOAD_SKILL_TOOL = LoadSkillTool.name;
+
+/**
+ * Fold any skill loaded during this step into the rest of the turn.
+ *
+ * Called from inside the agent loop, after tool results are pushed and before
+ * the next request goes out — that ordering is the whole same-reply guarantee.
+ * Mutates `messages[0].content` and `loadedSkills`; returns the widened
+ * declaration list rather than mutating it, since the caller holds it in a let.
+ *
+ * Exported so this is tested against real results instead of by reading source:
+ * it is the only place a tool result is allowed to change a turn's capabilities.
+ */
+export function applyLoadedSkills(results, { messages, toolDeclarations, loadedSkills, registry = toolRegistry }) {
+    let declarations = toolDeclarations;
+
+    for (const r of results) {
+        if (r.name !== LOAD_SKILL_TOOL || !r.result?.success) continue;
+
+        const { skill, instruction, toolNames = [] } = r.result.data ?? {};
+        // Loading twice is a wasted step, not an error — the model sometimes
+        // re-requests after a long tool chain. Re-appending would duplicate the
+        // instruction in the prompt.
+        if (!skill || loadedSkills.has(skill)) continue;
+        loadedSkills.add(skill);
+
+        // messages[0] is the system message. Appending keeps the skill after the
+        // base rules, where recency gives it weight — the same reasoning that
+        // puts the ACTIVE ROUTINE block last.
+        if (instruction && messages[0]) messages[0].content += `\n\n${instruction}`;
+
+        const added = registry
+            .getDeclarationsFor(toolNames)
+            .filter(d => !declarations.some(existing => existing.name === d.name));
+        declarations = [...declarations, ...added];
+
+        console.log(`[runAgent] skill "${skill}" loaded (+${added.length} tools)`);
+    }
+
+    return declarations;
+}
 
 // flowType → overlay instruction. Listed explicitly per known flow so the
 // agent never picks up an overlay we have not vetted. Add new flows here.
@@ -122,7 +167,11 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         const maxSteps = resolveMaxSteps(task);
 
         const providerManager = new ProviderManager(userProfile?.apiKeys || {}, task);
-        const toolDeclarations = toolRegistry.getToolDeclarations();
+        // let, not const: a skill loaded mid-turn widens this. Declarations are
+        // sent on every request rather than bound once, so the iteration after a
+        // load simply advertises more tools — no chat to rebuild.
+        let toolDeclarations = toolRegistry.getToolDeclarations();
+        const loadedSkills = new Set();
         const toolTimeoutMs = agentConfig.llm.toolTimeoutMs;
 
         const chain = resolveTaskChain(task).map(e => `${e.provider}:${e.model}`).join(" -> ");
@@ -191,6 +240,13 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
                     content: r.result,
                 });
             }
+
+            // Apply any skill loaded in this step, before the next request goes
+            // out — that is what makes a skill usable in the same reply that
+            // asked for it rather than the one after.
+            toolDeclarations = applyLoadedSkills(results, {
+                messages, toolDeclarations, loadedSkills,
+            });
         }
 
         if (steps >= maxSteps && !LLMresponse) {

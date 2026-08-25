@@ -96,10 +96,14 @@ test("forgetting nothing is a no-op, not a connection", async () => {
     assert.deepStrictEqual(await forgetFacts(1, []), { removed: [], missing: [] });
 });
 
-test("only the read tool is in the base registry", () => {
-    assert.ok(toolRegistry.getTool("fetchUserContext"), "reading a profile must always be possible");
+test("only the read tool is advertised; the editors are skill-loaded", () => {
+    assert.ok(toolRegistry.isDeclared("fetchUserContext"), "reading a profile must always be possible");
+
     for (const gated of ["updateUserSettings", "forgetFact", "manageFactKey"]) {
-        assert.strictEqual(toolRegistry.getTool(gated), undefined,
+        // Registered so the skill can run them, undeclared so a normal turn
+        // neither sees them nor pays for their declarations.
+        assert.ok(toolRegistry.getTool(gated), `${gated} must be executable once the skill loads it`);
+        assert.strictEqual(toolRegistry.isDeclared(gated), false,
             `${gated} belongs to the enrichment skill, not every request`);
     }
 });

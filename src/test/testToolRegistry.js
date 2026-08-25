@@ -26,8 +26,11 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 // siblings in ProfileTools.js — updateUserSettings, forgetFact, manageFactKey —
 // are deliberately NOT registered here; they load with the userContextEnrichment
 // skill, so a normal turn cannot reach them.
+// loadSkill is the one always-present door to everything undeclared. It cannot
+// reach data itself — it returns an instruction and a tool list, and only the
+// agent loop acts on them, against the explicit SKILLS map.
 const INTENTIONAL_ADDITIONS = new Set([
-    "updateFlowScratchpad", "deleteRecord", "rememberFact", "fetchUserContext",
+    "updateFlowScratchpad", "deleteRecord", "rememberFact", "fetchUserContext", "loadSkill",
 ]);
 // Present in toolOperator but deliberately dropped.
 const INTENTIONAL_REMOVALS = new Set();
