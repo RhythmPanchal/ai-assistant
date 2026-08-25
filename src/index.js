@@ -7,7 +7,7 @@ import { startTelegramPolling } from "./tools/telegram/telegramPoller.js";
 import { handleTelegramMessage, handleCallbackQuery } from "./tools/telegram/telegramHandler.js"
 import initCron from "./scheduler/initCron.js";
 import oauthRouter from "./oauthRestAPI.js";
-import adminRouter from "./adminRestAPI.js";
+import runStartupMigrations, { migrationStatus } from "./tools/mongo/migrations/runStartupMigrations.js";
 
 const app = express();
 app.use(express.json());
@@ -26,6 +26,12 @@ async function initService(){
     // Materialise the reviewed key spine into factKey. After ensureIndexes so
     // the unique index on key exists before the seed upserts against it.
     await ensureFactKeys();
+
+    // After ensureIndexes, because the repointing writes depend on the unique
+    // indexes existing. BEFORE the Telegram loop below, because the identity
+    // layer would otherwise allocate a fresh id for the legacy user on their
+    // next message and strand every existing row under the old one.
+    await runStartupMigrations();
 
     initCron();
     await startTelegramPolling(handleTelegramMessage, handleCallbackQuery);
@@ -46,11 +52,13 @@ app.get('/', (req, res) => {
     message: 'Telegram LLM Bot is running!',
     commit: process.env.RENDER_GIT_COMMIT ?? null,
     startedAt: BOOTED_AT,
+    // Read-only, and the only way to see what a boot migration did without
+    // shell access to the host. Counts and statuses only — no row contents.
+    migrations: migrationStatus,
   });
 });
 
 app.use(oauthRouter);
-app.use(adminRouter);
 
 app.listen(PORT, () => {
   initService(); 

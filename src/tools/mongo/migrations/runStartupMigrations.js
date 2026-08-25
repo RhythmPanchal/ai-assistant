@@ -1,0 +1,89 @@
+import { getDB } from "../mongoClient.js";
+import { runIdentityMigration } from "./001-internal-user-ids.js";
+
+/**
+ * Run pending data migrations at boot, before anything can read or write the
+ * data they move.
+ *
+ * This replaced an authenticated admin endpoint. The deployed database is not
+ * reachable from a laptop — the office network intercepts enough that even the
+ * Telegram API returns a proxy block page — so the migration has to be triggered
+ * from inside the service. A deploy is already that trigger, and it has none of
+ * the downsides: no public URL that rewrites every row, no token to hold, and
+ * nothing to remember to delete afterwards.
+ *
+ * Ordering matters. This runs after ensureIndexes, because the repointing writes
+ * depend on the unique indexes existing, and before the Telegram loop starts,
+ * because the identity layer would otherwise allocate a fresh id for the legacy
+ * user and leave their rows stranded under the old one.
+ */
+
+export const MIGRATION_LEDGER = "migrations";
+
+const PENDING = [
+    { name: "001-internal-user-ids", run: runIdentityMigration },
+];
+
+/**
+ * Last result per migration, for the health route to report. Held in memory
+ * rather than read per request — it is written once at boot and Render polls
+ * the health endpoint often enough that a database round trip per check would
+ * be pure waste.
+ */
+export const migrationStatus = {};
+
+export default async function runStartupMigrations() {
+    let db;
+    try {
+        db = await getDB();
+    } catch (err) {
+        console.error("[migrations] cannot reach the database, skipping:", err.message);
+        return migrationStatus;
+    }
+
+    const ledger = db.collection(MIGRATION_LEDGER);
+
+    for (const { name, run } of PENDING) {
+        try {
+            // The ledger is what keeps this off the boot path forever. The
+            // migrations are idempotent anyway, but re-scanning ten collections
+            // on every restart to learn there is nothing to do is wasted work.
+            const previous = await ledger.findOne({ _id: name });
+            if (previous?.status === "applied" || previous?.status === "nothing-to-do") {
+                migrationStatus[name] = { status: previous.status, ranAt: previous.ranAt, skipped: true };
+                console.log(`[migrations] ${name}: already ${previous.status}, skipping`);
+                continue;
+            }
+
+            console.log(`[migrations] ${name}: running`);
+            const report = await run({ apply: true });
+            const ranAt = new Date();
+
+            await ledger.updateOne(
+                { _id: name },
+                { $set: { status: report.status, ranAt, report } },
+                { upsert: true }
+            );
+
+            migrationStatus[name] = {
+                status: report.status,
+                ranAt: ranAt.toISOString(),
+                targetUserId: report.targetUserId,
+                total: report.total,
+                moved: report.moved ?? null,
+                adoptedExistingIdentity: report.adoptedExistingIdentity,
+                otherOwners: report.otherOwners ?? [],
+            };
+            console.log(`[migrations] ${name}: ${report.status}`);
+        } catch (err) {
+            // A failed migration must not stop the bot from starting. The same
+            // reasoning as ensureIndexes: a broken data move is worth reporting
+            // loudly and fixing deliberately, not worth taking the service down
+            // over. The ledger is left unset so the next boot retries.
+            migrationStatus[name] = { status: "failed", error: err.message };
+            console.error(`[migrations] ${name} FAILED — will retry next boot:`, err);
+        }
+    }
+
+    return migrationStatus;
+}
