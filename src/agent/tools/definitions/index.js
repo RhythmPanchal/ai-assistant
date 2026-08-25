@@ -13,6 +13,7 @@ import { CompleteFlowTool } from "./CompleteFlowTool.js";
 import { UpdateFlowScratchpadTool } from "./UpdateFlowScratchpadTool.js";
 import { ConnectAppTool, DisconnectAppTool } from "./ConnectorTools.js";
 import { RememberFactTool } from "./RememberFactTool.js";
+import { FetchUserContextTool } from "./ProfileTools.js";
 
 // Instantiate and register tools
 toolRegistry.register(new FetchCollectionNameAndSchemaTool());
@@ -30,6 +31,13 @@ toolRegistry.register(new UpdateFlowScratchpadTool());
 toolRegistry.register(new ConnectAppTool());
 toolRegistry.register(new DisconnectAppTool());
 toolRegistry.register(new RememberFactTool());
+
+// Reading a profile is always available; editing one is not. The other three
+// tools in ProfileTools.js — updateUserSettings, forgetFact, manageFactKey — are
+// loaded by the userContextEnrichment skill instead. They are rarer, they are
+// destructive or structural, and a declaration costs tokens on every request
+// whether or not the turn has anything to do with a profile.
+toolRegistry.register(new FetchUserContextTool());
 
 // SendMessageTool deliberately NOT registered: on main sendMessage is
 // scheduler-only (via actionDispatcher). Exposing it would let the model send

@@ -225,3 +225,124 @@ export async function rememberFacts(userId, facts = []) {
 
     return { saved, rejected };
 }
+
+/**
+ * Everything the model needs to edit a profile rather than only read one.
+ *
+ * The rendered block in the system prompt is prose grouped by category and does
+ * NOT show keys — deliberately, since keys on every turn are noise for a model
+ * that is only reading. But a key is exactly what an UPDATE needs: without it
+ * the model cannot tell whether to replace work.status or invent a new slug, and
+ * the upsert stops being an upsert.
+ *
+ * So the keys live here, fetched only when something is about to be written.
+ */
+export async function getUserContext(userId) {
+    const db = await getDB();
+
+    const [facts, vocabulary] = await Promise.all([
+        db.collection(USER_FACT)
+            .find({ userId }, { projection: { _id: 0, userId: 0, sourceTurn: 0 } })
+            .sort({ key: 1 })
+            .toArray(),
+        getMatchingVocabulary(),
+    ]);
+
+    // Which vocabulary entries this user has nothing under. This is the list the
+    // enrichment skill works from — "what do I not know yet" is otherwise a
+    // subtraction the model has to do in its head, and it does it badly.
+    const held = new Set(facts.map(f => f.key));
+    const unused = vocabulary.filter(v => !held.has(v.key));
+
+    return { userId, facts, vocabulary, unused };
+}
+
+/**
+ * Delete facts by key. Returns the keys that were actually removed, so a caller
+ * cannot report a deletion that did not happen.
+ *
+ * A hard delete, unlike the 002 migration's archive. A fact is one sentence the
+ * model can be told again, and keeping a shadow copy of something the user asked
+ * to be forgotten is the wrong default for personal data.
+ */
+export async function forgetFacts(userId, keys = []) {
+    if (!Number.isInteger(userId)) {
+        throw new Error(`[forgetFacts] userId must be an integer, got ${userId}`);
+    }
+    const list = (Array.isArray(keys) ? keys : [keys])
+        .map(k => String(k ?? "").trim().toLowerCase())
+        .filter(Boolean);
+    if (!list.length) return { removed: [], missing: [] };
+
+    const db = await getDB();
+    const removed = [];
+    const missing = [];
+
+    for (const key of list) {
+        const res = await db.collection(USER_FACT).deleteOne({ userId, key });
+        (res.deletedCount ? removed : missing).push(key);
+    }
+    return { removed, missing };
+}
+
+/**
+ * Add a key to the shared vocabulary by hand.
+ *
+ * rememberFacts already mints an unrecognised key as a side effect of using it,
+ * which covers the normal case. This exists for the other one: naming a concept
+ * before there is a fact to file under it, so the enrichment skill knows to ask.
+ */
+export async function addFactKey(key, description, userId = null) {
+    const slug = String(key ?? "").trim().toLowerCase();
+    if (!KEY_PATTERN.test(slug)) {
+        return { ok: false, key, reason: 'key must look like "work.status" — lowercase, dot-separated' };
+    }
+    if (!String(description ?? "").trim()) {
+        return { ok: false, key: slug, reason: "description is required — it is the instruction the extraction model reads" };
+    }
+
+    const db = await getDB();
+    const now = new Date();
+    const res = await db.collection(FACT_KEY).updateOne(
+        { key: slug },
+        {
+            $set: { description: String(description).trim(), updatedAt: now },
+            $setOnInsert: {
+                origin: "emergent",
+                usageCount: 0,
+                firstSeenFrom: userId,
+                promotedAt: null,
+                createdAt: now,
+            },
+        },
+        { upsert: true }
+    );
+    return { ok: true, key: slug, action: res.upsertedCount ? "created" : "updated" };
+}
+
+/**
+ * Remove a key from the vocabulary.
+ *
+ * Refuses while any user still holds a fact under it — deleting the key would
+ * leave those facts referring to a definition that no longer exists, and the
+ * next extraction pass would mint the same slug back with a worse description.
+ * Core keys are refused outright; the reviewed spine is not editable at runtime.
+ */
+export async function removeFactKey(key) {
+    const slug = String(key ?? "").trim().toLowerCase();
+    const db = await getDB();
+
+    const entry = await db.collection(FACT_KEY).findOne({ key: slug });
+    if (!entry) return { ok: false, key: slug, reason: "no such key" };
+    if (entry.origin === "core") {
+        return { ok: false, key: slug, reason: "core keys are part of the reviewed spine and cannot be removed at runtime" };
+    }
+
+    const inUse = await db.collection(USER_FACT).countDocuments({ key: slug });
+    if (inUse) {
+        return { ok: false, key: slug, reason: `${inUse} fact(s) still use this key — remove those first` };
+    }
+
+    await db.collection(FACT_KEY).deleteOne({ key: slug });
+    return { ok: true, key: slug, action: "removed" };
+}

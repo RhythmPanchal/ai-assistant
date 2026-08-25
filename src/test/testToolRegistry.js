@@ -22,7 +22,13 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 // every key it accepts must match KEY_PATTERN. It cannot reach any other
 // collection, and userFact is not in the fetchRecord whitelist, so the model can
 // write facts but cannot query them back — it sees them only as injected prompt.
-const INTENTIONAL_ADDITIONS = new Set(["updateFlowScratchpad", "deleteRecord", "rememberFact"]);
+// fetchUserContext is read-only and scoped to the userId it is given. Its three
+// siblings in ProfileTools.js — updateUserSettings, forgetFact, manageFactKey —
+// are deliberately NOT registered here; they load with the userContextEnrichment
+// skill, so a normal turn cannot reach them.
+const INTENTIONAL_ADDITIONS = new Set([
+    "updateFlowScratchpad", "deleteRecord", "rememberFact", "fetchUserContext",
+]);
 // Present in toolOperator but deliberately dropped.
 const INTENTIONAL_REMOVALS = new Set();
 
