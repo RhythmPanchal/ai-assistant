@@ -31,7 +31,37 @@ import { USER_SCHEDULE } from "../schema/userScheduleSchema.js";
 import { USERS } from "../schema/usersSchema.js";
 
 export const LEGACY_TELEGRAM_ID = 1136575387;
-const TARGET_USER_ID = 1;
+
+/**
+ * Internal ids come from a counter starting at 1; a raw Telegram id is nine or
+ * ten digits. Anything in users above this ceiling is therefore a pre-split row
+ * that has not been migrated yet, and must not be mistaken for an allocated id —
+ * treating one as the high-water mark would push the counter into the billions
+ * and make every later signup unreadable.
+ */
+const INTERNAL_ID_CEILING = 1_000_000;
+
+/**
+ * Pick a free internal id for the legacy user.
+ *
+ * This used to be a hardcoded 1, which failed on the first real run: the bot had
+ * been live on the identity layer for several hours, a second Telegram account
+ * had messaged it, and resolveUserByChannel had already handed that person id 1.
+ * The legacy user is not entitled to id 1 — only to an id nobody else holds.
+ *
+ * Safe without a lock because this runs at boot, before the Telegram loop starts
+ * and therefore before anything else can allocate.
+ */
+async function pickFreeUserId(db) {
+    const taken = new Set(
+        (await db.collection(USERS).distinct("userId")).map(Number).filter(Number.isFinite)
+    );
+    const counter = await db.collection(COUNTERS).findOne({ _id: USER_ID_SEQUENCE });
+
+    let candidate = Math.max(Number(counter?.seq) || 0, 0) + 1;
+    while (taken.has(candidate)) candidate++;
+    return candidate;
+}
 
 /**
  * Every collection storing userId as an OWNER reference.
@@ -73,17 +103,14 @@ export async function runIdentityMigration({ apply = false } = {}) {
     // rather than refusing: adopt the id the bot minted.
     const existingIdentity = await db.collection(USER_IDENTITY)
         .findOne({ channel: "telegram", externalId: String(LEGACY_TELEGRAM_ID) });
-    const targetUserId = existingIdentity?.userId ?? TARGET_USER_ID;
+    const targetUserId = existingIdentity?.userId ?? await pickFreeUserId(db);
     report.targetUserId = targetUserId;
     report.adoptedExistingIdentity = Boolean(existingIdentity);
 
     if (existingIdentity) {
         step(`identity exists — the bot allocated userId ${targetUserId} before this ran; repointing onto it`);
     } else {
-        const collision = await db.collection(USERS).findOne({ userId: targetUserId });
-        if (collision) {
-            throw new Error(`users already holds userId ${targetUserId} — set TARGET_USER_ID to a free id.`);
-        }
+        step(`allocated userId ${targetUserId} for telegram:${LEGACY_TELEGRAM_ID}`);
     }
 
     // ── report ───────────────────────────────────────────────────────────────
@@ -183,9 +210,17 @@ export async function runIdentityMigration({ apply = false } = {}) {
         }
     }
 
-    // ── 4. seed the counter past every id now in use ─────────────────────────
-    const maxId = (await db.collection(USERS).find({}, { projection: { userId: 1 } }).toArray())
-        .reduce((m, u) => Math.max(m, Number(u.userId) || 0), 0);
+    // ── 4. seed the counter past every ALLOCATED id ──────────────────────────
+    // Only ids below the ceiling count. Another user may still be sitting in
+    // users under their raw Telegram id awaiting their own pass; taking that as
+    // the high-water mark would set seq to ten digits and every later signup
+    // would get an id indistinguishable from a chat id — reintroducing exactly
+    // the confusion this migration exists to end.
+    const maxId = (await db.collection(USERS).distinct("userId"))
+        .map(Number)
+        .filter(n => Number.isFinite(n) && n < INTERNAL_ID_CEILING)
+        .reduce((m, n) => Math.max(m, n), 0);
+
     await db.collection(COUNTERS).updateOne(
         { _id: USER_ID_SEQUENCE },
         { $set: { seq: maxId } },
