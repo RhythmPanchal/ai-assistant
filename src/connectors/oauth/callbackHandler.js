@@ -2,6 +2,7 @@ import { getDB } from "../../tools/mongo/mongoClient.js";
 import { resolveProvider } from "./init.js";
 import { sendMessage, editMessage } from "../../tools/telegram/sendMessage.js";
 import { resolveAddress } from "../../identity/userManager.js";
+import { runWithUserContext } from "../../identity/userContext.js";
 
 const BOT_URL = "https://web.telegram.org/k/#@TskMgrRhythmBot";
 
@@ -122,7 +123,12 @@ export async function callbackOauth(code, state, res) {
 
     notifyUser(connection, true).catch(() => {});
 
-    provider.onConnectionEstablished(connection.userId).catch(err =>
+    // Fire-and-forget, so the context is bound around it rather than inherited:
+    // this promise outlives the response and must carry its own identity.
+    runWithUserContext(
+      { userId: connection.userId, channel: "oauth", reason: connection.appName },
+      () => provider.onConnectionEstablished(connection.userId)
+    ).catch(err =>
       console.error("[callbackOauth] onConnectionEstablished failed:", err)
     );
     return sendHtml(200, true, connection.appName);

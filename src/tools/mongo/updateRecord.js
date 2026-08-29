@@ -34,7 +34,7 @@ async function processUpdate(collectionName, id, data) {
 
     // 4. Validate the updated fields against the collection schema
     //    skipRequired=true because updates are partial — only supplied fields need validation
-    ValidateSchema(collectionName, refinedData, { skipRequired: true });
+    await ValidateSchema(collectionName, refinedData, { skipRequired: true });
 
     // 5. Connect and find the existing record by _id
     const db = await getDB();

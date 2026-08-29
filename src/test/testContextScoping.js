@@ -138,6 +138,58 @@ test("the exemption is not reachable by the model", () => {
     assert.ok(!declared.some(n => /system/i.test(n)), `no tool may expose system mode: ${declared}`);
 });
 
+// ── every entry point binds, because everything else refuses to run ─────────
+
+test("all four request entry points bind an identity", async () => {
+    const { readFileSync } = await import("node:fs");
+    const ENTRY_POINTS = [
+        ["src/tools/telegram/telegramHandler.js", /runWithUserContext/, "a user message"],
+        ["src/scheduler/jobs/goodMorningJob.js", /runWithUserContext/, "the morning routine"],
+        ["src/scheduler/executeTriggerJob.js", /runWithUserContext/, "a scheduled trigger"],
+        ["src/connectors/oauth/callbackHandler.js", /runWithUserContext/, "an OAuth callback"],
+    ];
+    for (const [file, pattern, what] of ENTRY_POINTS) {
+        assert.match(readFileSync(file, "utf8"), pattern,
+            `${what} reaches tools and queries — ${file} must bind a context`);
+    }
+});
+
+test("both Telegram handlers key on the authenticated sender", async () => {
+    const src = (await import("node:fs")).readFileSync("src/tools/telegram/telegramHandler.js", "utf8");
+    assert.match(src, /message\.from\?\.id/, "chat.id is a group in a group chat, not a person");
+    assert.match(src, /callbackQuery\.from\?\.id/,
+        "the userId in callback_data round-trips through the client and cannot be trusted");
+    assert.doesNotMatch(src, /parseInt\(userIdStr/,
+        "identity must not be parsed back out of data we sent to the client");
+});
+
+test("boot work runs as the system so nothing is scoped away", async () => {
+    const src = (await import("node:fs")).readFileSync("src/index.js", "utf8");
+    assert.match(src, /runAsSystem\("ensureFactKeys"/);
+    assert.match(src, /runAsSystem\("startupMigrations"/,
+        "a migration scoped to one user would migrate nobody");
+});
+
+test("schema validation is awaited at every write path", async () => {
+    // ValidateSchema is async. Called without await it rejects unhandled while
+    // the insert proceeds, which silently disabled JS-side validation on every
+    // write and — since Node 15 terminates on unhandled rejections — could take
+    // the process down on any invalid one.
+    const { readFileSync } = await import("node:fs");
+    for (const file of [
+        "src/tools/mongo/createRecord.js",
+        "src/tools/mongo/updateRecord.js",
+        "src/tools/mongo/operation/insertSchedule.js",
+    ]) {
+        const src = readFileSync(file, "utf8");
+        const calls = src.match(/[^ ]* ?ValidateSchema\(/g) ?? [];
+        for (const call of calls) {
+            if (call.includes("function")) continue;
+            assert.match(call, /await/, `${file}: ValidateSchema must be awaited`);
+        }
+    }
+});
+
 let pass = 0;
 for (const [name, fn] of tests) {
     try {

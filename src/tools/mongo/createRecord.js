@@ -35,7 +35,7 @@ export async function createRecord(collectionName, data) {
   // Normalize and validate separately so schema-validation errors
   // surface their real message to the caller (and to the LLM).
   const refinedData = normalizeDates(scoped);
-  ValidateSchema(collectionName, refinedData);
+  await ValidateSchema(collectionName, refinedData);
 
   const db = await getDB();
   const collection = db.collection(collectionName);
