@@ -125,6 +125,39 @@ test("every tool IS blocked without an identity", async () => {
         `these ran with no identity bound: ${leaked.join(", ")}`);
 });
 
+test("no tool reports success while its own result says otherwise", async () => {
+    // Added after insertSchedule was caught reporting "Successfully inserted
+    // schedule" for a call that wrote nothing. Several tools wrap a helper that
+    // signals failure by RETURNING { success: false } instead of throwing, so
+    // the registry's catch never fires and a hardcoded ToolResult(true) sails
+    // through. The sweep above printed "ok" for exactly that case.
+    //
+    // This is a general invariant, not a fix for one tool: any future wrapper
+    // that forgets to branch on its helper's result fails here.
+    const lying = [];
+
+    await runWithUserContext({ userId: 1, channel: "test" }, async () => {
+        for (const name of allTools) {
+            const result = await toolRegistry.execute(name, ARGS[name]);
+            const data = result?.data;
+            if (result?.success !== true || !data) continue;
+
+            // Two shapes of "nothing actually happened". updateRecords reports a
+            // batch as { successCount, failureCount } with no top-level flag, so
+            // checking data.success alone missed it entirely.
+            const flaggedFailure = data.success === false;
+            const wholeBatchFailed = data.failureCount > 0 && data.successCount === 0;
+
+            if (flaggedFailure || wholeBatchFailed) {
+                lying.push(`${name}: reported "${result.message}" but ${JSON.stringify(data).slice(0, 160)}`);
+            }
+        }
+    });
+
+    assert.deepStrictEqual(lying, [],
+        `these tools masked a failure as success:\n  ${lying.join("\n  ")}`);
+});
+
 let pass = 0;
 for (const [name, fn] of tests) {
     try {

@@ -73,6 +73,16 @@ export class InsertScheduleTool extends BaseTool {
 
     async execute({ userId, date, slots, summary, motivationalNote }) {
         const result = await insertSchedule(userId, date, slots, summary, motivationalNote);
+
+        // insertSchedule signals failure by RETURNING { success: false } — a bad
+        // date, an empty slot list, a schema rejection — rather than throwing, so
+        // the registry's catch never sees it. Reporting true regardless told the
+        // model a day plan had been stored when nothing was written, and HARD
+        // RULE 1 then let it say "Saved" in complete good faith.
+        if (!result?.success) {
+            return new ToolResult(false, `Could not insert the schedule for ${date}: ${result?.error ?? "unknown error"}`, result);
+        }
+
         return new ToolResult(true, `Successfully inserted schedule for ${date}`, result);
     }
 }

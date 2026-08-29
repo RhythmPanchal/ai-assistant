@@ -23,7 +23,18 @@ export class CompleteFlowTool extends BaseTool {
 
     async execute({ userId, flowType, reason }) {
         const result = await completeFlow(userId, flowType, reason);
-        return new ToolResult(true, `Completed flow ${flowType} for user ${userId} with reason ${reason}.`, result);
+
+        // closeFlowByAgent returns null when no flow of this type was open, which
+        // completeFlow turns into { success: false } rather than a throw. Saying
+        // "Completed" there let the model believe it had closed a routine that
+        // had never opened, and stop performing it.
+        if (!result?.success) {
+            return new ToolResult(false, `No open ${flowType} flow to complete — ${result?.message ?? "nothing was closed"}.`, result);
+        }
+
+        // userId is deliberately not echoed back: the model no longer supplies it
+        // and no longer sees it anywhere else, so repeating it here is noise.
+        return new ToolResult(true, `Completed flow ${flowType} with reason ${reason}.`, result);
     }
 }
 

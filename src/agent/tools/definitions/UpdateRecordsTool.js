@@ -35,6 +35,25 @@ export class UpdateRecordsTool extends BaseTool {
 
     async execute({ records }) {
         const result = await updateRecords(records);
+
+        // updateRecords never throws for a failed row: it catches per record and
+        // returns the outcomes. A blanket true therefore reported "Successfully
+        // updated records" even for a batch in which every single one failed.
+        if (result.failureCount > 0) {
+            const detail = result.results
+                .filter(r => !r.success)
+                .map(r => `[${r.index}] ${r.error}`)
+                .join("; ");
+
+            // Partial success stays success for the rows that did land — the
+            // model needs both halves to know what is left to retry.
+            return new ToolResult(
+                result.successCount > 0,
+                `Updated ${result.successCount} of ${result.totalRequested}. Failed: ${detail}`,
+                result
+            );
+        }
+
         return new ToolResult(true, `Successfully updated records.`, result);
     }
 }
