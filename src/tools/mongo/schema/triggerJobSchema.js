@@ -70,13 +70,20 @@ const triggerJobSchema = {
     },
 
     nextExecutionAt: {
-      bsonType: "date",
-      description: "Next scheduled execution time."
+      // Nulled once a job reaches a terminal state — there is no next run. The
+      // declared type was "date" only, which every completion write violated;
+      // it went unnoticed because the deployed collections carry no validator,
+      // so a fresh database built from this file would have started rejecting
+      // writes that the running system makes constantly.
+      bsonType: ["date", "null"],
+      description: "Next scheduled execution time. Null once the job is terminal."
     },
 
     expiryDate: {
       bsonType: ["date", "null"],
-      description: "Optional expiry time after which job should not run."
+      description: "Expiry time after which the job stops running. Enforced by " +
+        "triggerExecutor (which retires expired jobs) and by scheduleNextRun " +
+        "(which will not reschedule past it). Null means run indefinitely."
     },
 
     failedAt: {
@@ -103,11 +110,15 @@ export default triggerJobSchema;
 
 /**
  * Serves:
- *  - triggerExecutor — find({ status: "active", nextExecutionAt: {$lte: now} }),
- *    which runs EVERY MINUTE, forever. The hottest query in the system and the
- *    one most worth indexing: without it each tick is a full collection scan.
- *    Equality on status first, then the range — an index can only range-scan on
- *    its last used field.
+ *  - triggerExecutor — find({ status: "active", nextExecutionAt: {$lte: now} })
+ *    plus an expiryDate guard, which runs EVERY MINUTE, forever. The hottest
+ *    query in the system and the one most worth indexing: without it each tick
+ *    is a full collection scan. Equality on status first, then the range — an
+ *    index can only range-scan on its last used field. expiryDate stays out of
+ *    the key: it filters a handful of already-narrowed rows.
+ *  - triggerExecutor's expiry sweep — updateMany({ status: "active",
+ *    expiryDate: {$ne: null, $lte: now} }), same tick, served by the status
+ *    prefix of the same index.
  *  - createReminders.findDuplicate — { userId, title, nextExecutionAt, status }
  */
 export const TRIGGER_JOB_INDEXES = [

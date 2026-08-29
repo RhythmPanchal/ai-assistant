@@ -52,15 +52,55 @@ async function routineExecutor() {
 	}
 }
 
+/**
+ * Retire jobs that are past their expiryDate.
+ *
+ * expiryDate has been written since the beginning — it is what "remind me for
+ * a month" produces — but nothing ever read it back, so every recurring job
+ * ever created was immortal. "Call Masi" was still firing five weeks past its
+ * expiry, and a weekly job that expired in July still fired in August.
+ *
+ * This runs as a sweep rather than only as a filter on the due query below,
+ * because a job whose expiry passed while it was not due would otherwise sit
+ * in the active set looking live until its next fire date arrived.
+ */
+async function retireExpiredJobs(db, now) {
+	// $ne: null states the intent rather than carrying it: Mongo type-brackets
+	// range operators, so { $lte: <Date> } already skips null and missing. Kept
+	// explicit because "never retire a job that has no expiry" is the one thing
+	// this updateMany must not get wrong.
+	const { modifiedCount } = await db.collection(TRIGGER_JOB).updateMany(
+		{ status: "active", expiryDate: { $ne: null, $lte: now } },
+		{ $set: { status: "completed", nextExecutionAt: null, updatedAt: now } }
+	);
+
+	if (modifiedCount > 0) {
+		console.log(`[triggerExecutor] Retired ${modifiedCount} expired job(s).`);
+	}
+}
+
 async function triggerExecutor() {
 	const db = await getDB();
 	const now = new Date();
 
+	await retireExpiredJobs(db, now);
+
 	const pendingTriggers = await db
 		.collection(TRIGGER_JOB)
-		.find({ 
+		.find({
 			status : "active",
-			nextExecutionAt: { $lte: now } })
+			nextExecutionAt: { $lte: now },
+			// Behind the sweep above, not instead of it: an expired job must not
+			// dispatch even on a tick where the sweep failed. All three branches
+			// are needed — type bracketing means { $gt: <Date> } matches neither
+			// null nor a missing field, so on its own it would drop every job
+			// that has no expiry, which is most of them.
+			$or: [
+				{ expiryDate: null },
+				{ expiryDate: { $exists: false } },
+				{ expiryDate: { $gt: now } },
+			],
+		})
 		.toArray();
 
 	// console.log(`[Trigger Executor] found ${pendingTriggers.length} pending triggers. [ ${pendingTriggers.join(" ")} ] at ${now}`);

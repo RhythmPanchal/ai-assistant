@@ -45,15 +45,15 @@ export default async function executeTriggerJob(job) {
         console.log("[executeTriggerJob] job function result",res); 
         //TODO : handle the results. 
         // ─── 3a. Success ─────────────────────────────────────────────────────
-        const nextExecutionAt = updatedJob.recurring
-            ? getNextCronDate(updatedJob.cronPattern, updatedJob.timeZone)
-            : null;
+        const { status, nextExecutionAt } = updatedJob.recurring
+            ? scheduleNextRun(updatedJob)
+            : { status: "completed", nextExecutionAt: null };
 
         await collection.updateOne(
             { _id: job._id },
             {
                 $set: {
-                    status: updatedJob.recurring ? "active" : "completed",
+                    status,
                     lastExecutedAt: now,
                     attempts: 0,
                     nextExecutionAt,
@@ -76,15 +76,16 @@ export default async function executeTriggerJob(job) {
         // became three, each burning what little quota was left. Reschedule
         // instead of retrying.
         if (classifyQuotaError(err).kind === "RPD") {
-            const nextExecutionAt = updatedJob.recurring
-                ? getNextCronDate(updatedJob.cronPattern, updatedJob.timeZone)
-                : new Date(Date.now() + 60 * 60 * 1000); // don't lose a one-time job
+            const { status, nextExecutionAt } = updatedJob.recurring
+                ? scheduleNextRun(updatedJob)
+                // don't lose a one-time job
+                : { status: "active", nextExecutionAt: new Date(Date.now() + 60 * 60 * 1000) };
 
             await collection.updateOne(
                 { _id: job._id },
                 {
                     $set: {
-                        status: "active",
+                        status,
                         attempts: 0,
                         failedAt: new Date(),
                         nextExecutionAt,
@@ -119,14 +120,15 @@ export default async function executeTriggerJob(job) {
 
         // ─── 3c. Failure — max attempts exceeded ─────────────────────────────
         if (updatedJob.recurring) {
-            // For recurring jobs — reset attempts, keep active, schedule next run
-            const nextExecutionAt = getNextCronDate(updatedJob.cronPattern, updatedJob.timeZone);
+            // For recurring jobs — reset attempts and schedule the next run,
+            // unless that run would fall past the job's expiry.
+            const { status, nextExecutionAt } = scheduleNextRun(updatedJob);
 
             await collection.updateOne(
                 { _id: job._id },
                 {
                     $set: {
-                        status: "active",
+                        status,
                         attempts: 0,
                         failedAt: new Date(),
                         nextExecutionAt : nextExecutionAt,
@@ -158,17 +160,48 @@ export default async function executeTriggerJob(job) {
     }
 }
 
+// ─── Helper: where a recurring job goes next ───────────────────────────────
+/**
+ * Returns the status and next fire time for a recurring job, honouring
+ * expiryDate.
+ *
+ * Three separate branches above each had their own copy of getNextCronDate —
+ * success, quota deferral, and exhausted retries — and none of them looked at
+ * expiryDate, so a job that had run its course rescheduled itself forever no
+ * matter which path it took. Putting the check here covers all three.
+ *
+ * A job whose next fire lands past its expiry is "completed", not "cancelled":
+ * it ran the schedule it was given. "cancelled" is for a user calling it off.
+ */
+export function scheduleNextRun(job) {
+    const nextExecutionAt = getNextCronDate(job.cronPattern, job.timeZone);
+
+    if (job.expiryDate && nextExecutionAt && nextExecutionAt > job.expiryDate) {
+        return { status: "completed", nextExecutionAt: null };
+    }
+
+    return { status: "active", nextExecutionAt };
+}
+
 // ─── Helper: compute next cron execution date ──────────────────────────────
+/**
+ * The job's own timeZone decides when its cron fires. It used to be accepted
+ * and then ignored in favour of a hardcoded "Asia/Kolkata", which was
+ * invisible while every row was IST but silently wrong the moment a user in
+ * another timezone got a recurring reminder.
+ */
 export function getNextCronDate(cronPattern, timeZone) {
     if (!cronPattern) return null;
 
+    const tz = timeZone || "Asia/Kolkata";
+
     try{
-        const interval = CronExpressionParser.parse(cronPattern, { tz: "Asia/Kolkata", });
+        const interval = CronExpressionParser.parse(cronPattern, { tz });
         const nextExecutionAt = interval.next();
         const nextEexcutionAtDate = nextExecutionAt.toDate();
 
-        return nextEexcutionAtDate; 
+        return nextEexcutionAtDate;
     }catch(e){
-        throw new Error(`Invalid Cron Expression : "${cronPattern}" `); 
+        throw new Error(`Invalid cron expression "${cronPattern}" for timeZone "${tz}": ${e.message}`);
     }
 }
