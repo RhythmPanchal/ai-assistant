@@ -58,12 +58,17 @@ export function applyLoadedSkills(results, { messages, toolDeclarations, loadedS
     return declarations;
 }
 
-// flowType → overlay instruction. Listed explicitly per known flow so the
-// agent never picks up an overlay we have not vetted. Add new flows here.
-const FLOW_OVERLAYS = {
-    [goodNightFlow.flowType]: goodNightFlow.instruction,
-    [goodMorningFlow.flowType]: goodMorningFlow.instruction,
+// flowType → the flow module. Listed explicitly per known flow so the agent
+// never picks up an overlay we have not vetted. Add new flows here.
+const FLOWS = {
+    [goodNightFlow.flowType]: goodNightFlow,
+    [goodMorningFlow.flowType]: goodMorningFlow,
 };
+
+// The static half, for callers that only measure or inspect the prompt.
+export const FLOW_OVERLAYS = Object.fromEntries(
+    Object.entries(FLOWS).map(([flowType, flow]) => [flowType, flow.instruction])
+);
 
 /**
  * Per-flow state the overlay needs but cannot infer from the transcript.
@@ -88,6 +93,49 @@ export function flowStateBlock(flow, timeZone = IST_TIMEZONE) {
         `- opened: ${flow.startedAt ? new Date(flow.startedAt).toLocaleString("en-GB", { timeZone }) : "unknown"}`,
         "-------------------------------------",
     ].join("\n");
+}
+
+/**
+ * One flow's full overlay: its procedure, its state, and — if it has one — the
+ * data it needs, read fresh.
+ *
+ * `buildContext` is what lets a routine carry live data on the SYSTEM side. The
+ * morning routine used to receive its backlog as part of the user message the
+ * cron job sent, which meant the data was written once at 09:00, stored in
+ * chatHistory, and replayed unchanged for the rest of the day. Asked at 15:50
+ * what was still pending, the agent answered off a six-hour-old list. Rebuilding
+ * per turn also means a task the model closes at 09:05 is gone from the list it
+ * reads at 09:06.
+ *
+ * A context that fails must not cost the turn. The model is told the data is
+ * missing and to fetch what it needs — which is worse than having it, and far
+ * better than a routine that dies because one query timed out.
+ *
+ * `flows` is injectable for the same reason applyLoadedSkills takes a registry:
+ * the fallback path is the one that matters and the only way to exercise it for
+ * real is to hand it a context that throws.
+ */
+export async function buildFlowOverlay(flow, { userId, timeZone = IST_TIMEZONE, flows = FLOWS } = {}) {
+    const definition = flows[flow.flowType];
+    if (!definition) return null;
+
+    const parts = [definition.instruction, flowStateBlock(flow, timeZone)];
+
+    if (typeof definition.buildContext === "function") {
+        try {
+            const context = await definition.buildContext(userId, { timeZone });
+            if (context) parts.push(context);
+        } catch (err) {
+            console.warn(`[runAgent] ${flow.flowType} live context unavailable:`, err.message);
+            parts.push(
+                `⚠ The live data block for this routine could not be read (${err.message}).\n` +
+                `Ignore any instruction above that tells you not to fetch — you have nothing to work ` +
+                `from, so read what you need with fetchRecord before planning anything.`
+            );
+        }
+    }
+
+    return parts.join("\n\n");
 }
 
 // openFlow only supersedes flows of the SAME type, so two types can be open at
@@ -143,9 +191,9 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
 
         // Active flow overlays. Lazy expiry inside getOpenFlowsForUser. keeps stale flows from leaking.
         const openFlows = await getOpenFlowsForUser(userId);
-        const overlays = openFlows
-            .filter(f => FLOW_OVERLAYS[f.flowType])
-            .map(f => `${FLOW_OVERLAYS[f.flowType]}\n\n${flowStateBlock(f, timeZone)}`);
+        const overlays = (await Promise.all(
+            openFlows.map(f => buildFlowOverlay(f, { userId, timeZone }))
+        )).filter(Boolean);
 
         // 3. Persona + live IST time + overlays. Rebuilt every turn.
         // The profile is rendered here rather than cached: facts change between

@@ -1,7 +1,5 @@
 import { runAgent } from "../../agent/agent.js";
 import { NO_REPLY } from "../../agent/instruction.js";
-import pendingTasksKnowledge from "../../knowledge/pendingTasksKnowledge.js";
-import taskLogKnowledge from "../../knowledge/taskLogKnowledge.js";
 import { sendMessage } from "../../tools/telegram/sendMessage.js";
 import { openFlow, closeFlow, hasFlowStartedToday } from "../flows/activeFlowsRepo.js";
 import { goodMorningFlow } from "../../agent/flows/goodMorningFlow.js";
@@ -29,13 +27,12 @@ export async function goodMorningJob(user) {
     }
 
     try {
-      const [pendingTasks, taskLogs] = await Promise.all([
-        pendingTasksKnowledge(userId),
-        taskLogKnowledge(userId),
-      ]);
-
-      // Flow must be open BEFORE runAgent so the morning overlay applies to
-      // the draft turn as well as every follow-up confirmation turn.
+      // Flow must be open BEFORE runAgent — the routine's whole prompt, its
+      // procedure AND the backlog it plans against, arrives as that flow's
+      // overlay. This job used to read the data itself and inline it in the
+      // trigger message; runAgent now rebuilds it every turn, so the follow-up
+      // turns see the same data freshly rather than a 09:00 snapshot.
+      //
       // Last night's wrap-up is over the moment a new day is planned. This is
       // what actually ends the night flow — its expiry is only a backstop.
       await closeFlow({
@@ -52,7 +49,7 @@ export async function goodMorningJob(user) {
 
       const draftMessage = await runAgent(
         userId,
-        goodMorningFlow.buildTriggerPrompt({ pendingTasks, taskLogs }),
+        goodMorningFlow.buildTriggerPrompt(),
         "goodMorningJob"
       );
 

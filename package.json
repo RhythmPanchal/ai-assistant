@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon src/index.js",
-    "test": "node src/test/testUsageMeter.js && node src/test/testProviders.js && node src/test/testToolRegistry.js && node src/test/testRoutineGuard.js && node src/test/testTaskRouting.js && node src/test/testIdentityLayer.js && node src/test/testProfileRender.js && node src/test/testFactWriting.js && node src/test/testStartupMigrations.js && node src/test/testMigrationTargetId.js && node src/test/testPurgeMigration.js && node src/test/testRememberInstruction.js && node src/test/testProfileTools.js && node src/test/testSkills.js",
+    "test": "node src/test/testUsageMeter.js && node src/test/testProviders.js && node src/test/testToolRegistry.js && node src/test/testRoutineGuard.js && node src/test/testTaskRouting.js && node src/test/testIdentityLayer.js && node src/test/testProfileRender.js && node src/test/testFactWriting.js && node src/test/testStartupMigrations.js && node src/test/testMigrationTargetId.js && node src/test/testPurgeMigration.js && node src/test/testRememberInstruction.js && node src/test/testProfileTools.js && node src/test/testSkills.js && node src/test/testTaskHygiene.js",
     "eval": "node src/test/eval/evalModels.js",
     "eval:size": "node src/test/eval/measurePromptSize.js",
     "eval:chains": "node src/test/eval/testAllProviders.js",

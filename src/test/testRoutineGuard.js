@@ -48,13 +48,22 @@ test("hourCycle h23 gives a usable 0-23 hour at every boundary", () => {
     assert.strictEqual(at("2020-01-01T03:30:00Z", "Asia/Kolkata"), 9);
 });
 
-test("morning prompt forbids re-fetching data it already inlines", async () => {
+test("the morning routine's data is system-side, not inlined in a user message", async () => {
+    // It used to be inlined, along with a shouted instruction not to re-fetch
+    // it. Being on the user side meant it was written to chatHistory verbatim
+    // and replayed on every later turn, frozen at 09:00 — asked at 15:50 what
+    // was pending, the agent answered off a six-hour-old list.
     const { goodMorningFlow } = await import("../agent/flows/goodMorningFlow.js");
-    const p = goodMorningFlow.buildTriggerPrompt({ pendingTasks: "A", taskLogs: "B" });
-    assert.match(p, /DO NOT FETCH IT/);
-    assert.match(p, /NO tool calls/);
-    assert.match(p, /fetchCollectionNameAndSchema/, "must name the tool it is overriding");
-    assert.ok(p.includes("A") && p.includes("B"), "data must still be inlined");
+
+    const prompt = goodMorningFlow.buildTriggerPrompt();
+    assert.ok(prompt.length < 200, "the trigger is a knock on the door, not a payload");
+
+    assert.strictEqual(typeof goodMorningFlow.buildContext, "function",
+        "no buildContext means the overlay has no data and the routine plans blind");
+    // The do-not-fetch rule has to travel with the data it protects, or it
+    // forbids reading something that was never supplied.
+    assert.match(goodMorningFlow.instruction, /LIVE DATA/,
+        "the procedure must reference the block buildContext produces");
 });
 
 test("usersSchema matches main's bare-default-export convention", async () => {
