@@ -47,6 +47,13 @@ export class CreateTaskTool extends BaseTool {
 
     async execute({ userId, title, requiredMinutes, importance, priorityScore, category, deadline, recurring }) {
         const result = await createTask(userId, title, requiredMinutes, importance, priorityScore, category, deadline, recurring);
+
+        // createTask refuses routine blocks and silently-duplicating titles.
+        // Reporting those as success is how "Personal time / catch up" ended up
+        // in the backlog and stayed there: the model was told it had worked.
+        if (result?.success === false) return new ToolResult(false, result.error, result);
+        if (result?.duplicate) return new ToolResult(true, result.message, result);
+
         return new ToolResult(true, `Created task "${title}".`, result);
     }
 }

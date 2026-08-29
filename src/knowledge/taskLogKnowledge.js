@@ -9,12 +9,10 @@ function formatTaskLogsForLLM(records) {
             cleanItem.date = new Date(cleanItem.date).toISOString().split('T')[0];
         }
 
-        if (cleanItem.performedTasks) {
-            cleanItem.performedTasks = cleanItem.performedTasks.map(task => {
-                const { taskId, ...cleanTask } = task;
-                return cleanTask;
-            });
-        }
+        // taskId is KEPT. It used to be stripped here, on the same token-thrift
+        // reasoning that removed _id from the pending list — and with the same
+        // result: the one field that links what was done to what was planned
+        // never reached the model, so nothing could ever be reconciled.
         return cleanItem;
     });
 

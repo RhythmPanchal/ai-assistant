@@ -29,8 +29,16 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 // loadSkill is the one always-present door to everything undeclared. It cannot
 // reach data itself — it returns an instruction and a tool list, and only the
 // agent loop acts on them, against the explicit SKILLS map.
+// updateTaskStatus and deferTask write to taskCalendar only, only for the userId
+// they are given, and only to fields describing a task's own lifecycle — status,
+// deadline, notes. They cannot create a task or reach another collection. They
+// are declared rather than skill-loaded because the failure they exist for is
+// not scoped to a routine: on 2026-08-22 the user said a task was already done
+// during the morning flow, the agent acknowledged it and called nothing, and the
+// task was still Pending ten days later. That sentence can arrive at any hour.
 const INTENTIONAL_ADDITIONS = new Set([
     "updateFlowScratchpad", "deleteRecord", "rememberFact", "fetchUserContext", "loadSkill",
+    "updateTaskStatus", "deferTask",
 ]);
 // Present in toolOperator but deliberately dropped.
 const INTENTIONAL_REMOVALS = new Set();

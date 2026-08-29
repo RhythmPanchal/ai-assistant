@@ -111,7 +111,7 @@ The user has been prompted to wrap up their day. Across one or several casual me
     day: <day name e.g. "Wednesday">,
     performedTasks: [
       {
-        taskId: <string — "task_1", "task_2" if not linked to a taskCalendar entry>,
+        taskId: <the taskCalendar _id returned by updateTaskStatus below, else null>,
         title: <string>,
         category: <string e.g. "Work", "Personal", "Health">,
         actualDurationMinutes: <int, minimum 1>,
@@ -155,6 +155,19 @@ The user has been prompted to wrap up their day. Across one or several casual me
    • Food: estimate calories/macros if unspecified.
    • Tasks: only write if the user actually named the task. "Finished 3
      tasks" without titles → skip the write, ask in step 4.
+
+     CLOSE THE TASK TOO. Work the user finished tonight is usually work
+     that is still sitting in taskCalendar as Pending. For each named task,
+     call updateTaskStatus with the TITLE they used and status "Completed" —
+     you do not need an id, it resolves titles. Put the id it returns into
+     that entry's taskId so the log points at the task it closed.
+
+     If it comes back saying nothing matched, the work was unplanned:
+     taskId null, and log it as normal. Never invent an id.
+
+     Logging alone is not enough. "Move compaction changes to lowes prod"
+     was logged Completed on 2026-08-17 and its task stayed Pending for
+     another twelve days, offered back in every morning schedule.
    • Expenses: write each one.
 3. ACKNOWLEDGE in text what was JUST written, formatted as one line:
    "Logged: <comma-separated summary>."

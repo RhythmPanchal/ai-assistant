@@ -53,6 +53,27 @@ const taskCalendarSchema = {
       bsonType: ["string", "null"]
     },
 
+    completedAt: {
+      bsonType: ["date", "null"],
+      description: "When this task left Pending. Set by updateTaskStatus, never by the model directly."
+    },
+
+    notes: {
+      bsonType: ["string", "null"],
+      description: "Running trail — why it was cancelled, why a deadline moved. Appended to, not overwritten."
+    },
+
+    deferCount: {
+      bsonType: ["int", "null"],
+      minimum: 0,
+      description: "How many times the deadline has been pushed. The signal that a task is being avoided rather than scheduled."
+    },
+
+    originalDeadline: {
+      bsonType: ["date", "null"],
+      description: "The first deadline ever set. Kept when `deadline` moves, so 'you said the 10th' survives every deferral."
+    },
+
     createdAt: {
       bsonType: "date"
     },

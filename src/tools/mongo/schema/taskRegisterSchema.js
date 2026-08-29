@@ -22,7 +22,16 @@ const tasksRegisterSchema = {
       items: {
         bsonType: "object",
         properties: {
-          taskId: { bsonType: "string" },
+          taskId: {
+            bsonType: ["string", "null"],
+            description:
+              "The taskCalendar _id this completed work closes, or null if it was " +
+              "unplanned. Was a per-document label — task_1, task_2 — invented fresh " +
+              "each night, so the same string meant a different thing every day and " +
+              "pointed at nothing. That is why 'Move compaction changes to lowes prod' " +
+              "could be logged Completed on 2026-08-17 while its taskCalendar row " +
+              "stayed Pending for another twelve days."
+          },
           title: { bsonType: "string" },
           category: { bsonType: "string" },
           actualFrom: {
