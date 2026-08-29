@@ -1,5 +1,5 @@
 import { generateConnectorLink } from "../../connectors/oauth/connectorLink.js";
-import { resolveAddress } from "../../agent/userManager.js";
+import { resolveAddress } from "../../identity/userManager.js";
 
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;

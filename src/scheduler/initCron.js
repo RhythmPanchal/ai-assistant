@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { getDB } from "../tools/mongo/mongoClient.js";
 import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
 import executeTriggerJob from "./executeTriggerJob.js";
-import { resolveRoutineTargets } from "../agent/userManager.js";
+import { resolveRoutineTargets } from "../identity/userManager.js";
 import { goodMorningJob } from "./jobs/goodMorningJob.js";
 import { goodNightJob } from "./jobs/goodNightJob.js";
 

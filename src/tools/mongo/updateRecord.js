@@ -3,8 +3,12 @@ import { getDB } from "./mongoClient.js";
 import fetchCollectionNameAndSchema from "./fetchCollectionSchema.js";
 import ValidateSchema from "./validateSchema.js";
 import { normalizeDates } from "./validateSchema.js";
+import { getUserContext } from "../../identity/userContext.js";
 
 async function processUpdate(collectionName, id, data) {
+    // Identity first, before parsing or connecting. An unbound caller must fail
+    // having done nothing at all.
+    const context = getUserContext();
 
     // 1. Parse data if it's a JSON string
     try {
@@ -43,17 +47,29 @@ async function processUpdate(collectionName, id, data) {
         throw new Error(`Invalid id: "${id}" is not a valid ObjectId.`);
     }
 
-    const existingRecord = await collection.findOne({ _id: objectId });
+    // The owner is part of the FILTER, not a check afterwards — the same shape
+    // deleteRecord already uses. Matching on _id alone meant any valid id
+    // rewrote any user's row, and _id values travel through the model. Scoped
+    // like this, a foreign id simply matches nothing.
+    const scope = context.isSystem ? { _id: objectId } : { _id: objectId, userId: context.userId };
+
+    const existingRecord = await collection.findOne(scope);
     if (!existingRecord) {
+        // Deliberately does not distinguish "no such record" from "not yours".
+        // Telling the model which one it hit turns this into a probe for whether
+        // an id exists on another account.
         throw new Error(`Record with id "${id}" not found in collection "${collectionName}".`);
     }
 
     // 6. Perform the update with $set and stamp updatedAt
     const result = await collection.updateOne(
-        { _id: objectId },
+        scope,
         {
             $set: {
                 ...refinedData,
+                // userId is never patchable. Without this a model could hand a
+                // record to another account by "updating" its owner.
+                ...(context.isSystem ? {} : { userId: context.userId }),
                 updatedAt: new Date(),
             },
         }

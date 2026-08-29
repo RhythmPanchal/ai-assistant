@@ -7,10 +7,6 @@ export class CompleteFlowTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: {
-                type: "integer",
-                description: "Identifier of the user whose flow should be closed.",
-            },
             flowType: {
                 type: "string",
                 enum: ["goodNight", "goodMorning"],
@@ -22,7 +18,7 @@ export class CompleteFlowTool extends BaseTool {
                 description: "Why the flow is closing. 'done' = completion criteria met. 'skipped' = user explicitly opted out for tonight/today.",
             },
         },
-        required: ["userId", "flowType", "reason"],
+        required: ["flowType", "reason"],
     };
 
     async execute({ userId, flowType, reason }) {

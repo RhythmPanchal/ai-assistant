@@ -1,4 +1,5 @@
 import { ToolResult } from "./BaseTool.js";
+import { getUserContext } from "../../identity/userContext.js";
 
 export class ToolRegistry {
     constructor() {
@@ -66,8 +67,18 @@ export class ToolRegistry {
             return new ToolResult(false, `Unknown tool: '${toolName}'. Available: ${available.join(", ")}`);
         }
 
+        // Identity is supplied here, never by the caller of the tool. No
+        // declaration exposes userId any more, so the model cannot name one —
+        // and if a model somehow emitted the field anyway, spreading the context
+        // LAST discards it rather than merging it.
+        //
+        // Tools still receive `userId` in their args and their signatures are
+        // unchanged; the only difference is that the value is now known to have
+        // come from the entry point that authenticated it.
+        const scopedArgs = { ...args, userId: getUserContext().userId };
+
         try {
-            return await tool.execute(args);
+            return await tool.execute(scopedArgs);
         } catch (error) {
             console.error(`Error executing tool ${toolName}:`, error);
             return new ToolResult(false, `Tool '${toolName}' crashed: ${error.message}`);

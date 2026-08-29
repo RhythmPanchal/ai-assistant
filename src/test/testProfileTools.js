@@ -114,8 +114,10 @@ test("all four tools exist and declare correctly", () => {
         assert.ok(profileTools[name], `${name} must be exported for the skill to load it`);
         const d = new profileTools[name]().toFunctionDeclaration();
         assert.ok(d.name && d.description, `${name} needs a wire name and description`);
-        assert.ok(d.parameters.required.includes("userId") || d.name === "manageFactKey",
-            `${d.name} must be scoped to a user`);
+        // Scoping is no longer a declared parameter — the registry injects it
+        // from the bound context, so no tool may advertise one.
+        assert.ok(!("userId" in (d.parameters.properties ?? {})),
+            `${d.name} must not let the model choose whose profile it edits`);
     }
 });
 

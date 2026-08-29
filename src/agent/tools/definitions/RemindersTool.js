@@ -11,10 +11,6 @@ export class CreateOneTimeReminderTool extends BaseTool {
                 type: "string",
                 description: "Human-readable title for the reminder. e.g. 'Take medicine at 8pm'",
             },
-            userId: {
-                type: "integer",
-                description: "Identifier of the user who owns this reminder.",
-            },
             nextExecutionAt: {
                 type: "string",
                 description: "When the reminder should fire, in Asia/Kolkata. Write as naive ISO local time with NO trailing 'Z' and NO timezone offset, e.g. '2025-06-01T20:00:00' for 8 PM IST.",
@@ -24,7 +20,7 @@ export class CreateOneTimeReminderTool extends BaseTool {
                 description: "Any extra description needed to execute the reminder action, e.g. { message: 'Take your medicine' }",
             },
         },
-        required: ["title", "userId", "nextExecutionAt", "message"],
+        required: ["title", "nextExecutionAt", "message"],
     };
 
     async execute({ title, userId, nextExecutionAt, message }) {
@@ -49,10 +45,6 @@ export class CreateMultiTimeReminderTool extends BaseTool {
                 type: "string",
                 description: "Human-readable title for the reminder. e.g. 'Take medicine at 8pm'",
             },
-            userId: {
-                type: "integer",
-                description: "Identifier of the user who owns this reminder.",
-            },
             cron: {
                 type: "string",
                 description: "Cron expression describing the recurrence (5-field, Asia/Kolkata timezone). e.g. '0 20 * * *' for every day at 8pm.",
@@ -70,7 +62,7 @@ export class CreateMultiTimeReminderTool extends BaseTool {
                 description: "When the recurring reminder should stop, in Asia/Kolkata. Same format rule as nextExecutionAt — naive ISO local time, no 'Z', no offset. e.g. '2026-06-01T20:00:00'.",
             }
         },
-        required: ["title", "userId", "cron", "nextExecutionAt", "message", "expiryDate"],
+        required: ["title", "cron", "nextExecutionAt", "message", "expiryDate"],
     };
 
     async execute({ title, userId, cron, nextExecutionAt, message, expiryDate }) {

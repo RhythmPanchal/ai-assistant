@@ -1,7 +1,7 @@
 import { getDB } from "../../tools/mongo/mongoClient.js";
 import { resolveProvider } from "./init.js";
 import { sendMessage, editMessage } from "../../tools/telegram/sendMessage.js";
-import { resolveAddress } from "../../agent/userManager.js";
+import { resolveAddress } from "../../identity/userManager.js";
 
 const BOT_URL = "https://web.telegram.org/k/#@TskMgrRhythmBot";
 

@@ -22,16 +22,12 @@ export class DeleteRecordTool extends BaseTool {
                 type: "string",
                 description: "The exact 24-character hex _id from a fetchRecord response. NEVER fabricate.",
             },
-            userId: {
-                type: "integer",
-                description: "Owner of the record. Part of the delete filter, so a wrong _id deletes nothing.",
-            },
             reason: {
                 type: "string",
                 description: "Short reason, e.g. 'duplicate of 6a7b8b17' or 'user says this was not today'. Logged for the audit trail.",
             },
         },
-        required: ["collectionName", "id", "userId", "reason"],
+        required: ["collectionName", "id", "reason"],
     };
 
     async execute({ collectionName, id, userId, reason }) {

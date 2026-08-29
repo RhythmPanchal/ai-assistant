@@ -8,11 +8,10 @@ export class UpdateFlowScratchpadTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: { type: "integer", description: "The user's Telegram ID" },
             flowType: { type: "string", description: "The type of flow (e.g. 'goodMorning', 'goodNight')" },
             scratchpad: { type: "object", description: "State to carry into later turns of this flow, e.g. { unrelatedReplies: 1 }" }
         },
-        required: ["userId", "flowType", "scratchpad"]
+        required: ["flowType", "scratchpad"]
     };
 
     async execute(args) {

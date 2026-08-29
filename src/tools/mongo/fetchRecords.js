@@ -7,6 +7,7 @@ import { TRIGGER_JOB } from "./schema/triggerJobSchema.js";
 import { USER_SCHEDULE } from "./schema/userScheduleSchema.js";
 import { toIST, IST_TIMEZONE } from "./dateUtils.js";
 import fetchCollectionNameAndSchema from "./fetchCollectionSchema.js";
+import { getUserContext } from "../../identity/userContext.js";
 
 const WHITELISTED_COLLECTIONS = {
 	expenseRegister: EXPENSE_REGISTER,
@@ -65,6 +66,20 @@ function coerceMaybeDate(val) {
 }
 
 export async function fetchRecord(collection, filters = {}, sortBy, sortOrder = "desc", limit = 50) {
+	// 0. Scope to the caller. This is the ONLY thing standing between the model
+	//    and everyone else's rows, so it happens before anything else and it
+	//    overwrites rather than defaults.
+	//
+	//    Until now the entire defence was the sentence "Always include userId in
+	//    filters" in this tool's description — a request addressed to the model,
+	//    with nothing enforcing it. Omit that key and the query returned every
+	//    user's rows; name someone else's id and it returned theirs.
+	//
+	//    Spread order matters: the context goes LAST so a model-supplied userId
+	//    is discarded, not merged.
+	const context = getUserContext();
+	filters = context.isSystem ? filters : { ...filters, userId: context.userId };
+
 	// 1. Whitelist check
 	const collectionName = WHITELISTED_COLLECTIONS[collection];
 	if (!collectionName) {

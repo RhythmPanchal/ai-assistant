@@ -24,7 +24,7 @@ test("module graph still loads despite the agent/job import cycle", async () => 
 
 test("routine guard and target resolver are exported", async () => {
     const { hasFlowStartedToday } = await import("../scheduler/flows/activeFlowsRepo.js");
-    const { resolveRoutineTargets, LEGACY_USER } = await import("../agent/userManager.js");
+    const { resolveRoutineTargets, LEGACY_USER } = await import("../identity/userManager.js");
     assert.strictEqual(typeof hasFlowStartedToday, "function");
     assert.strictEqual(typeof resolveRoutineTargets, "function");
     assert.strictEqual(LEGACY_USER.userId, 1136575387, "legacy fallback user must survive");

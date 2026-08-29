@@ -1,7 +1,7 @@
 import { sendMessage } from "../../tools/telegram/sendMessage.js";
 import { openFlow, hasFlowStartedToday } from "../flows/activeFlowsRepo.js";
 import { goodNightFlow } from "../../agent/flows/goodNightFlow.js";
-import { resolveRoutineTargets, resolveAddress } from "../../agent/userManager.js";
+import { resolveRoutineTargets, resolveAddress } from "../../identity/userManager.js";
 
 /**
  * @param {Object} [user] fire for just this user; omit to fire for everyone

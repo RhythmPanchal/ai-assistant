@@ -11,10 +11,6 @@ export class RememberFactTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: {
-                type: "integer",
-                description: "Identifier of the user these facts describe.",
-            },
             facts: {
                 type: "array",
                 description: "One entry per distinct fact. Save several at once rather than calling repeatedly.",
@@ -58,7 +54,7 @@ export class RememberFactTool extends BaseTool {
                 },
             },
         },
-        required: ["userId", "facts"],
+        required: ["facts"],
     };
 
     async execute({ userId, facts }) {

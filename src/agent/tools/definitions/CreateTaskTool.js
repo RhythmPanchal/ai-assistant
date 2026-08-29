@@ -7,10 +7,6 @@ export class CreateTaskTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: {
-                type: "integer",
-                description: "Identifier of the user who owns this task.",
-            },
             title: {
                 type: "string",
                 description: "Title or name of the task.",
@@ -42,7 +38,7 @@ export class CreateTaskTool extends BaseTool {
                 description: "Recurrence pattern for the task. Set if the task appears to be recurring.",
             },
         },
-        required: ["userId", "title"],
+        required: ["title"],
     };
 
     async execute({ userId, title, requiredMinutes, importance, priorityScore, category, deadline, recurring }) {

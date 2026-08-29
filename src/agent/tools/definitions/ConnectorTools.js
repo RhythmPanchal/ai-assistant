@@ -17,8 +17,8 @@ export class ConnectAppTool extends BaseTool {
         "Sends a Connect button so the user can authorize a third-party app. Use whenever the user wants to connect, link, or re-enable an app (e.g. 'connect Google Calendar', 'I accidentally dismissed calendar, reconnect it'). Validates that the app is supported before sending.";
     static parameters = {
         type: "object",
-        properties: { userId: USER_ID, appName: APP_NAME },
-        required: ["userId", "appName"],
+        properties: { appName: APP_NAME },
+        required: ["appName"],
     };
 
     async execute({ userId, appName }) {
@@ -33,8 +33,8 @@ export class DisconnectAppTool extends BaseTool {
         "Disconnects a third-party app for the user — disables the connection and removes all stored tokens. Use when the user explicitly asks to disconnect, unlink, or revoke access for an app.";
     static parameters = {
         type: "object",
-        properties: { userId: USER_ID, appName: APP_NAME },
-        required: ["userId", "appName"],
+        properties: { appName: APP_NAME },
+        required: ["appName"],
     };
 
     async execute({ userId, appName }) {

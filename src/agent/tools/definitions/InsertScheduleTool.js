@@ -7,10 +7,6 @@ export class InsertScheduleTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: {
-                type: "integer",
-                description: "Identifier of the user who owns this schedule.",
-            },
             date: {
                 type: "string",
                 description: "Schedule day in Asia/Kolkata as 'YYYY-MM-DD' (date only, no time, no 'Z', no offset), e.g. '2026-05-01'.",
@@ -72,7 +68,7 @@ export class InsertScheduleTool extends BaseTool {
                 description: "Motivational message for the day.",
             },
         },
-        required: ["userId", "date", "slots"],
+        required: ["date", "slots"],
     };
 
     async execute({ userId, date, slots, summary, motivationalNote }) {

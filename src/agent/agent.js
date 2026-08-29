@@ -3,7 +3,7 @@ import { LoadSkillTool } from "./tools/definitions/LoadSkillTool.js";
 import { ProviderManager, resolveMaxSteps, resolveTaskChain } from "./llm/createProvider.js";
 import { startTurn } from "./llm/usageMeter.js";
 import { agentConfig } from "../config/agent.config.js";
-import { getUserProfile } from "./userManager.js";
+import { getUserProfile } from "../identity/userManager.js";
 import { createRecord } from "../tools/mongo/createRecord.js";
 import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHistorySchema.js";
 import { buildSystemInstruction, NO_REPLY } from "./instruction.js";

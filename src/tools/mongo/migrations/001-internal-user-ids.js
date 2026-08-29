@@ -234,7 +234,7 @@ export async function runIdentityMigration({ apply = false } = {}) {
         `userProfileKnowledge and already emits the resolved userId. Confirm on a real turn that ` +
         `it reads "userId (integer): ${targetUserId}".`,
 
-        `src/agent/userManager.js — LEGACY_USER is now dead. resolveRoutineTargets finds the real ` +
+        `src/identity/userManager.js — LEGACY_USER is now dead. resolveRoutineTargets finds the real ` +
         `row via triggersOptIn. Delete it once routines have fired and you have seen them land.`,
 
         `Old triggerJob rows keep actionType "sendMessage" with a baked-in payload.chatId. They ` +

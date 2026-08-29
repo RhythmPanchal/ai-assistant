@@ -1,6 +1,6 @@
 import { BaseTool, ToolResult } from "../BaseTool.js";
 import {
-    getUserContext, forgetFacts, addFactKey, removeFactKey,
+    getProfileContext, forgetFacts, addFactKey, removeFactKey,
 } from "../../../tools/mongo/operation/userFacts.js";
 import { updateUserSettings, EDITABLE_SETTINGS } from "../../../tools/mongo/operation/userSettings.js";
 
@@ -22,13 +22,12 @@ export class FetchUserContextTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: { type: "integer", description: "Identifier of the user whose profile to read." },
         },
-        required: ["userId"],
+        required: [],
     };
 
     async execute({ userId }) {
-        const context = await getUserContext(userId);
+        const context = await getProfileContext(userId);
         return new ToolResult(
             true,
             `${context.facts.length} fact(s) stored; ${context.unused.length} known key(s) with nothing recorded.`,
@@ -46,7 +45,6 @@ export class UpdateUserSettingsTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: { type: "integer", description: "Identifier of the user to update." },
             name: { type: "string", description: "What they want to be called." },
             timezone: { type: "string", description: "IANA zone, e.g. 'Asia/Kolkata'. Must be a real zone name, not an offset or a city alone." },
             currency: { type: "string", description: "ISO 4217 code they think in day to day, e.g. INR, USD, CAD." },
@@ -55,7 +53,7 @@ export class UpdateUserSettingsTool extends BaseTool {
             morningHour: { type: "integer", description: "Local hour (0-23) the morning routine should fire." },
             nightHour: { type: "integer", description: "Local hour (0-23) the evening routine should fire." },
         },
-        required: ["userId"],
+        required: [],
     };
 
     async execute({ userId, ...settings }) {
@@ -84,14 +82,13 @@ export class ForgetFactTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: { type: "integer", description: "Identifier of the user these facts belong to." },
             keys: {
                 type: "array",
                 description: "Exact fact keys to delete, e.g. ['work.employer'].",
                 items: { type: "string" },
             },
         },
-        required: ["userId", "keys"],
+        required: ["keys"],
     };
 
     async execute({ userId, keys }) {
@@ -118,7 +115,6 @@ export class ManageFactKeyTool extends BaseTool {
                 type: "string",
                 description: "Required for 'add'. What belongs under this key, written as guidance — this text is what a future extraction reads to decide whether a fact fits.",
             },
-            userId: { type: "integer", description: "The user whose conversation prompted this, recorded on a new key." },
         },
         required: ["action", "key"],
     };

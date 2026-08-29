@@ -75,16 +75,35 @@ test("sendMessage stays scheduler-only", () => {
     assert.ok(!ported.has("sendMessage"), "model must not be able to send arbitrary Telegram messages");
 });
 
-test("required params unchanged for every shared tool", () => {
+test("required params unchanged for every shared tool, apart from userId", () => {
+    // userId is deliberately gone from every declaration — it now comes from the
+    // bound user context instead of from the model. Anything ELSE dropping out
+    // of required is still drift and still a bug.
     const drift = [];
     for (const [name, decl] of ported) {
         const old = legacy.get(name);
         if (!old) continue;
-        const a = [...(old.parameters?.required || [])].sort();
+        const a = [...(old.parameters?.required || [])].filter(p => p !== "userId").sort();
         const b = [...(decl.parameters?.required || [])].sort();
         if (JSON.stringify(a) !== JSON.stringify(b)) drift.push(`${name}: ${JSON.stringify(a)} -> ${JSON.stringify(b)}`);
     }
     assert.deepStrictEqual(drift, [], `required-param drift:\n  ${drift.join("\n  ")}`);
+});
+
+test("no declaration exposes userId to the model", () => {
+    // The invariant that replaces the parameter. A tool that reintroduces userId
+    // hands the model back the ability to name whose data it is acting on, which
+    // is the whole vulnerability this removed.
+    const offenders = [];
+    for (const tool of toolRegistry.getAllTools()) {
+        const decl = tool.toFunctionDeclaration();
+        const params = JSON.stringify(decl.parameters ?? {});
+        if (/"userId"\s*:/.test(params) || (decl.parameters?.required ?? []).includes("userId")) {
+            offenders.push(decl.name);
+        }
+    }
+    assert.deepStrictEqual(offenders, [],
+        `these declarations still let the model choose a userId: ${offenders.join(", ")}`);
 });
 
 test("every tool has a non-empty description and is executable", () => {

@@ -22,7 +22,6 @@ export class UpdateTaskStatusTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: { type: "integer", description: "Identifier of the user who owns these tasks." },
             updates: {
                 type: "array",
                 description: "One entry per task the user has resolved.",
@@ -53,7 +52,7 @@ export class UpdateTaskStatusTool extends BaseTool {
                 },
             },
         },
-        required: ["userId", "updates"],
+        required: ["updates"],
     };
 
     async execute({ userId, updates }) {
@@ -86,7 +85,6 @@ export class DeferTaskTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            userId: { type: "integer", description: "Identifier of the user who owns the task." },
             task: { type: "string", description: "The task's 24-character id, or its exact title." },
             newDeadline: {
                 type: "string",
@@ -99,7 +97,7 @@ export class DeferTaskTool extends BaseTool {
                 description: "Why it moved, in the user's words. Kept on the task.",
             },
         },
-        required: ["userId", "task", "newDeadline"],
+        required: ["task", "newDeadline"],
     };
 
     async execute({ userId, task, newDeadline, reason }) {

@@ -1,5 +1,6 @@
 import { runAgent } from "../../agent/agent.js";
-import { resolveUserByChannel } from "../../agent/userManager.js";
+import { resolveUserByChannel } from "../../identity/userManager.js";
+import { runWithUserContext } from "../../identity/userContext.js";
 import { NO_REPLY } from "../../agent/instruction.js";
 import { sendMessage, editMessage, deleteMessage, createThinkingAnimation, answerCallbackQuery } from "./sendMessage.js";
 import { dismissCallbackHandler } from "../../connectors/oauth/dismissCallbackHandler.js";
@@ -17,14 +18,28 @@ export async function handleCallbackQuery(callbackQuery) {
     return;
   }
 
-  const [code, appName, userIdStr] = data.split(":");
-  // callback_data values are always strings after split; userId is a Telegram
-  // chat id (int) in the DB so we must parse it before any DB query.
-  const userId = parseInt(userIdStr, 10);
+  const [code, appName] = data.split(":");
+
+  // Identity comes from `from`, NOT from the userId embedded in callback_data.
+  // That trailing field round-trips through the Telegram client, so trusting it
+  // is the same mistake as trusting a userId the model supplied — the value is
+  // whatever came back, not whatever we sent. from.id is the authenticated
+  // sender, and it is what every other entry point resolves on.
+  const externalId = callbackQuery.from?.id;
+  if (!externalId) {
+    console.warn("[handleCallbackQuery] no from.id — cannot attribute this to anyone");
+    await answerCallbackQuery(callbackQueryId, "Something went wrong.");
+    return;
+  }
+
+  const { userId } = await resolveUserByChannel("telegram", externalId, { address: chatId });
 
   if (code === "dismiss") {
     try {
-      await dismissCallbackHandler(appName, userId);
+      await runWithUserContext(
+        { userId, channel: "telegram", address: chatId },
+        () => dismissCallbackHandler(appName, userId)
+      );
       await answerCallbackQuery(callbackQueryId, "Got it, won't ask again.");
       if (chatId && messageId) {
         await editMessage(
@@ -73,7 +88,14 @@ export async function handleTelegramMessage(message) {
     // then a new user simply gets a working bot with an empty profile.
     if (isNew) console.log(`[handleTelegramMessage] first contact — allocated userId ${userId}`);
 
-    const reply = await runAgent(userId, text);
+    // The trust boundary. This is the only place in a user turn where identity
+    // is established from something authenticated, so it is the only place the
+    // context may be bound. Everything runAgent touches — the loop, every tool,
+    // every query underneath — reads userId from here instead of being told it.
+    const reply = await runWithUserContext(
+      { userId, channel: "telegram", address: chatId },
+      () => runAgent(userId, text)
+    );
     console.log("RUN AGENT COMPLETED WITH THIS REPLY");
 
     // Stop animation BEFORE editing — prevents race condition

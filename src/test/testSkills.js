@@ -16,6 +16,11 @@ import { readFileSync } from "node:fs";
 const { SKILLS, SKILL_NAMES, allSkillToolNames, skillCatalogue } = await import("../agent/skills/index.js");
 const toolRegistry = (await import("../agent/tools/definitions/index.js")).default;
 const { buildSystemInstruction } = await import("../agent/instruction.js");
+const { runWithUserContext } = await import("../identity/userContext.js");
+
+// toolRegistry.execute now reads identity from the bound context and throws
+// without one — that is the point. Tests have to say who they are.
+const asUser = (fn) => runWithUserContext({ userId: 1, channel: "test" }, fn);
 
 const tests = [];
 const test = (n, f) => tests.push([n, f]);
@@ -52,7 +57,7 @@ test("an unknown tool name is skipped, not thrown", () => {
 });
 
 test("the unknown-tool error does not leak undeclared tool names", async () => {
-    const result = await toolRegistry.execute("noSuchTool", {});
+    const result = await asUser(() => toolRegistry.execute("noSuchTool", {}));
     assert.strictEqual(result.success, false);
     for (const hidden of allSkillToolNames()) {
         assert.ok(!result.message.includes(hidden),
@@ -61,7 +66,7 @@ test("the unknown-tool error does not leak undeclared tool names", async () => {
 });
 
 test("loadSkill returns what the loop needs to widen the turn", async () => {
-    const result = await toolRegistry.execute("loadSkill", { skill: "userContextEnrichment" });
+    const result = await asUser(() => toolRegistry.execute("loadSkill", { skill: "userContextEnrichment" }));
     assert.strictEqual(result.success, true);
     assert.strictEqual(result.data.skill, "userContextEnrichment");
     assert.ok(result.data.instruction?.length > 200, "the instruction is the substance of a skill");
@@ -69,7 +74,7 @@ test("loadSkill returns what the loop needs to widen the turn", async () => {
 });
 
 test("an unknown skill fails without pretending to load", async () => {
-    const result = await toolRegistry.execute("loadSkill", { skill: "nope" });
+    const result = await asUser(() => toolRegistry.execute("loadSkill", { skill: "nope" }));
     assert.strictEqual(result.success, false);
     assert.match(result.message, /Available/);
 });

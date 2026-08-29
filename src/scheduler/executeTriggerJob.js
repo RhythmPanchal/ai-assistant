@@ -2,6 +2,7 @@ import { getDB } from "../tools/mongo/mongoClient.js";
 import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
 import { ObjectId } from "mongodb";
 import { dispatchAction } from "./actionDispatcher.js";
+import { runWithUserContext } from "../identity/userContext.js";
 import { CronExpressionParser } from "cron-parser";
 import { classifyQuotaError } from "../agent/llm/usageMeter.js";
 
@@ -33,7 +34,14 @@ export default async function executeTriggerJob(job) {
     // ─── 2. Execute the action ───────────────────────────────────────────────
     try {
         console.log(updatedJob.actionType, updatedJob.payload); 
-        const res = await dispatchAction(updatedJob.actionType, updatedJob.payload);
+        // The fourth entry point. A job acts for the user named on the row, and
+        // that userId was written by the system rather than supplied by a model,
+        // so it is the right thing to bind. Without this every scheduler-driven
+        // write lands with no context and throws.
+        const res = await runWithUserContext(
+            { userId: updatedJob.userId, channel: "scheduler", reason: updatedJob.actionType },
+            () => dispatchAction(updatedJob.actionType, updatedJob.payload)
+        );
         console.log("[executeTriggerJob] job function result",res); 
         //TODO : handle the results. 
         // ─── 3a. Success ─────────────────────────────────────────────────────

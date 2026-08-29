@@ -68,7 +68,10 @@ test("rememberFact is exposed to the model and correctly shaped", () => {
     assert.ok(tool, "the model cannot record anything about the user without this");
 
     const d = tool.toFunctionDeclaration();
-    assert.deepStrictEqual(d.parameters.required, ["userId", "facts"]);
+    // userId is absent by design — the registry supplies it from the bound
+    // context, so the model cannot choose whose profile it writes to.
+    assert.deepStrictEqual(d.parameters.required, ["facts"]);
+    assert.ok(!("userId" in d.parameters.properties), "userId must not be model-supplied");
     assert.strictEqual(d.parameters.properties.facts.type, "array",
         "batching matters: onboarding learns several things in one message");
     assert.deepStrictEqual(d.parameters.properties.facts.items.required, ["key", "fact"],

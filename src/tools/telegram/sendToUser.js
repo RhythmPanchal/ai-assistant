@@ -1,4 +1,4 @@
-import { resolveAddress } from "../../agent/userManager.js";
+import { resolveAddress } from "../../identity/userManager.js";
 import { sendMessage } from "./sendMessage.js";
 
 /**

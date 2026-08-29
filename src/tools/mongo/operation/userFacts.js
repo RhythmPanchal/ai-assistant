@@ -237,7 +237,7 @@ export async function rememberFacts(userId, facts = []) {
  *
  * So the keys live here, fetched only when something is about to be written.
  */
-export async function getUserContext(userId) {
+export async function getProfileContext(userId) {
     const db = await getDB();
 
     const [facts, vocabulary] = await Promise.all([

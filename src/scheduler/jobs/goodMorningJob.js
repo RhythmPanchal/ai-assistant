@@ -4,7 +4,8 @@ import { sendMessage } from "../../tools/telegram/sendMessage.js";
 import { openFlow, closeFlow, hasFlowStartedToday } from "../flows/activeFlowsRepo.js";
 import { goodMorningFlow } from "../../agent/flows/goodMorningFlow.js";
 import { goodNightFlow } from "../../agent/flows/goodNightFlow.js";
-import { resolveAddress, resolveRoutineTargets } from "../../agent/userManager.js";
+import { resolveAddress, resolveRoutineTargets } from "../../identity/userManager.js";
+import { runWithUserContext } from "../../identity/userContext.js";
 
 /**
  * @param {Object} [user] fire for just this user; omit to fire for everyone
@@ -47,10 +48,14 @@ export async function goodMorningJob(user) {
         expiresAt: goodMorningFlow.computeExpiry(timeZone),
       });
 
-      const draftMessage = await runAgent(
-        userId,
-        goodMorningFlow.buildTriggerPrompt(),
-        "goodMorningJob"
+      // A routine acts on a user's behalf without that user having sent
+      // anything, so this is an entry point in its own right and has to declare
+      // who it is acting as. Scoped to runAgent because that is the only call
+      // here that dispatches tools; the flow and address calls above take a
+      // userId read from the users row, which was never model-supplied.
+      const draftMessage = await runWithUserContext(
+        { userId, channel: "scheduler", reason: "goodMorningJob" },
+        () => runAgent(userId, goodMorningFlow.buildTriggerPrompt(), "goodMorningJob")
       );
 
       // The whole point of this job is to send a draft, so NO_REPLY here is a
