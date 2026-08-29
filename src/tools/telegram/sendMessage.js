@@ -1,4 +1,4 @@
-import { renderForTelegram, markdownToTelegramHTML } from "./renderMarkdown.js";
+import { renderForTelegram } from "./renderMarkdown.js";
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
@@ -241,5 +241,3 @@ export function startTyping(chatId) {
         },
     };
 }
-
-export { markdownToTelegramHTML };

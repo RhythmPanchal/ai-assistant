@@ -1,9 +1,6 @@
 import { generateConnectorLink } from "../../connectors/oauth/connectorLink.js";
 import { resolveAddress } from "../../identity/userManager.js";
-
-
-const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
+import { sendMessage } from "./sendMessage.js";
 
 
 export async function connectorButton(userId, appName, text) {
@@ -36,15 +33,11 @@ export async function connectorButton(userId, appName, text) {
     ],
   };
 
-  const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: address,
-      text,
-      reply_markup,
-    }),
-  });
-
-  return await response.json();
+  // Through sendMessage rather than its own fetch. The connect copy says
+  // 'Tap *Connect* to authorize', and this used to post it with no parse_mode —
+  // so the asterisks reached the user literally, on the one message whose whole
+  // job is to be tapped. Going through the shared sender also picks up escaping
+  // and the plain-text fallback, and keeps this the only place that builds the
+  // keyboard rather than the only place that duplicates the transport.
+  return sendMessage(address, text, { reply_markup });
 }
