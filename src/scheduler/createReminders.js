@@ -21,6 +21,30 @@ function assertFuture(fireAt, raw) {
 }
 
 /**
+ * The reminder body, as an actual string.
+ *
+ * `"[*REMINDER*]" + message` stringifies whatever it is given, so an object
+ * arrived as the literal text "[*REMINDER*][object Object]" and the user got
+ * that on Telegram every night. Two such reminders ran daily from 2026-08-18
+ * to 2026-08-30 before anyone could tell what they were meant to say.
+ *
+ * The tool description was the cause — it declared type "string" but gave
+ * `{ message: '...' }` as the example, and the model copied the example. That
+ * is fixed in RemindersTool.js; this rejects the shape outright so no future
+ * wording can put an unreadable reminder in the database. Throwing beats
+ * coercing: the error goes back to the model, which retries with a string.
+ */
+function reminderBody(message) {
+  if (typeof message !== "string" || message.trim() === "") {
+    throw new Error(
+      `Invalid message: expected a non-empty string, got ${JSON.stringify(message)}. ` +
+      `Pass the reminder sentence itself, e.g. "Call Masi" — not an object and not an empty value.`
+    );
+  }
+  return "[*REMINDER*]" + message;
+}
+
+/**
  * An identical still-pending reminder already exists. Re-issuing one is almost
  * always the model misreading an acknowledgement ("thanks, that's done now") as
  * a fresh request, so this is a no-op rather than an error.
@@ -38,6 +62,7 @@ async function findDuplicate(userId, title, fireAt) {
 export async function createOneTimeReminder(title, userId, nextExecutionAt, message) {
   const fireAt = toIST(nextExecutionAt);
   assertFuture(fireAt, nextExecutionAt);
+  const text = reminderBody(message);
 
   const duplicate = await findDuplicate(userId, title, fireAt);
   if (duplicate) {
@@ -59,7 +84,7 @@ export async function createOneTimeReminder(title, userId, nextExecutionAt, mess
     actionType: "sendToUser",
     payload : {
         userId,
-        text : "[*REMINDER*]" + message
+        text,
     },
     status: "active",
     attempts: 0,
@@ -78,6 +103,7 @@ export async function createOneTimeReminder(title, userId, nextExecutionAt, mess
 export async function createMultiTimeReminder(title, userId, cron, nextExecutionAt, message, expiryDate){
   const fireAt = toIST(nextExecutionAt);
   assertFuture(fireAt, nextExecutionAt);
+  const text = reminderBody(message);
 
   const duplicate = await findDuplicate(userId, title, fireAt);
   if (duplicate) {
@@ -99,7 +125,7 @@ export async function createMultiTimeReminder(title, userId, cron, nextExecution
     actionType: "sendToUser",
     payload : {
         userId,
-        text : "[*REMINDER*]" + message
+        text,
     },
     status: "active",
     attempts: 0,

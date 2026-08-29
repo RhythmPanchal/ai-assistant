@@ -244,7 +244,7 @@ export const tools = [
                         },
                         message: {
                             type: "string",
-                            description: "Any extra description needed to execute the reminder action, e.g. { message: 'Take your medicine' }",
+                            description: "The reminder text sent to the user, as a plain string. Pass the sentence itself, NOT an object — e.g. 'Take your medicine'.",
                         },
                     },
                     required: ["title", "userId", "nextExecutionAt", "message"],
@@ -298,7 +298,7 @@ export const tools = [
                         },
                         message: {
                             type: "string",
-                            description: "Any extra description needed to execute the reminder action, e.g. { message: 'Take your medicine' }",
+                            description: "The reminder text sent to the user, as a plain string. Pass the sentence itself, NOT an object — e.g. 'Take your medicine'.",
                         },
                         expiryDate: {
                             type: "string",
