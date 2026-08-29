@@ -1,5 +1,6 @@
 import { BaseTool, ToolResult } from "../BaseTool.js";
 import { createOneTimeReminder, createMultiTimeReminder } from "../../../scheduler/createReminders.js";
+import { cancelReminder } from "../../../scheduler/cancelReminder.js";
 
 export class CreateOneTimeReminderTool extends BaseTool {
     static name = "createOneTimeReminder";
@@ -75,3 +76,46 @@ export class CreateMultiTimeReminderTool extends BaseTool {
     }
 }
 
+
+export class CancelReminderTool extends BaseTool {
+    static name = "cancelReminder";
+    static description =
+        "Stop a reminder the user no longer wants — a recurring one they are done with, or a one-time one that is no longer needed. " +
+        "You MUST call fetchRecord on triggerJob first (filter status 'active') and pass the exact _id it returned; never guess or reconstruct an _id. " +
+        "If more than one reminder could match what the user said, list them with their times and ask which one before calling this — do not pick for them. " +
+        "This cancels reminders only. It cannot switch off the daily good-morning or good-night routines, and it does not delete anything: the reminder is marked cancelled and stops firing. " +
+        "To change when a reminder fires rather than stop it, cancel it and create a new one.";
+
+    static parameters = {
+        type: "object",
+        properties: {
+            id: {
+                type: "string",
+                description: "The exact 24-character hex _id from a fetchRecord response on triggerJob. NEVER fabricate.",
+            },
+            reason: {
+                type: "string",
+                description: "Short reason, e.g. 'user says they no longer need the Masi reminder'. Logged for the audit trail.",
+            },
+        },
+        required: ["id", "reason"],
+    };
+
+    async execute({ id, userId, reason }) {
+        const result = await cancelReminder(id, userId, reason);
+
+        if (result.alreadyCancelled) {
+            return new ToolResult(true, result.message, result);
+        }
+
+        // Name the schedule back, not just the title. The user's own words were
+        // fuzzy ("the masi one"); quoting what was actually stopped is how they
+        // catch the agent having cancelled the wrong reminder.
+        const when = result.recurring ? `recurring (${result.cronPattern})` : "one-time";
+        return new ToolResult(
+            true,
+            `Cancelled "${result.title}" — ${when}. It will not fire again.`,
+            result
+        );
+    }
+}

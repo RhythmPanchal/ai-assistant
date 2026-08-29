@@ -36,9 +36,17 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 // not scoped to a routine: on 2026-08-22 the user said a task was already done
 // during the morning flow, the agent acknowledged it and called nothing, and the
 // task was still Pending ten days later. That sentence can arrive at any hour.
+// cancelReminder writes to triggerJob only, only for the userId it is given,
+// and only to rows whose actionType is a reminder — it cannot switch off the
+// good-morning or good-night routines, which live in the same collection and
+// are the thing "cancel my morning reminder" would otherwise hit. It sets
+// status to "cancelled" rather than deleting. Declared rather than skill-loaded
+// because until now there was no way to stop a reminder at all: the two
+// "[object Object]" rows firing nightly from 2026-08-18 had to be removed by
+// hand against the production database.
 const INTENTIONAL_ADDITIONS = new Set([
     "updateFlowScratchpad", "deleteRecord", "rememberFact", "fetchUserContext", "loadSkill",
-    "updateTaskStatus", "deferTask",
+    "updateTaskStatus", "deferTask", "cancelReminder",
 ]);
 // Present in toolOperator but deliberately dropped.
 const INTENTIONAL_REMOVALS = new Set();

@@ -6,6 +6,7 @@ import { sendMessage } from "../tools/telegram/sendMessage.js";
 import { sendToUser } from "../tools/telegram/sendToUser.js";
 import fetchCollectionNameAndSchema from "../tools/mongo/fetchCollectionSchema.js";
 import { createOneTimeReminder, createMultiTimeReminder } from "./createReminders.js";
+import { cancelReminder } from "./cancelReminder.js";
 import { createTask } from "../tools/mongo/operation/createTask.js";
 import { insertSchedule } from "../tools/mongo/operation/insertSchedule.js";
 import { goodMorningJob } from "./jobs/goodMorningJob.js";
@@ -23,6 +24,13 @@ export const ACTION_MAP = {
   createMultiTimeReminder: {
     fn: createMultiTimeReminder,
     params: ["title", "userId", "cron", "nextExecutionAt", "message", "expiryDate"]
+  },
+
+  // cancelReminder(id, userId, reason) — order matters, dispatchAction spreads
+  // these positionally.
+  cancelReminder: {
+    fn: cancelReminder,
+    params: ["id", "userId", "reason"]
   },
 
   createTask: {
