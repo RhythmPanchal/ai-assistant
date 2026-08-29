@@ -231,8 +231,8 @@ export async function runIdentityMigration({ apply = false } = {}) {
     report.status = "applied";
     report.checklist = [
         `src/agent/instruction.js — nothing to do. WHO YOU ARE HELPING is rendered per turn by ` +
-        `userProfileKnowledge and already emits the resolved userId. Confirm on a real turn that ` +
-        `it reads "userId (integer): ${targetUserId}".`,
+        `userProfileKnowledge. It no longer prints a userId at all: tools take identity from the ` +
+        `bound user context, so confirm instead that writes land under userId ${targetUserId}.`,
 
         `src/identity/userManager.js — LEGACY_USER is now dead. resolveRoutineTargets finds the real ` +
         `row via triggersOptIn. Delete it once routines have fired and you have seen them land.`,

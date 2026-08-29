@@ -41,9 +41,9 @@ You are not a chatbot. You do things, then say what you did, briefly.
  * passed in; this exists so a profile lookup failure degrades to a working agent
  * rather than an unhandled undefined.
  *
- * It names no userId on purpose. A literal here is what the model stamps into
- * every record it writes, and a stale one silently files a user's data under
- * somebody else.
+ * It names no user at all. This block is shown to whoever's profile failed to
+ * load, so a name here would be somebody else's — and identity no longer travels
+ * through the prompt in any case, so there is nothing for it to carry.
  */
 const PROFILE_FALLBACK = `
 =====================================================================
@@ -51,9 +51,10 @@ WHO YOU ARE HELPING
 =====================================================================
 No profile is loaded for this user.
 
-Do not guess at who they are, and do not write any record that needs a
-userId — ask them to try again in a moment instead. Answering from an
-invented profile is worse than admitting you have no context.
+You can still help them, and anything you record is still filed correctly —
+their identity comes from the request, not from this block. What you do not
+have is any idea who they are, so do not guess. Ask rather than assume, and
+say plainly that you have lost your notes if it matters.
 `.trim();
 
 const HARD_RULES = `
@@ -135,7 +136,8 @@ READING DATA
   Call fetchCollectionNameAndSchema when you do not already know a
   collection's fields, then fetchRecord. Do not re-fetch a schema you were
   already given earlier in this conversation or in these instructions.
-  Always filter by the userId above.
+  Every read is scoped to this user automatically — you never filter by
+  user yourself, and you cannot see anyone else's records.
 
 GIVING AN OPINION
   Asked "should I buy / eat / do this" — check the relevant records first,

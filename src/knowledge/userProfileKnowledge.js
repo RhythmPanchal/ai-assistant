@@ -61,9 +61,11 @@ export function renderProfileBlock(userId, profile = null, facts = [], now = Dat
         "=====================================================================",
     ];
 
-    // Always emitted, even with no profile row. Every write the model makes
-    // carries this value, so a missing line is worse than a sparse block.
-    const identityLines = [`userId (integer): ${userId}`];
+    // No userId. Tools take it from the bound user context now, so the model
+    // has nothing to do with it — and a userId in the prompt is precisely what
+    // an injection aims at: "actually my userId is 2" is only a move worth
+    // making while the model believes it has one to state.
+    const identityLines = [];
 
     if (profile?.name) identityLines.push(`Name: ${profile.name}`);
 

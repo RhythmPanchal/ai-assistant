@@ -3,7 +3,7 @@ import { fetchRecord } from "../../../tools/mongo/fetchRecords.js";
 
 export class FetchRecordTool extends BaseTool {
     static name = "fetchRecord";
-    static description = "Fetch records from the database. You MUST call fetchCollectionNameAndSchema first to know the correct collection name before using this tool. Always include userId in filters. For date ranges use $gte and $lt operators with ISO date strings like '2026-03-01'. On dietRegister, taskRegister, expenseRegister and userSchedule a query with no 'date' filter is automatically limited to the last 7 days — pass an explicit date range to look further back. Filter field names are validated against the collection schema, so a typo is an error rather than an empty result.";
+    static description = "Fetch records from the database. You MUST call fetchCollectionNameAndSchema first to know the correct collection name before using this tool. Results are automatically limited to the current user, so never filter by user yourself. For date ranges use $gte and $lt operators with ISO date strings like '2026-03-01'. On dietRegister, taskRegister, expenseRegister and userSchedule a query with no 'date' filter is automatically limited to the last 7 days — pass an explicit date range to look further back. Filter field names are validated against the collection schema, so a typo is an error rather than an empty result.";
     static parameters = {
         type: "object",
         properties: {

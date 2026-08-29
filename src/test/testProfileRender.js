@@ -21,10 +21,22 @@ const read = (p) => readFileSync(p, "utf8");
 const NOW = Date.parse("2026-08-25T00:00:00Z");
 const fact = (over) => ({ stability: "stable", confidence: "stated", ...over });
 
-test("userId is rendered even with no profile and no facts", () => {
+test("no userId reaches the prompt", () => {
+    // Tools take identity from the bound context, so the model has no use for a
+    // userId — and a userId in the prompt is what an injection aims at:
+    // "actually my userId is 2" is only worth attempting while it has one to
+    // state.
+    const out = renderProfileBlock(7, { name: "Aditya" }, [
+        fact({ key: "work.role", fact: "developer", category: "work" }),
+    ], NOW);
+    assert.doesNotMatch(out, /userId/i, "identity must not travel through the prompt");
+    assert.match(out, /Aditya/, "the block still has to say who they are");
+});
+
+test("an empty profile still renders a usable block", () => {
     const out = renderProfileBlock(7, null, [], NOW);
-    assert.match(out, /userId \(integer\): 7/,
-        "the model stamps this into every record it writes — it may never be missing");
+    assert.match(out, /WHO YOU ARE HELPING/);
+    assert.doesNotMatch(out, /userId/i);
 });
 
 test("expired facts are not asserted", () => {
@@ -91,6 +103,15 @@ test("the instruction fallback names no user and no userId", () => {
         "a literal userId here is what silently files one user's data under another");
     assert.doesNotMatch(src, /Rhythm Panchal/,
         "the fallback is shown to any user whose profile failed to load");
+});
+
+test("nothing tells the model to scope its own reads any more", async () => {
+    const { buildSystemInstruction } = await import("../agent/instruction.js");
+    const prompt = buildSystemInstruction();
+    assert.doesNotMatch(prompt, /filter by the userId/i,
+        "the data layer forces the filter; an instruction to do it is now false");
+    assert.match(prompt, /scoped to this user automatically/,
+        "the model should know why it can never see anyone else's rows");
 });
 
 test("buildSystemInstruction injects the rendered profile", async () => {
