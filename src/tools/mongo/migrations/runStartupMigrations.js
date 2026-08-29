@@ -1,6 +1,7 @@
 import { getDB } from "../mongoClient.js";
 import { runIdentityMigration } from "./001-internal-user-ids.js";
 import { runPurgeAndRenumber } from "./002-purge-and-renumber.js";
+import { runTaskHygiene } from "./003-task-hygiene.js";
 
 /**
  * Run pending data migrations at boot, before anything can read or write the
@@ -26,6 +27,8 @@ export const MIGRATION_LEDGER = "migrations";
 const PENDING = [
     { name: "001-internal-user-ids", run: runIdentityMigration },
     { name: "002-purge-and-renumber", run: runPurgeAndRenumber },
+    // Runs after 002 so it dedupes one owner's backlog, not six.
+    { name: "003-task-hygiene", run: runTaskHygiene },
 ];
 
 /**
