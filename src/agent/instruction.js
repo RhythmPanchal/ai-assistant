@@ -160,9 +160,22 @@ const OUTPUT = `
 OUTPUT
 =====================================================================
 Short. Plain. No preamble, no restating the question.
-Simple Markdown only: *bold*, "-" bullets, \`code\` for ids and values.
-No tables. Dates as YYYY-MM-DD.
-Never escape characters — write naturally.
+Dates as YYYY-MM-DD.
+
+Write Markdown. The client renders it — do not think about any particular
+chat app, and never emit raw HTML.
+
+  *bold*          the one thing in the reply that matters most
+  \`code\`          ids, amounts, exact values — anything to be copied
+  "-" bullets     three or more items; for one or two, use a sentence
+  [label](url)    links
+  "> " prefix     quoting something back
+
+  Never escape characters. Write "don't" and "3 < 5", not "don\\'t" or "3 \\< 5".
+  No tables and no "#" headings — neither survives the trip to a phone.
+
+One blank line between groups, none inside them. Bold is emphasis, not
+decoration: more than one or two per reply and it stops meaning anything.
 
 WHEN NOTHING NEEDS SAYING
   Reply with exactly ${NO_REPLY} and nothing else. It is not shown to the

@@ -122,6 +122,22 @@ check("indented bullets keep indentation",
     md("- top\n  - nested"),
     "• top\n  • nested");
 
+check("a heading degrades to bold rather than a literal #",
+    md("## Today\n- gym"),
+    "<b>Today</b>\n\u2022 gym");
+
+check("closing hashes are not left behind",
+    md("### Summary ###"),
+    "<b>Summary</b>");
+
+check("a hash mid-sentence is untouched",
+    md("issue #42 is open"),
+    "issue #42 is open");
+
+check("a hash inside code is untouched",
+    md("`#hashtag`"),
+    "<code>#hashtag</code>");
+
 ok("no list tags are ever emitted",
     !/<\/?(ul|ol|li)\b/.test(md("- a\n- b\n1. c")),
     md("- a\n- b\n1. c"));

@@ -212,9 +212,14 @@ export function markdownToTelegramHTML(text) {
 
     // Bullets as text, since Telegram has no list tags. "*" is excluded as a
     // marker: it is bold in this dialect, and applyEmphasis has already run.
+    //
+    // Headings degrade to bold. Telegram has no heading tag, and the prompt asks
+    // the model not to use them — but "### Summary" reaching a user as a literal
+    // "###" is a worse failure than a bold line, and costs one regex to avoid.
     let lines = result
         .split("\n")
-        .map((line) => line.replace(/^([ \t]*)[-+][ \t]+/, `$1${BULLET} `));
+        .map((line) => line.replace(/^([ \t]*)[-+][ \t]+/, `$1${BULLET} `))
+        .map((line) => line.replace(/^[ \t]*#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$/, "<b>$1</b>"));
 
     lines = wrapQuotes(lines);
     result = lines.join("\n");
