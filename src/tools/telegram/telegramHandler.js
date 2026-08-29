@@ -2,7 +2,7 @@ import { runAgent } from "../../agent/agent.js";
 import { resolveUserByChannel } from "../../identity/userManager.js";
 import { runWithUserContext } from "../../identity/userContext.js";
 import { NO_REPLY } from "../../agent/instruction.js";
-import { sendMessage, editMessage, deleteMessage, createThinkingAnimation, answerCallbackQuery } from "./sendMessage.js";
+import { sendMessage, editMessage, startTyping, answerCallbackQuery } from "./sendMessage.js";
 import { dismissCallbackHandler } from "../../connectors/oauth/dismissCallbackHandler.js";
 
 
@@ -74,8 +74,9 @@ export async function handleTelegramMessage(message) {
     return;
   }
 
-  // Send animated "Thinking..." placeholder + typing indicator
-  const thinking = await createThinkingAnimation(chatId);
+  // Telegram's native "typing…" badge, nothing in the transcript. See
+  // startTyping for why the "Processing..." placeholder was removed.
+  const typing = startTyping(chatId);
 
   try {
     // from.id, never chat.id — see resolveUserByChannel.
@@ -98,45 +99,33 @@ export async function handleTelegramMessage(message) {
     );
     console.log("RUN AGENT COMPLETED WITH THIS REPLY");
 
-    // Stop animation BEFORE editing — prevents race condition
-    thinking.stop();
-
     // The agent decided nothing needs saying. It is already recorded in
-    // chatHistory; here it just means clearing the placeholder and going quiet,
-    // rather than sending the sentinel to the user as text.
+    // chatHistory; here it means going quiet rather than sending the sentinel
+    // to the user as text. With no placeholder there is nothing to clean up.
     if (reply?.trim() === NO_REPLY) {
       console.log("[handleTelegramMessage] NO_REPLY — closing silently");
-      await deleteMessage(chatId, thinking.messageId);
       return;
     }
 
-    // Edit the placeholder with the actual response
-    if (thinking.messageId) {
-      await editMessage(chatId, thinking.messageId, reply);
-    } else {
-      await sendMessage(chatId, reply);
-    }
+    await sendMessage(chatId, reply);
   } catch (error) {
     console.error("[handleTelegramMessage] error:", error);
 
-    // Stop animation BEFORE editing
-    thinking.stop();
-
+    // Plain sentences, no MarkdownV2 escapes. The renderer strips stray
+    // backslashes, but writing them here only ever risked them reaching the
+    // user as literal characters.
     const errorReply = [
-      "⚠️ *Something went wrong*",
+      "*Something went wrong.*",
       "",
-      "Sorry, I ran into an unexpected error while processing your message\\.",
-      "Please try again in a moment\\.",
+      "I hit an unexpected error handling that. Try again in a moment — if it keeps happening, it is worth reporting.",
       "",
-      "If this keeps happening, please report it to the admin\\.",
-      "",
-      `🪲 \`${String(error.message || error).slice(0, 200)}\``,
+      `\`${String(error.message || error).slice(0, 200)}\``,
     ].join("\n");
 
-    if (thinking.messageId) {
-      await editMessage(chatId, thinking.messageId, errorReply);
-    } else {
-      await sendMessage(chatId, errorReply);
-    }
+    await sendMessage(chatId, errorReply);
+  } finally {
+    // finally, not per-branch: an early return or a throw from sendMessage would
+    // otherwise leave the 4s interval running for the life of the process.
+    typing.stop();
   }
 }
