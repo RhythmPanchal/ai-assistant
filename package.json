@@ -4,12 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon src/index.js",
-    "test": "node src/test/testUserContext.js && node src/test/testContextScoping.js && node src/test/testAllToolsWithContext.js && node src/test/testUsageMeter.js && node src/test/testProviders.js && node src/test/testToolRegistry.js && node src/test/testRoutineGuard.js && node src/test/testTaskRouting.js && node src/test/testIdentityLayer.js && node src/test/testProfileRender.js && node src/test/testFactWriting.js && node src/test/testStartupMigrations.js && node src/test/testMigrationTargetId.js && node src/test/testPurgeMigration.js && node src/test/testRememberInstruction.js && node src/test/testProfileTools.js && node src/test/testSkills.js && node src/test/testTaskHygiene.js",
+    "dev": "nodemon src/index.js",
+    "test": "node src/test/testUserContext.js && node src/test/testContextScoping.js && node src/test/testAllToolsWithContext.js && node src/test/testUsageMeter.js && node src/test/testProviders.js && node src/test/testToolRegistry.js && node src/test/testRoutineGuard.js && node src/test/testTaskRouting.js && node src/test/testIdentityLayer.js && node src/test/testProfileRender.js && node src/test/testFactWriting.js && node src/test/testStartupMigrations.js && node src/test/testMigrationTargetId.js && node src/test/testPurgeMigration.js && node src/test/testRememberInstruction.js && node src/test/testProfileTools.js && node src/test/testSkills.js && node src/test/testTaskHygiene.js && node src/test/testTelegramRender.js && node src/test/testTelegramSend.js",
     "eval": "node src/test/eval/evalModels.js",
     "eval:size": "node src/test/eval/measurePromptSize.js",
     "eval:chains": "node src/test/eval/testAllProviders.js",
-    "eval:model": "node src/test/eval/tryModel.js"
+    "eval:model": "node src/test/eval/tryModel.js",
+    "telegram:check": "node src/test/testTelegramLive.js"
   },
   "keywords": [],
   "author": "",
