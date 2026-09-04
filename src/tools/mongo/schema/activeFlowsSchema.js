@@ -13,11 +13,7 @@ const activeFlowsSchema = {
     flowType: {
       bsonType: "string",
       description: "Kind of flow — selects which agent instruction overlay applies.",
-      // 'summarize' is not a conversation: it is opened and closed by the
-      // summarize job with no user on the other end. It lives here anyway so
-      // it inherits lazy expiry, which is what stops a crashed pass leaving an
-      // open flow on the user's account forever.
-      enum: ["goodNight", "goodMorning", "summarize"]
+      enum: ["goodNight", "goodMorning"]
     },
     state: {
       bsonType: "string",

@@ -22,6 +22,16 @@ const MAX_MESSAGE_CHARS = 2000;
 // is roughly 2.5x the worst day observed — a ceiling, not a working limit.
 const MAX_TRANSCRIPT_CHARS = 24000;
 
+// A turn's `source` says which entry point produced it, and that changes how
+// the summarizer should read it. A goodMorningJob turn is the assistant
+// proposing a plan to a silent user, not a conversation — knowing that is the
+// difference between "planned a full day" and "the user agreed to a full day",
+// and followThrough depends on the distinction.
+const SOURCE_LABELS = {
+    goodMorningJob: "morning routine",
+    goodNightJob: "night routine",
+};
+
 function clip(text, limit) {
     const t = String(text).trim();
     return t.length <= limit ? t : `${t.slice(0, limit)}… [truncated]`;
@@ -43,12 +53,6 @@ export default async function dayTranscriptKnowledge(userId, date, { timeZone = 
         .find({
             userId,
             createdAt: { $gte: start, $lt: end },
-            // Keep the summarize pass out of its own input. $ne matches documents
-            // where the field is absent, which is every row written before source
-            // existed — so this excludes exactly the summarize turns and nothing
-            // else. (Unlike a range operator, which type-brackets and would drop
-            // every row missing the field.)
-            source: { $ne: "summarizeJob" },
         })
         .sort({ createdAt: 1 })
         .toArray();
@@ -67,7 +71,10 @@ export default async function dayTranscriptKnowledge(userId, date, { timeZone = 
 
             const time = new Date(msg.timestamp ?? turn.createdAt)
                 .toLocaleTimeString("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" });
-            const who = msg.role === "user" ? "user" : "rasmalai";
+            const context = SOURCE_LABELS[turn.source];
+            const who = msg.role === "user"
+                ? (context ? `user (replying to the ${context})` : "user")
+                : (context ? `rasmalai (${context})` : "rasmalai");
             const line = `[${time}] ${who}: ${clip(msg.content, MAX_MESSAGE_CHARS)}`;
 
             if (line.length > budget) {

@@ -1,19 +1,20 @@
 import { getDB } from "../../tools/mongo/mongoClient.js";
 import { TRIGGER_JOB } from "../../tools/mongo/schema/triggerJobSchema.js";
-import { runAgent } from "../../agent/agent.js";
-import { openFlow, closeFlow } from "../flows/activeFlowsRepo.js";
-import summarizeFlow from "../../agent/flows/summarizeFlow.js";
-import { hasDaySummary } from "../../tools/mongo/operation/chatSummaries.js";
-import { runWithUserContext } from "../../identity/userContext.js";
-import { IST_TIMEZONE } from "../../tools/mongo/dateUtils.js";
+import { CHAT_SUMMARY } from "../../tools/mongo/schema/chatSummarySchema.js";
+import { createRecord } from "../../tools/mongo/createRecord.js";
+import { summarizeDay } from "../../agent/summarize/summarizeDay.js";
+import dayTranscriptKnowledge from "../../knowledge/dayTranscriptKnowledge.js";
+import { findDaySummary, hasDaySummary } from "../../tools/mongo/operation/chatSummaries.js";
+import { getUserProfile } from "../../identity/userManager.js";
+import { IST_TIMEZONE, previousDay } from "../../tools/mongo/dateUtils.js";
 
 /**
  * Writes one day into chatSummary, once that day's wrap-up is finished.
  *
- * Entered from the two places the goodNight flow can close:
- *   - the agent calls completeFlow, because the user replied and wrapped up
- *   - goodMorningJob supersedes it the next morning, because they never did
- * Both go through scheduleDaySummary below rather than calling this directly.
+ * Entered from the two places the goodNight flow can close — the agent calling
+ * completeFlow because the user replied, and goodMorningJob superseding it
+ * because they never did. Both go through onGoodNightClosed rather than calling
+ * this directly.
  */
 
 const ACTION_TYPE = "summarizeDayJob";
@@ -23,25 +24,23 @@ const ACTION_TYPE = "summarizeDayJob";
  *
  * Not zero, and the delay is the point. The agent path closes the flow from
  * INSIDE a live turn — completeFlow is usually the last tool call of the
- * wrap-up, and the reply and its chatHistory document are still to come. Firing
- * immediately would read a transcript missing the final exchange, and would put
- * a second concurrent agent run on a user whose turns are otherwise strictly
- * serial. Two minutes is comfortably past both.
+ * wrap-up, and the reply and its chatHistory document are still to come.
+ * Firing immediately would read a transcript missing the final exchange.
  */
 const DELAY_MINUTES = 2;
 
 /**
  * Queue the pass. Safe to call more than once for the same day.
  *
- * A triggerJob row rather than a setTimeout or an inline await, for three
- * reasons: it survives a restart, it reuses executeTriggerJob's claim and
- * backoff, and it takes the work off the caller's stack entirely — the user's
- * "goodnight" must not wait on a summarization.
+ * A triggerJob row rather than a setTimeout or an inline await: it survives a
+ * restart, it reuses executeTriggerJob's claim and backoff, and it takes the
+ * work off the caller's stack entirely — the user's "goodnight" must not wait
+ * on a summarization.
  *
  * Written with the raw driver, like activeFlowsRepo. createRecord stamps the
- * owner from the bound user context, and one of the two callers (goodMorningJob's
- * supersede) has no context bound — getUserContext throws rather than defaulting,
- * which is the correct behaviour there and the wrong dependency here.
+ * owner from the bound user context, and one of the two callers has none bound
+ * — getUserContext throws rather than defaulting, which is right there and the
+ * wrong dependency here.
  */
 export async function scheduleDaySummary({ userId, logDate, timeZone = IST_TIMEZONE }) {
     if (!Number.isInteger(userId)) throw new Error("[summarizeDayJob] userId must be an integer");
@@ -94,12 +93,14 @@ export async function scheduleDaySummary({ userId, logDate, timeZone = IST_TIMEZ
 }
 
 /**
- * Run the pass. Dispatched by executeTriggerJob, which has already bound the
- * user context from the job row.
+ * Read the day, summarise it, store the row.
  *
- * Throws on failure rather than swallowing, so the scheduler's retry and
- * backoff apply — a summarization that fails on a quota block should be tried
- * again, not silently lose the day.
+ * Dispatched by executeTriggerJob, which has already bound the user context
+ * from the job row — which is what lets createRecord stamp the owner and what
+ * scopes the reads.
+ *
+ * Throws on failure so the scheduler's retry and backoff apply. A day lost to a
+ * quota block should be tried again, not silently dropped.
  */
 export async function summarizeDayJob(userId, logDate, timeZone = IST_TIMEZONE) {
     if (await hasDaySummary(userId, logDate)) {
@@ -107,41 +108,30 @@ export async function summarizeDayJob(userId, logDate, timeZone = IST_TIMEZONE) 
         return { skipped: true, logDate };
     }
 
-    // The day being summarised is NOT the day this opens on — the no-reply path
-    // runs the morning after. flowStateBlock reads this in preference to
-    // startedAt, which is what stops every row being filed a day late.
-    await openFlow({
-        userId,
-        flowType: summarizeFlow.flowType,
-        expiresAt: summarizeFlow.computeExpiry(timeZone),
-        scratchpad: { logDate },
+    let apiKeys = {};
+    try {
+        const profile = await getUserProfile(userId);
+        apiKeys = profile?.apiKeys || {};
+        timeZone = profile?.timezone || timeZone;
+    } catch (e) {
+        console.warn(`[summarizeDayJob] profile lookup failed, using shared keys: ${e.message}`);
+    }
+
+    const [transcript, previous] = await Promise.all([
+        dayTranscriptKnowledge(userId, logDate, { timeZone }),
+        findDaySummary(userId, previousDay(logDate)).catch(() => null),
+    ]);
+
+    const { row, provider, model } = await summarizeDay({
+        userId, logDate, transcript, previous, timeZone, apiKeys,
     });
 
-    try {
-        // Bound here for the same reason the routine jobs bind it: this acts on
-        // a user's behalf without that user having sent anything, so it has to
-        // declare who it is acting as before it dispatches a single tool.
-        const reply = await runWithUserContext(
-            { userId, channel: "scheduler", reason: ACTION_TYPE },
-            () => runAgent(userId, summarizeFlow.buildTriggerPrompt(logDate), "summarizeJob")
-        );
-        console.log(`[summarizeDayJob] ${logDate} for ${userId}: ${reply}`);
+    // Through createRecord rather than the driver, so the row picks up
+    // ValidateSchema and the owner stamp like every other write. The model
+    // supplied only the content fields; userId, period and date were set from
+    // arguments it never saw.
+    const { insertedId } = await createRecord(CHAT_SUMMARY, row);
 
-        // The agent reporting success is not evidence the row exists — HARD RULE
-        // 1 exists precisely because it says "saved" without having saved. Check.
-        if (!(await hasDaySummary(userId, logDate))) {
-            throw new Error(`summarize pass for ${logDate} finished without writing a row`);
-        }
-
-        return { skipped: false, logDate, reply };
-    } finally {
-        // In a finally so a thrown turn cannot leave the flow open. It would
-        // expire on its own in 20 minutes, but until then the retry would see a
-        // stale flow and openFlow would supersede it rather than reuse it.
-        await closeFlow({
-            userId,
-            flowType: summarizeFlow.flowType,
-            reason: "summarize pass finished",
-        }).catch(e => console.warn(`[summarizeDayJob] could not close flow: ${e.message}`));
-    }
+    console.log(`[summarizeDayJob] wrote ${logDate} for ${userId} via ${provider}:${model} — ${row.headline}`);
+    return { skipped: false, logDate, insertedId, row };
 }

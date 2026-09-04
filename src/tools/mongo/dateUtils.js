@@ -58,6 +58,22 @@ export function localDayRange(date) {
   return { start, end: new Date(start.getTime() + 86400000) };
 }
 
+/**
+ * The calendar day before `date`, as "YYYY-MM-DD".
+ *
+ * Anchored at midday UTC before subtracting, so the arithmetic cannot land on
+ * the wrong side of a day boundary in any zone — the failure a naive
+ * midnight-minus-24h has twice a year wherever DST applies.
+ *
+ * @param {string} date "YYYY-MM-DD"
+ */
+export function previousDay(date) {
+  if (!date) return null;
+  const at = new Date(`${date}T12:00:00Z`);
+  if (isNaN(at.getTime())) return null;
+  return new Date(at.getTime() - 86400000).toISOString().slice(0, 10);
+}
+
 /** That zone's UTC offset at that instant, as "+05:30". Honours DST. */
 function zoneOffset(timeZone, at) {
   const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })

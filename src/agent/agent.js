@@ -14,7 +14,6 @@ import { localDateOf, IST_TIMEZONE } from "../tools/mongo/dateUtils.js";
 import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
 import goodMorningFlow from "./flows/goodMorningFlow.js";
-import summarizeFlow from "./flows/summarizeFlow.js";
 
 // The wire name, taken from the class rather than repeated as a literal —
 // `static name` shadows the class name, so these cannot drift apart.
@@ -65,7 +64,6 @@ export function applyLoadedSkills(results, { messages, toolDeclarations, loadedS
 const FLOWS = {
     [goodNightFlow.flowType]: goodNightFlow,
     [goodMorningFlow.flowType]: goodMorningFlow,
-    [summarizeFlow.flowType]: summarizeFlow,
 };
 
 // The static half, for callers that only measure or inspect the prompt.
@@ -85,11 +83,7 @@ export const FLOW_OVERLAYS = Object.fromEntries(
  */
 export function flowStateBlock(flow, timeZone = IST_TIMEZONE) {
     const sp = flow.scratchpad || {};
-    // startedAt is the right answer for a routine that opens on the day it
-    // covers, and the wrong one for a pass that runs after that day has ended.
-    // A flow that knows which day it is about seeds scratchpad.logDate at open;
-    // the summarize pass does, because it can start at 09:00 the next morning.
-    const logDate = sp.logDate ?? localDateOf(flow.startedAt, timeZone);
+    const logDate = localDateOf(flow.startedAt, timeZone);
     return [
         "-------------------------------------",
         `📌 FLOW STATE (${flow.flowType})`,
@@ -130,9 +124,7 @@ export async function buildFlowOverlay(flow, { userId, timeZone = IST_TIMEZONE, 
 
     if (typeof definition.buildContext === "function") {
         try {
-            // `flow` so a context can read what was seeded at open — the day a
-            // summarize pass covers is on its scratchpad, not derivable from now.
-            const context = await definition.buildContext(userId, { timeZone, flow });
+            const context = await definition.buildContext(userId, { timeZone });
             if (context) parts.push(context);
         } catch (err) {
             console.warn(`[runAgent] ${flow.flowType} live context unavailable:`, err.message);
@@ -151,35 +143,7 @@ export async function buildFlowOverlay(flow, { userId, timeZone = IST_TIMEZONE, 
 // once and the mapping needs an explicit precedence. goodNight wins: it is the
 // schema-critical logging flow, and an unengaged morning flow stays open until
 // the evening cutoff, so it can still be open when goodNight fires.
-const FLOW_TASK_PRECEDENCE = ["summarize", "goodNight", "goodMorning"];
-
-/**
- * Which of a user's open flows apply to THIS turn.
- *
- * Normally all of them: a morning flow and a night flow can legitimately be
- * open together, and the precedence list above resolves which one names the
- * task. A flow marked `exclusive` breaks that, in both directions.
- *
- * It is a system pass with nobody on the other end, so:
- *  - for the job that opened it, it is the ONLY overlay. The no-reply summarize
- *    path fires minutes after the morning routine opens, and without this the
- *    summarizer would be handed the morning procedure and plan the user's day
- *    instead of writing a row.
- *  - for everyone else — a real user message arriving while it is open, which
- *    means a pass crashed and left it behind — it is invisible. The user gets
- *    the normal agent, not a job's private instructions.
- *
- * Exported because that second case is the one worth testing and the only way
- * to reach it for real is to leave a flow open.
- */
-export function selectFlows(openFlows = [], source, flows = FLOWS) {
-    const exclusive = openFlows.find(f => flows[f.flowType]?.exclusive);
-    if (!exclusive) return openFlows;
-
-    return flows[exclusive.flowType].ownerSource === source
-        ? [exclusive]
-        : openFlows.filter(f => f !== exclusive);
-}
+const FLOW_TASK_PRECEDENCE = ["goodNight", "goodMorning"];
 
 // Jobs that open NO flow identify themselves by source instead.
 const SOURCE_TASKS = { summarizeJob: "summarize", slackIngest: "ingest" };
@@ -227,7 +191,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         const timeZone = userProfile?.timezone || IST_TIMEZONE;
 
         // Active flow overlays. Lazy expiry inside getOpenFlowsForUser. keeps stale flows from leaking.
-        const openFlows = selectFlows(await getOpenFlowsForUser(userId), source);
+        const openFlows = await getOpenFlowsForUser(userId);
         const overlays = (await Promise.all(
             openFlows.map(f => buildFlowOverlay(f, { userId, timeZone }))
         )).filter(Boolean);
@@ -236,16 +200,9 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         // The profile is rendered here rather than cached: facts change between
         // turns, and a stale block is how the agent ends up telling someone they
         // are still job hunting.
-        //
-        // The summary block is skipped for an exclusive pass. The summarize
-        // routine already receives the previous row through its own
-        // buildContext, in the field-by-field form it has to write back — the
-        // same data a second time, in prose, is just something else to confuse
-        // it with.
-        const wantsRecent = !openFlows.some(f => FLOWS[f.flowType]?.exclusive);
         const [profileBlock, recentBlock] = await Promise.all([
             userProfileKnowledge(userId, userProfile),
-            wantsRecent ? chatSummaryKnowledge(userId, { timeZone }) : "",
+            chatSummaryKnowledge(userId, { timeZone }),
         ]);
         const systemInstruction = buildSystemInstruction(overlays, {
             profile: profileBlock,

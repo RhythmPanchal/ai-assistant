@@ -56,10 +56,16 @@ const chatSummarySchema = {
         "The local day this row covers. For a week or month row, its first day. Bare 'YYYY-MM-DD' — never the day the summary was written.",
     },
 
+    // One to three sentences rather than one. The headline is read EIGHT times
+    // — rendered in full for the newest day, and as the only line for each of
+    // the seven days behind it — so it is the one field whose length multiplies.
+    // Everything else in the row is read once. Detail about the most recent day
+    // is not scarce even so: state, openThreads and followThrough already give
+    // it a paragraph, and they are the fields to widen if it needs more.
     headline: {
       bsonType: "string",
       description:
-        "One sentence: what this day was. Belongs to this day only and is never carried forward — it is the single line rendered for older days in the prompt, so it has to stand alone with no other context around it.",
+        "One to three sentences: what this day was. Belongs to this day only and is never carried forward — it is the single line rendered for older days in the prompt, so it has to stand alone with no other context around it.",
     },
 
     // Arrays of plain sentences rather than structured objects on purpose. The

@@ -5,7 +5,7 @@ import { ACTIVE_FLOWS } from "../../tools/mongo/schema/activeFlowsSchema.js";
  * Open a flow for a user. Supersedes any other open flow of the same type
  * for the same user — there is at most one open (userId, flowType) at a time.
  */
-export async function openFlow({ userId, flowType, expiresAt, ttlMinutes, scratchpad = null }) {
+export async function openFlow({ userId, flowType, expiresAt, ttlMinutes }) {
   const db = await getDB();
   const col = db.collection(ACTIVE_FLOWS);
   const now = new Date();
@@ -34,11 +34,7 @@ export async function openFlow({ userId, flowType, expiresAt, ttlMinutes, scratc
     closedAt: null,
     closedBy: null,
     reason: null,
-    // Seeded at open for flows that cover a day other than the one they open
-    // on. The summarize pass is the case: it opens after the day it summarises
-    // has ended, so startedAt is the wrong day and flowStateBlock reads
-    // scratchpad.logDate in preference to it.
-    scratchpad,
+    scratchpad: null,
     createdAt: now,
     updatedAt: now
   };
