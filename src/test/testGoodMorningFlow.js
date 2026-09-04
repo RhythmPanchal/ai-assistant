@@ -108,7 +108,7 @@ async function main() {
   divider("STEP 2 — simulate user confirmation (should insertSchedule then completeFlow)");
   const confirmText = "looks good, confirm and lock it in";
   console.log("user  >>", confirmText);
-  const agentReply = await runAgent(USER_ID, confirmText);
+  const { text: agentReply } = await runAgent(USER_ID, confirmText);
   console.log("\nagent <<", agentReply);
   console.log("\nflow row after confirm:", summarizeFlow(await getLatestGoodMorningFlow()));
 

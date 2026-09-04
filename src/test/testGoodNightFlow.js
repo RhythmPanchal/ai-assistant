@@ -77,14 +77,15 @@ async function main() {
   const replyText =
     "had idli sambhar for breakfast and dal-rice for dinner, finished 3 tasks today, spent 200 on auto rickshaw";
   console.log("user  >>", replyText);
-  const agentReply1 = await runAgent(USER_ID, replyText);
+  const { text: agentReply1, metrics: m1 } = await runAgent(USER_ID, replyText);
   console.log("\nagent <<", agentReply1);
+  console.log("cost  >>", m1.calls, "calls,", m1.tokens.total, "tok, $" + m1.cost.listUsd);
   console.log("\nflow row after reply 1:", summarizeFlow(await getLatestGoodNightFlow()));
 
   divider("STEP 3 — simulate user wrap-up (should trigger completeFlow)");
   const wrapText = "that's all, going to sleep, gn";
   console.log("user  >>", wrapText);
-  const agentReply2 = await runAgent(USER_ID, wrapText);
+  const { text: agentReply2 } = await runAgent(USER_ID, wrapText);
   console.log("\nagent <<", agentReply2);
   console.log("\nflow row after wrap-up:", summarizeFlow(await getLatestGoodNightFlow()));
 

@@ -8,8 +8,9 @@ async function test() {
     add a record " Hello my name is rhythm from ahmedabad" in a collection named chatHistory.
     ` ; 
 
-    const result = await runAgent({userId : 123, userInstruction: instruction});
-    console.log(JSON.stringify(result, null, 2));
+    const { text, metrics } = await runAgent(123, instruction);
+    console.log(text);
+    console.log(JSON.stringify(metrics, null, 2));
     console.log("test ended");
 }
 

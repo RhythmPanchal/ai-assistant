@@ -68,7 +68,7 @@ export async function goodMorningJob(user) {
       // who it is acting as. Scoped to runAgent because that is the only call
       // here that dispatches tools; the flow and address calls above take a
       // userId read from the users row, which was never model-supplied.
-      const draftMessage = await runWithUserContext(
+      const { text: draftMessage } = await runWithUserContext(
         { userId, channel: "scheduler", reason: "goodMorningJob" },
         () => runAgent(userId, goodMorningFlow.buildTriggerPrompt(), "goodMorningJob")
       );

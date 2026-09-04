@@ -224,6 +224,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
 
         const task = resolveTask({ source, openFlows, override: taskOverride });
         const maxSteps = resolveMaxSteps(task);
+        meter.setTask(task);
 
         const providerManager = new ProviderManager(userProfile?.apiKeys || {}, task);
         // let, not const: a skill loaded mid-turn widens this. Declarations are
@@ -243,6 +244,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         // Each iteration is at least one billable request, so the loop is bounded.
         while (steps < maxSteps) {
             steps++;
+            meter.recordStep();
 
             let response;
             try {
@@ -250,6 +252,9 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
                     // Per MODEL, not per provider — each has its own daily
                     // bucket, so that is the granularity worth tracking.
                     onAttempt: (provider, model) => meter.recordCall(`${provider}:${model}`),
+                    // Fires on failures too, so a fallback cascade is priced
+                    // rather than silently dropped.
+                    onResult: (info) => meter.recordResult(info),
                 });
             } catch (err) {
                 meter.recordError(err);
@@ -329,10 +334,16 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         console.log("FINAL LLM RESPONSE:", LLMresponse);
 
         conversation.addAssistantMessage(LLMresponse);
+
+        // Computed before the write so one set of figures serves the document,
+        // the caller and the daily rollup. summary() does no I/O; finish()
+        // persists, and must therefore come after.
+        const metrics = meter.summary("ok");
+        conversation.setMetrics(metrics);
         await createRecord(CHAT_HISTORY, conversation.build());
 
         await meter.finish("ok");
-        return LLMresponse;
+        return { text: LLMresponse, metrics };
     } catch (error) {
         console.error("❌ Error in runAgent:", error);
         // Record the partial turn too — a turn that died at call 7 of a quota

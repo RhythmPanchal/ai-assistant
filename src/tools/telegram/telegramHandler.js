@@ -93,7 +93,8 @@ export async function handleTelegramMessage(message) {
     // is established from something authenticated, so it is the only place the
     // context may be bound. Everything runAgent touches — the loop, every tool,
     // every query underneath — reads userId from here instead of being told it.
-    const reply = await runWithUserContext(
+    // TODO(metrics): surface `metrics` to the user behind a debug toggle.
+    const { text: reply } = await runWithUserContext(
       { userId, channel: "telegram", address: chatId },
       () => runAgent(userId, text)
     );
