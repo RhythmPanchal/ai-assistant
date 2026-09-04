@@ -9,6 +9,7 @@ import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHis
 import { buildSystemInstruction, NO_REPLY } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
 import userProfileKnowledge from "../knowledge/userProfileKnowledge.js";
+import chatSummaryKnowledge from "../knowledge/chatSummaryKnowledge.js";
 import { localDateOf, IST_TIMEZONE } from "../tools/mongo/dateUtils.js";
 import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
@@ -235,8 +236,21 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         // The profile is rendered here rather than cached: facts change between
         // turns, and a stale block is how the agent ends up telling someone they
         // are still job hunting.
-        const profileBlock = await userProfileKnowledge(userId, userProfile);
-        const systemInstruction = buildSystemInstruction(overlays, { profile: profileBlock });
+        //
+        // The summary block is skipped for an exclusive pass. The summarize
+        // routine already receives the previous row through its own
+        // buildContext, in the field-by-field form it has to write back — the
+        // same data a second time, in prose, is just something else to confuse
+        // it with.
+        const wantsRecent = !openFlows.some(f => FLOWS[f.flowType]?.exclusive);
+        const [profileBlock, recentBlock] = await Promise.all([
+            userProfileKnowledge(userId, userProfile),
+            wantsRecent ? chatSummaryKnowledge(userId, { timeZone }) : "",
+        ]);
+        const systemInstruction = buildSystemInstruction(overlays, {
+            profile: profileBlock,
+            recent: recentBlock,
+        });
 
         const messages = [
             { role: "system", content: systemInstruction },

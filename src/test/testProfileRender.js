@@ -127,7 +127,10 @@ test("buildSystemInstruction injects the rendered profile", async () => {
 test("agent.js renders the profile every turn", () => {
     const src = read("src/agent/agent.js");
     assert.match(src, /userProfileKnowledge\(userId, userProfile\)/);
-    assert.match(src, /buildSystemInstruction\(overlays, \{ profile/,
+    // Whitespace-tolerant: the options object went multi-line when the RECENTLY
+    // block joined it. What is being asserted is that the profile is PASSED IN
+    // per turn, not the formatting of the call.
+    assert.match(src, /buildSystemInstruction\(overlays,\s*\{\s*profile/,
         "a cached block is how the agent ends up asserting last week's facts");
 });
 

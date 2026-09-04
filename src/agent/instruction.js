@@ -217,11 +217,16 @@ Resolve "today", "tomorrow", "tonight", "next week" against this.
  *  - the routine overlay goes LAST, where recency gives it the most weight —
  *    which is what we want, since its whole job is to override the defaults.
  */
-const ORDER = ["identity", "profile", "now", "hardRules", "defaults", "output"];
+const ORDER = ["identity", "profile", "recent", "now", "hardRules", "defaults", "output"];
 
 const SECTIONS = {
   identity: () => IDENTITY,
   profile: (ctx) => ctx.profile || PROFILE_FALLBACK,
+  // Directly after the profile, because the two answer adjacent questions —
+  // who this person is, then what is currently going on with them — and the
+  // model reads them as one picture. Empty until a day has been summarised,
+  // and empty on the day the very first row is written.
+  recent: (ctx) => ctx.recent || "",
   now: nowBlock,
   hardRules: () => HARD_RULES,
   defaults: () => DEFAULTS,
@@ -234,13 +239,21 @@ const SECTIONS = {
  * @param {string}   [options.profile] rendered WHO YOU ARE HELPING block, from
  *                                     userProfileKnowledge. Omitted only by the
  *                                     evals, which measure the shared skeleton.
+ * @param {string}   [options.recent]  rendered RECENTLY block, from
+ *                                     chatSummaryKnowledge. Empty string when
+ *                                     there is nothing summarised yet, and the
+ *                                     section drops out rather than leaving a
+ *                                     gap.
  * @param {string[]} [options.order]   section order; exposed so the eval can
  *                                     compare arrangements rather than us
  *                                     guessing at one.
  */
 export function buildSystemInstruction(overlays = [], options = {}) {
-  const { profile = null, order = ORDER } = options;
-  let out = order.map((k) => SECTIONS[k]({ profile })).join("\n\n");
+  const { profile = null, recent = null, order = ORDER } = options;
+  // filter(Boolean) so an empty section leaves no blank gap between the two
+  // around it — the block is absent for any user whose first day is not yet
+  // summarised, which is every user on day one.
+  let out = order.map((k) => SECTIONS[k]({ profile, recent })).filter(Boolean).join("\n\n");
 
   if (overlays.length) {
     out += `

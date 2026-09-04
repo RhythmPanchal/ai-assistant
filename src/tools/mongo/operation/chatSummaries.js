@@ -42,3 +42,29 @@ export async function findDaySummary(userId, date) {
 export async function hasDaySummary(userId, date) {
     return Boolean(await findDaySummary(userId, date));
 }
+
+/**
+ * The most recent day rows STRICTLY BEFORE `before`, newest first.
+ *
+ * Strictly before, because the day in progress is already in the prompt as raw
+ * chat — it has not been summarised yet and will not be until its wrap-up ends.
+ * Including it would be impossible; excluding it explicitly is what stops an
+ * off-by-one from rendering today twice.
+ *
+ * The (userId, period, date) index serves this as a prefix plus its own sort,
+ * so the limit stops after reading exactly as many entries as it needs.
+ *
+ * @param {number} userId
+ * @param {string} before "YYYY-MM-DD" — exclusive upper bound, normally today
+ * @param {number} limit  how many rows back to read
+ */
+export async function findRecentDaySummaries(userId, before, limit) {
+    if (!before || limit <= 0) return [];
+    const { start } = localDayRange(before);
+    const db = await getDB();
+    return db.collection(CHAT_SUMMARY)
+        .find({ userId, period: "day", date: { $lt: start } })
+        .sort({ date: -1 })
+        .limit(limit)
+        .toArray();
+}
