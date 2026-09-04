@@ -11,6 +11,21 @@ const FALLBACK_TURNS = 5;
 const FALLBACK_MAX_MESSAGES = 15;
 
 /**
+ * Turns produced by a system pass rather than a conversation.
+ *
+ * The summarize pass runs through runAgent and so persists a chatHistory
+ * document like any other turn — one whose "user" message is a job instruction
+ * and whose reply is a note to a log. Replayed as history it reads as the user
+ * having asked for a summary, and the agent picks the thread back up.
+ *
+ * $ne matches documents where the field is ABSENT, which is every row written
+ * before `source` existed — so this excludes the summarize turns and nothing
+ * else. A range operator would not: Mongo type-brackets those, and $gt/$lt
+ * against a string drops every row missing the field.
+ */
+const EXCLUDE_SYSTEM_TURNS = { source: { $ne: "summarizeJob" } };
+
+/**
  * Converts conversation documents into the provider-neutral shape every
  * LLM provider translates: [{ role: "user" | "assistant", content }].
  *
@@ -65,6 +80,7 @@ async function fetchTodayChatRecords(userId) {
                 $gte: startOfDay,
                 $lte: endOfDay,
             },
+            ...EXCLUDE_SYSTEM_TURNS,
         })
         .sort({ createdAt: -1 })
         .limit(MAX_HISTORY_TURNS)
@@ -80,7 +96,7 @@ async function fetchRecentChatRecords(userId, limit) {
     const db = await getDB();
     const recent = await db
         .collection(CHAT_HISTORY)
-        .find({ userId })
+        .find({ userId, ...EXCLUDE_SYSTEM_TURNS })
         .sort({ createdAt: -1 })
         .limit(limit)
         .toArray();

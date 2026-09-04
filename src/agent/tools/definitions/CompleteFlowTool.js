@@ -9,7 +9,7 @@ export class CompleteFlowTool extends BaseTool {
         properties: {
             flowType: {
                 type: "string",
-                enum: ["goodNight", "goodMorning"],
+                enum: ["goodNight", "goodMorning", "summarize"],
                 description: "Which flow to close.",
             },
             reason: {

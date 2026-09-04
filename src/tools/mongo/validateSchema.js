@@ -6,7 +6,13 @@ import { toIST } from "./dateUtils.js";
 // to Asia/Kolkata, which protects against the LLM appending a stray `Z`
 // (which `new Date()` would otherwise honor as UTC).
 export function normalizeDates(obj) {
-    const avoidNormalization = ["cronPattern"]
+    // Fields whose value is free prose. Date.parse is far looser than it looks
+    // — it takes "Sept 4 was rough" — so a chatSummary headline or mood would
+    // be silently replaced by a Date and the day's memory lost. Same class of
+    // bug as the userId string that parsed to year 123 in fetchRecord; the fix
+    // there was a strict ISO regex, and widening this list is the narrower
+    // version of it that changes no existing collection's behaviour.
+    const avoidNormalization = ["cronPattern", "headline", "followThrough", "mood"]
     for (const key in obj) {
         if ( typeof obj[key] === "string" && !isNaN(Date.parse(obj[key])) && !avoidNormalization.includes(key) ) {
             obj[key] = toIST(obj[key]);

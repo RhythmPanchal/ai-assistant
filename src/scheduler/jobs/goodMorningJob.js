@@ -6,6 +6,7 @@ import { goodMorningFlow } from "../../agent/flows/goodMorningFlow.js";
 import { goodNightFlow } from "../../agent/flows/goodNightFlow.js";
 import { resolveAddress, resolveRoutineTargets } from "../../identity/userManager.js";
 import { runWithUserContext } from "../../identity/userContext.js";
+import { onGoodNightClosed } from "./onGoodNightClosed.js";
 
 /**
  * @param {Object} [user] fire for just this user; omit to fire for everyone
@@ -36,11 +37,25 @@ export async function goodMorningJob(user) {
       //
       // Last night's wrap-up is over the moment a new day is planned. This is
       // what actually ends the night flow — its expiry is only a backstop.
-      await closeFlow({
+      const closedNight = await closeFlow({
         userId,
         flowType: goodNightFlow.flowType,
         reason: "superseded by the new day",
       });
+
+      // The no-reply path. This is the ONLY moment yesterday becomes
+      // summarisable for a user who never wrapped up — the flow sat open all
+      // night waiting for them, and closing it here is what settles the day.
+      //
+      // Null when the flow was already closed, which is the normal case: they
+      // wrapped up last night and completeFlow queued it then. Not awaited —
+      // the morning routine is the expensive thing here and must not wait on a
+      // queue insert.
+      if (closedNight) {
+        onGoodNightClosed(closedNight).catch(e =>
+          console.error(`[goodMorningJob] could not queue yesterday's summary: ${e.message}`)
+        );
+      }
 
       await openFlow({
         userId,

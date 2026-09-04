@@ -2,6 +2,7 @@ import { MongoClient } from "mongodb";
 
 import { ACTIVE_FLOWS, ACTIVE_FLOWS_INDEXES } from "./schema/activeFlowsSchema.js";
 import { CHAT_HISTORY, CHAT_HISTORY_INDEXES } from "./schema/chatHistorySchema.js";
+import { CHAT_SUMMARY, CHAT_SUMMARY_INDEXES } from "./schema/chatSummarySchema.js";
 import { CONNECTION, CONNECTION_INDEXES } from "./schema/connectionSchema.js";
 import { COUNTERS, COUNTERS_INDEXES } from "./schema/countersSchema.js";
 import { DIET_REGISTER, DIET_REGISTER_INDEXES } from "./schema/dietRegisterSchema.js";
@@ -42,6 +43,7 @@ const LLM_USAGE = "llmUsage";
 const INDEX_REGISTRY = [
     [ACTIVE_FLOWS, ACTIVE_FLOWS_INDEXES],
     [CHAT_HISTORY, CHAT_HISTORY_INDEXES],
+    [CHAT_SUMMARY, CHAT_SUMMARY_INDEXES],
     [CONNECTION, CONNECTION_INDEXES],
     [COUNTERS, COUNTERS_INDEXES],
     [DIET_REGISTER, DIET_REGISTER_INDEXES],

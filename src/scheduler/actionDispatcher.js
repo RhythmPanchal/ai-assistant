@@ -11,6 +11,7 @@ import { createTask } from "../tools/mongo/operation/createTask.js";
 import { insertSchedule } from "../tools/mongo/operation/insertSchedule.js";
 import { goodMorningJob } from "./jobs/goodMorningJob.js";
 import { goodNightJob } from "./jobs/goodNightJob.js";
+import { summarizeDayJob } from "./jobs/summarizeDayJob.js";
 import { completeFlow } from "./flows/completeFlow.js";
 import { connectApp } from "../connectors/oauth/connectApp.js";
 import { disconnectApp } from "../connectors/oauth/disconnectApp.js";
@@ -91,6 +92,14 @@ export const ACTION_MAP = {
   goodNightJob: {
     fn: goodNightJob,
     params: []
+  },
+
+  // summarizeDayJob(userId, logDate, timeZone) — spread positionally, so this
+  // order is the signature. Queued by scheduleDaySummary when the goodNight
+  // flow closes, never by the model.
+  summarizeDayJob: {
+    fn: summarizeDayJob,
+    params: ["userId", "logDate", "timeZone"]
   },
 
   completeFlow: {

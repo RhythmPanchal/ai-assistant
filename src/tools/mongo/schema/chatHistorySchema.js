@@ -56,6 +56,20 @@ const chatHistorySchema = {
         }
       }
     },
+    // Which entry point produced this turn: "telegram", "goodMorningJob",
+    // "goodNightJob", "summarizeJob". Absent on every row written before this
+    // field existed, so readers must treat missing as a normal conversation.
+    //
+    // It exists to keep the summarize pass out of its own input. That pass runs
+    // through runAgent like any other turn and so persists a document like any
+    // other turn — and without a way to tell it apart, tomorrow's summarizer
+    // reads yesterday's summarization exchange as if the user had said it, and
+    // the agent replays a conversation with itself.
+    source: {
+      bsonType: ["string", "null"],
+      description: "Entry point that produced this turn. Null/absent means a normal user conversation."
+    },
+
     createdAt: {
       bsonType: "date"
     }
@@ -87,9 +101,10 @@ export const CHAT_HISTORY_INDEXES = [
  * and produces the final document to insert into MongoDB.
  */
 export class ConversationBuilder {
-  constructor(userId) {
+  constructor(userId, source = null) {
     this.conversationId = crypto.randomUUID();
     this.userId = userId;
+    this.source = source;
     this.messages = [];
     this.createdAt = new Date();
   }
@@ -138,6 +153,7 @@ export class ConversationBuilder {
     return {
       conversationId: this.conversationId,
       userId: this.userId,
+      source: this.source,
       messages: this.messages
     };
   }

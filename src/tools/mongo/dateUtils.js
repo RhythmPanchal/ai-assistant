@@ -40,6 +40,24 @@ export function localDateOf(instant, timeZone = IST_TIMEZONE) {
   return d.toLocaleDateString("en-CA", { timeZone });
 }
 
+/**
+ * The half-open instant range [start, end) covering one local calendar day.
+ *
+ * Half-open rather than 00:00:00-23:59:59.999 because the closed form has a
+ * millisecond hole at the top of every day, and a turn that lands in it belongs
+ * to neither day.
+ *
+ * Anchored through toIST like every other date here, so it inherits the same
+ * hardcoded zone — see the note in CLAUDE.md. It is the right single place to
+ * fix when the zone stops being global.
+ *
+ * @param {string} date "YYYY-MM-DD"
+ */
+export function localDayRange(date) {
+  const start = toIST(`${date}T00:00:00`);
+  return { start, end: new Date(start.getTime() + 86400000) };
+}
+
 /** That zone's UTC offset at that instant, as "+05:30". Honours DST. */
 function zoneOffset(timeZone, at) {
   const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
