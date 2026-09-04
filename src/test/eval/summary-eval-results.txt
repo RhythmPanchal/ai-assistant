@@ -1,0 +1,79 @@
+RASMALAI — DAY SUMMARY EVAL
+══════════════════════════════════════════════════════════════════════════════
+Generated : 2026-09-04
+Command   : node src/test/eval/evalSummaries.js --repeat 3
+Scenarios : src/test/eval/summaryScenarios.js
+Execution : LIVE model calls, nothing written to Mongo
+
+RESULT
+══════════════════════════════════════════════════════════════════════════════
+21/21 runs fully clean · 66/66 checks passed · 21 requests
+
+Every run served by gemini-3.1-flash-lite except one, which fell through to
+cohere:command-a-03-2025 when Gemini hit its 15/min cap — and passed there
+too. That was the fallback chain proving itself live rather than in a stub.
+
+  scenario         runs  in tok  out tok  checks
+  state-change      3     2062   136-148   5/5
+  state-resolves    3     1952   118-129   4/4
+  quiet-day         3     1870    49-52    2/2
+  empty-day         3     1883    75-78    2/2
+  routine-only      3     1976    89-95    3/3
+  overload          3     2006   156-190   3/3
+  recall-only       3     1927   134-137   3/3
+
+Input is ~1.9-2.1K tokens: the instruction (~1.4K) plus the day. No chat
+history, no tool declarations, no persona. Output is 50-190 tokens.
+
+WHAT EACH SCENARIO PINS
+══════════════════════════════════════════════════════════════════════════════
+state-change    A health state appearing mid-day reaches `state`, the pending
+                report reaches `openThreads`, Loki reaches `mentioned` — and
+                the meal and the Rs 800 do NOT, because they are already rows
+                in dietRegister and expenseRegister.
+
+state-resolves  THE one that matters most. Yesterday's "admitted to hospital"
+                and "waiting on blood test results" must be GONE once the user
+                is discharged and the results arrive, while the unresolved deck
+                review carries forward. Stale state is worse than no state: it
+                is what makes the agent ask about a hospital stay a week after
+                discharge.
+
+quiet-day       Two messages must not be padded into invented ongoing state.
+
+empty-day       Silence must CARRY state forward, not blank it. A day with no
+                conversation does not end a doctor's instruction.
+
+routine-only    The morning schedule draft is already in userSchedule. The
+                headline must not retell its slot times; followThrough must
+                record that none of it happened.
+
+overload        A dump of eight things comes back bounded and compressed
+                (<2.2KB), not transcribed.
+
+recall-only     The Loki case. A day of pure passing detail still produces a
+                row worth keeping.
+
+PROMPT FIXES THIS EVAL DROVE
+══════════════════════════════════════════════════════════════════════════════
+Three failures found by running it, each now frozen as a check:
+
+1. `mentioned: ["Loki (TV show)"]` — a bare tag, useless read back a week
+   later. Fixed with an explicit right/wrong pair in the field description.
+
+2. Invented `openThreads: ["Waiting on Ankit's confirmation"]` — the user had
+   TOLD Ankit; nothing was pending. Fixed with "do not invent a follow-up
+   nobody raised".
+
+3. `mentioned` filling with "barely ate today" / "paid 800 for the cab" —
+   both already logged. Fixed with a leading hard rule and three wrong
+   examples. This was the most persistent of the three and needed the rule
+   moved to the FRONT of the field description before it held.
+
+KNOWN RESIDUAL
+══════════════════════════════════════════════════════════════════════════════
+A durable fact planted in the previous row's `state` ("renewed the gym
+membership") is carried forward rather than pruned, despite the "still true in
+a month = fact, not state" test. Self-limiting in practice: the same prompt
+would not have written it into `state` on the day it happened, so a real chain
+of rows does not contain the bait. The cap of 6 bounds it either way.
