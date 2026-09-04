@@ -10,6 +10,11 @@ const MAX_HISTORY_TURNS = 50;
 const FALLBACK_TURNS = 5;
 const FALLBACK_MAX_MESSAGES = 15;
 
+// Usage metadata is written per turn but never read back into a prompt, and
+// this runs before every turn over up to 50 documents. Excluded rather than
+// merely ignored so it is not pulled across the wire.
+const HISTORY_PROJECTION = { llmConversationMetadata: 0 };
+
 /**
  * Converts conversation documents into the provider-neutral shape every
  * LLM provider translates: [{ role: "user" | "assistant", content }].
@@ -66,6 +71,7 @@ async function fetchTodayChatRecords(userId) {
                 $lte: endOfDay,
             },
         })
+        .project(HISTORY_PROJECTION)
         .sort({ createdAt: -1 })
         .limit(MAX_HISTORY_TURNS)
         .toArray();
@@ -81,6 +87,7 @@ async function fetchRecentChatRecords(userId, limit) {
     const recent = await db
         .collection(CHAT_HISTORY)
         .find({ userId })
+        .project(HISTORY_PROJECTION)
         .sort({ createdAt: -1 })
         .limit(limit)
         .toArray();
