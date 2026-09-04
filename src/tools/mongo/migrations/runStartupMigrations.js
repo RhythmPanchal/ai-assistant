@@ -2,6 +2,7 @@ import { getDB } from "../mongoClient.js";
 import { runIdentityMigration } from "./001-internal-user-ids.js";
 import { runPurgeAndRenumber } from "./002-purge-and-renumber.js";
 import { runTaskHygiene } from "./003-task-hygiene.js";
+import { runBackfillDaySummaries } from "./004-backfill-day-summaries.js";
 
 /**
  * Run pending data migrations at boot, before anything can read or write the
@@ -29,6 +30,10 @@ const PENDING = [
     { name: "002-purge-and-renumber", run: runPurgeAndRenumber },
     // Runs after 002 so it dedupes one owner's backlog, not six.
     { name: "003-task-hygiene", run: runTaskHygiene },
+    // Queues seven summarize jobs per user; the scheduler does the work over
+    // the following seven hours. Last, and after 001/002, so the userIds it
+    // queues against are the internal ones the jobs will resolve.
+    { name: "004-backfill-day-summaries", run: runBackfillDaySummaries },
 ];
 
 /**

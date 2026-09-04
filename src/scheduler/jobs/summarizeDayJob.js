@@ -42,7 +42,7 @@ const DELAY_MINUTES = 2;
  * — getUserContext throws rather than defaulting, which is right there and the
  * wrong dependency here.
  */
-export async function scheduleDaySummary({ userId, logDate, timeZone = IST_TIMEZONE }) {
+export async function scheduleDaySummary({ userId, logDate, timeZone = IST_TIMEZONE, runAt = null }) {
     if (!Number.isInteger(userId)) throw new Error("[summarizeDayJob] userId must be an integer");
     if (!logDate) throw new Error("[summarizeDayJob] logDate is required");
 
@@ -81,7 +81,10 @@ export async function scheduleDaySummary({ userId, logDate, timeZone = IST_TIMEZ
         attempts: 0,
         maxAttempts: 3,
         lastExecutedAt: null,
-        nextExecutionAt: new Date(now.getTime() + DELAY_MINUTES * 60 * 1000),
+        // runAt is for the backfill, which spaces a week of days an hour apart
+        // so each one's summary exists before the next reads it as PREVIOUS
+        // STATE. The nightly path leaves it null and takes the short delay.
+        nextExecutionAt: runAt ?? new Date(now.getTime() + DELAY_MINUTES * 60 * 1000),
         expiryDate: null,
         failedAt: null,
         createdAt: now,
