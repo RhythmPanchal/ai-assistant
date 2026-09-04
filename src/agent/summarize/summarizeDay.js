@@ -136,17 +136,30 @@ export async function summarizeDay({ userId, logDate, transcript, previous = nul
     if (!logDate) throw new Error("[summarizeDay] logDate is required");
 
     const messages = buildMessages({ logDate, transcript, previous, timeZone });
-    const meter = startTurn(userId, "summarizeJob");
+    // The task is known up front here, unlike a conversation where it is
+    // resolved from the open flows — so it goes in the constructor rather than
+    // through setTask.
+    const meter = startTurn(userId, "summarizeJob", "summarize");
 
     try {
         const manager = new ProviderManager(apiKeys, "summarize");
         const chain = resolveTaskChain("summarize").map(e => `${e.provider}:${e.model}`).join(" -> ");
         console.log(`[summarizeDay] ${logDate} for ${userId}\n  chain: ${chain}`);
 
+        // One step, always. A conversation loops until the model stops calling
+        // tools; this asks once and reads the answer.
+        meter.recordStep();
+
         // No tools. This pass has nothing to call: the transcript is already in
         // the message, and the row it produces is written by the caller.
+        //
+        // onResult as well as onAttempt: without it the pass reports a call
+        // count and nothing else, and a daily job that runs for every user
+        // would sit at zero tokens and zero cost in the rollup that exists to
+        // catch exactly that kind of spend.
         const response = await manager.chatWithFallback(messages, [], {
             onAttempt: (provider, model) => meter.recordCall(`${provider}:${model}`),
+            onResult: (info) => meter.recordResult(info),
         });
 
         const row = coerceRow(extractJson(response.text), { userId, logDate });
