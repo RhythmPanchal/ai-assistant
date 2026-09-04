@@ -70,6 +70,83 @@ const chatHistorySchema = {
       description: "Entry point that produced this turn. Null/absent means a normal user conversation."
     },
 
+    /**
+     * What this turn cost in LLM calls.
+     *
+     * Per-turn detail lives here because chatHistory is already exactly one
+     * document per turn. llmUsage is a daily rollup with a unique index on
+     * (userId, ptDate) and structurally cannot hold it — the two answer
+     * different questions, and the rollup can be rebuilt from these rows.
+     * Absent on documents written before this field existed.
+     */
+    llmConversationMetadata: {
+      bsonType: ["object", "null"],
+      description: "Tokens, cost, latency and models for this turn",
+      properties: {
+        task: { bsonType: "string" },
+        source: { bsonType: ["string", "null"] },
+        outcome: { bsonType: "string", enum: ["ok", "error"] },
+        steps: { bsonType: ["int", "long"] },
+        // Counts failed attempts too — a 429'd request still spent quota.
+        calls: { bsonType: ["int", "long"] },
+
+        // toolMs = durationMs - llmMs. Derived, so no per-tool timing needed.
+        durationMs: { bsonType: ["int", "long"] },
+        llmMs: { bsonType: ["int", "long"] },
+        toolMs: { bsonType: ["int", "long"] },
+
+        models: {
+          bsonType: "array",
+          description: "Distinct provider:model that served a step",
+          items: { bsonType: "string" }
+        },
+
+        // reasoning is billed as output but never shown, so a model that starts
+        // thinking harder is otherwise an untraceable cost rise.
+        tokens: {
+          bsonType: "object",
+          properties: {
+            input: { bsonType: ["int", "long"] },
+            output: { bsonType: ["int", "long"] },
+            reasoning: { bsonType: ["int", "long"] },
+            cached: { bsonType: ["int", "long"] },
+            total: { bsonType: ["int", "long"] }
+          }
+        },
+
+        // billed is what was charged (0 on a free tier); list is what the same
+        // turn would cost at published prices, which stays meaningful anyway.
+        cost: {
+          bsonType: "object",
+          properties: {
+            billedUsd: { bsonType: ["double", "int"] },
+            listUsd: { bsonType: ["double", "int", "null"] },
+            priced: { bsonType: "bool" }
+          }
+        },
+
+        // One row per outbound request, so a fallback cascade stays readable.
+        attempts: {
+          bsonType: "array",
+          items: {
+            bsonType: "object",
+            properties: {
+              provider: { bsonType: "string" },
+              model: { bsonType: "string" },
+              ok: { bsonType: "bool" },
+              latencyMs: { bsonType: ["int", "long"] },
+              input: { bsonType: ["int", "long"] },
+              output: { bsonType: ["int", "long"] },
+              reasoning: { bsonType: ["int", "long"] },
+              cached: { bsonType: ["int", "long"] },
+              billedUsd: { bsonType: ["double", "int"] },
+              listUsd: { bsonType: ["double", "int", "null"] },
+              errorKind: { bsonType: ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
     createdAt: {
       bsonType: "date"
     }
@@ -107,6 +184,7 @@ export class ConversationBuilder {
     this.source = source;
     this.messages = [];
     this.createdAt = new Date();
+    this.llmConversationMetadata = null;
   }
 
   addUserMessage(content) {
@@ -149,12 +227,23 @@ export class ConversationBuilder {
     return this;
   }
 
+  /** Attach the turn's LLM cost. Called once, after the loop finishes. */
+  setMetrics(metrics) {
+    this.llmConversationMetadata = metrics;
+    return this;
+  }
+
   build() {
     return {
       conversationId: this.conversationId,
       userId: this.userId,
       source: this.source,
-      messages: this.messages
+      messages: this.messages,
+      // Omitted rather than null when absent, so a turn that died before the
+      // meter closed carries no field at all.
+      ...(this.llmConversationMetadata
+        ? { llmConversationMetadata: this.llmConversationMetadata }
+        : {})
     };
   }
 }
