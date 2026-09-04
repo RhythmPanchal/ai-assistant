@@ -77,16 +77,23 @@ const FOOTER = "gemini-3.5-flash-lite \u00b7 3.2s \u00b7 ~\u20b90.35";
 reset();
 await sendMessage(123, "*Logged.* Dinner 2100 kcal.", { footer: FOOTER });
 ok("a short reply still sends one message with a footer", sends().length === 1, `got ${sends().length}`);
-ok("the footer is italicised and separated",
-    sends()[0].body.text.endsWith(`\n\n<i>${FOOTER}</i>`),
+// blockquote, not italic: it is the only thing in Telegram's HTML mode that
+// renders genuinely smaller text on mobile (Android fontSize-2, iOS -1pt).
+ok("the footer is in a blockquote and separated",
+    sends()[0].body.text.endsWith(`\n\n<blockquote>${FOOTER}</blockquote>`),
     sends()[0].body.text);
+
+// Clients only collapse a quote past 3 WRAPPED lines. A one-line footer must
+// never be long enough to earn an expand chevron.
+ok("the footer is a single short line, so no expand affordance appears",
+    !FOOTER.includes("\n") && FOOTER.length <= 78, `${FOOTER.length} chars`);
 
 reset();
 await sendMessage(123, long, { footer: FOOTER });
-const footered = sends().filter(c => c.body.text.includes("<i>"));
+const footered = sends().filter(c => c.body.text.includes("<blockquote>"));
 ok("a split reply carries the footer exactly once", footered.length === 1, `got ${footered.length}`);
-ok("and it is on the last message", sends().at(-1).body.text.includes(`<i>${FOOTER}</i>`));
-ok("earlier chunks carry no footer", sends().slice(0, -1).every(c => !c.body.text.includes("<i>")));
+ok("and it is on the last message", sends().at(-1).body.text.includes(`<blockquote>${FOOTER}</blockquote>`));
+ok("earlier chunks carry no footer", sends().slice(0, -1).every(c => !c.body.text.includes("<blockquote>")));
 ok("the footer does not push any chunk over the cap",
     sends().every(c => rendered(c.body.text) <= 4096),
     `max = ${Math.max(...sends().map(c => rendered(c.body.text)))}`);
@@ -98,13 +105,13 @@ ok("footer is not forwarded to the Telegram API", sends().every(c => c.body.foot
 reset();
 await sendMessage(123, "done", { footer: "a_b*c <x> & y" });
 ok("the footer is escaped, not rendered",
-    sends()[0].body.text.includes("<i>a_b*c &lt;x&gt; &amp; y</i>"),
+    sends()[0].body.text.includes("<blockquote>a_b*c &lt;x&gt; &amp; y</blockquote>"),
     sends()[0].body.text);
 
 // No footer given: nothing extra, and no stray blank lines.
 reset();
 await sendMessage(123, "plain reply");
-ok("no footer means no <i> wrapper", !sends()[0].body.text.includes("<i>"));
+ok("no footer means no blockquote wrapper", !sends()[0].body.text.includes("<blockquote>"));
 ok("no footer means no trailing blank line", sends()[0].body.text === "plain reply");
 
 // The footer can always be appended: a chunk is capped at CHUNK_BUDGET (3900
@@ -117,12 +124,22 @@ await sendMessage(123, "x".repeat(3890), { footer: FOOTER });
 ok("a maximal chunk plus a footer still fits one message",
     sends().length === 1 && rendered(sends()[0].body.text) <= 4096,
     `${sends().length} msg(s), ${rendered(sends()[0].body.text)} chars`);
-ok("and the footer is on it", sends()[0].body.text.includes(`<i>${FOOTER}</i>`));
+ok("and the footer is on it", sends()[0].body.text.includes(`<blockquote>${FOOTER}</blockquote>`));
 
 reset();
 await sendMessage(123, long, { footer: FOOTER, reply_markup: { inline_keyboard: [] } });
 ok("footer and keyboard coexist on the final chunk",
-    sends().at(-1).body.text.includes("<i>") && !!sends().at(-1).body.reply_markup);
+    sends().at(-1).body.text.includes("<blockquote>") && !!sends().at(-1).body.reply_markup);
+
+// Telegram cannot nest blockquotes, and the reply may legitimately contain one.
+reset();
+await sendMessage(123, "> they said Friday\n> and it is Friday", { footer: FOOTER });
+ok("a reply that already quotes does not nest the footer inside it",
+    !/<blockquote>[^<]*<blockquote>/.test(sends()[0].body.text),
+    sends()[0].body.text);
+ok("both quotes are present and siblings",
+    (sends()[0].body.text.match(/<blockquote>/g) || []).length === 2,
+    sends()[0].body.text);
 
 // ---------------------------------------------------------- nothing to say --
 

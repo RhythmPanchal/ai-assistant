@@ -75,13 +75,28 @@ async function postMessage(chatId, html, options = {}) {
     return fallbackData;
 }
 
+// How the footer is de-emphasised. Telegram's HTML mode has no font-size, no
+// colour and no <small> — the supported tag list is fixed and exclusive — so
+// there are exactly two ways to make text quiet, and this picks between them.
+//
+//   "blockquote"  genuinely SMALLER text on mobile: Android renders it at
+//                 fontSize-2 (14sp against a 16sp body) and iOS at -1pt, both
+//                 as real metric-affecting spans. Adds a muted accent bar and a
+//                 ~10% background tint. Desktop keeps body size but still
+//                 mutes. No expand affordance: clients only collapse a quote
+//                 past 3 WRAPPED lines, and this footer is capped at one.
+//   "italic"      no chrome at all, but body size everywhere.
+//
+// blockquote wins because "smaller" was the actual goal and it is the only
+// thing in the API that delivers it. Flip this one word to fall back.
+const FOOTER_STYLE = "blockquote";
+
 /**
  * Put the turn footer on the LAST message, and only there.
  *
  * A long reply is several messages, and a footer repeated under each one would
  * be three times the noise for the same information — so it goes where the eye
- * finishes. Telegram has no small-text or colour control in HTML parse mode, so
- * "quiet" is italic and a blank line; that is the whole vocabulary available.
+ * finishes.
  *
  * The footer is escaped rather than rendered: it is generated text, not
  * something the model wrote, and a model name containing "_" or "*" must not be
@@ -96,7 +111,10 @@ async function postMessage(chatId, html, options = {}) {
  * would fail loudly if one were raised. Mutates `chunks` in place.
  */
 function attachFooter(chunks, footer) {
-    const html = `<i>${escapeHtml(String(footer).trim())}</i>`;
+    const body = escapeHtml(String(footer).trim());
+    const html = FOOTER_STYLE === "blockquote"
+        ? `<blockquote>${body}</blockquote>`
+        : `<i>${body}</i>`;
     const lastIndex = chunks.length - 1;
     const candidate = `${chunks[lastIndex]}\n\n${html}`;
 
