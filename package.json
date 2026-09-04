@@ -10,6 +10,7 @@
     "eval:size": "node src/test/eval/measurePromptSize.js",
     "eval:chains": "node src/test/eval/testAllProviders.js",
     "eval:model": "node src/test/eval/tryModel.js",
+    "test:metrics": "node src/test/testTurnMetrics.js",
     "telegram:check": "node src/test/testTelegramLive.js"
   },
   "keywords": [],
