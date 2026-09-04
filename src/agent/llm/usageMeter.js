@@ -10,6 +10,8 @@
  * Nothing here changes agent behaviour — it only counts.
  */
 
+import { estimateCost } from "../../config/pricing.js";
+
 export const LLM_USAGE = "llmUsage";
 
 // Google's quota errors distinguish per-minute from per-day limits only inside
@@ -62,13 +64,96 @@ function dayKeys() {
 // version numbers in them, so "byModel.<id>" would split at the dot.
 const safeKey = (s) => String(s).replace(/\./g, "_");
 
-export function startTurn(userId, source = "telegram") {
+export function startTurn(userId, source = "telegram", task = null) {
   const startedAt = Date.now();
   let calls = 0;
+  let steps = 0;
+  let llmMs = 0;
   const errors = [];
   const byModel = {};
+  const attempts = [];
+
+  /**
+   * The turn's numbers. Pure — no I/O, so it is safe to call before the
+   * chatHistory write. That is what lets one set of figures reach the document,
+   * the caller and the daily rollup without being computed three times.
+   */
+  function summary(outcome = "ok") {
+    const durationMs = Date.now() - startedAt;
+
+    const tok = attempts.reduce((a, x) => ({
+      input: a.input + x.input,
+      output: a.output + x.output,
+      reasoning: a.reasoning + x.reasoning,
+      cached: a.cached + x.cached,
+    }), { input: 0, output: 0, reasoning: 0, cached: 0 });
+
+    const served = attempts.filter((a) => a.ok);
+    const withPrice = served.filter((a) => a.listUsd !== null);
+    // priced:false alongside a non-null total means a lower bound — some model
+    // in the turn had no entry in the price table.
+    const priced = served.length > 0 && withPrice.length === served.length;
+
+    return {
+      task, source, outcome,
+      steps, calls,
+      durationMs,
+      llmMs,
+      // Everything not spent waiting on a model. Derived, so the split needs
+      // no per-tool timing.
+      toolMs: Math.max(0, durationMs - llmMs),
+      models: [...new Set(served.map((a) => `${a.provider}:${a.model}`))],
+      tokens: { ...tok, total: tok.input + tok.output },
+      cost: {
+        billedUsd: attempts.reduce((a, x) => a + (x.billedUsd || 0), 0),
+        listUsd: withPrice.length ? withPrice.reduce((a, x) => a + x.listUsd, 0) : null,
+        priced,
+      },
+      attempts,
+    };
+  }
 
   return {
+    summary,
+
+    /** The chain actually used. Resolved after flows, so it is set late. */
+    setTask(t) {
+      task = t;
+    },
+
+    recordStep() {
+      steps += 1;
+    },
+
+    /**
+     * One completed request, success or failure.
+     *
+     * Fires on BOTH branches on purpose. A failed attempt still spent a slot in
+     * the quota bucket and still cost wall-clock, and a fallback cascade is
+     * exactly when that matters — recording only successes would go quiet at
+     * the moment there is most to explain.
+     */
+    recordResult({ provider, model, ok, usage = null, latencyMs = 0, errorKind = null }) {
+      llmMs += latencyMs;
+      const { listUsd } = ok && usage
+        ? estimateCost(provider, model, usage)
+        : { listUsd: null };
+
+      attempts.push({
+        provider, model, ok, latencyMs,
+        input: usage?.input ?? 0,
+        output: usage?.output ?? 0,
+        reasoning: usage?.reasoning ?? 0,
+        cached: usage?.cached ?? 0,
+        // What the provider says it charged. Ones that stay silent contribute
+        // 0, which is correct on a free tier and the reason a list figure is
+        // reported next to it.
+        billedUsd: usage?.billedUsd ?? 0,
+        listUsd,
+        errorKind,
+      });
+    },
+
     /**
      * One outbound request, labelled "provider:model". Called per ATTEMPT, not
      * per agent step — a step that falls gemini -> groq is two real requests,
@@ -103,13 +188,20 @@ export function startTurn(userId, source = "telegram") {
      * Never throws — a metering failure must not break a reply.
      */
     async finish(outcome = "ok") {
-      const durationMs = Date.now() - startedAt;
+      const s = summary(outcome);
+      const { durationMs } = s;
       const { istDate, ptDate } = dayKeys();
 
       const mix = Object.entries(byModel).map(([m, c]) => `${m}×${c}`).join(" ") || "none";
+      const money = s.cost.listUsd === null
+        ? "unpriced"
+        : `$${s.cost.listUsd.toFixed(6)}${s.cost.priced ? "" : "+"} list`;
       console.log(
         `[usage] turn done: calls=${calls} [${mix}] source=${source} ` +
-          `outcome=${outcome} ${durationMs}ms`
+          `outcome=${outcome} ${durationMs}ms (llm ${s.llmMs}ms / tools ${s.toolMs}ms) ` +
+          `tok ${s.tokens.input}in/${s.tokens.output}out` +
+          (s.tokens.reasoning ? ` (${s.tokens.reasoning} reasoning)` : "") +
+          ` ${money}`
       );
 
       try {
@@ -124,6 +216,11 @@ export function startTurn(userId, source = "telegram") {
             $inc: {
               turns: 1,
               calls,
+              tokensIn: s.tokens.input,
+              tokensOut: s.tokens.output,
+              tokensReasoning: s.tokens.reasoning,
+              billedUsd: s.cost.billedUsd,
+              listUsd: s.cost.listUsd ?? 0,
               [`bySource.${safeKey(source)}`]: calls,
               ...Object.fromEntries(
                 Object.entries(byModel).map(([m, c]) => [`byModel.${safeKey(m)}`, c])
@@ -150,7 +247,7 @@ export function startTurn(userId, source = "telegram") {
         console.error("[usage] failed to persist (ignored):", e.message);
       }
 
-      return { calls, durationMs, errors };
+      return s;
     },
   };
 }

@@ -92,10 +92,13 @@ export class ProviderManager {
     }
 
     /**
-     * @param {Function} [opts.onAttempt] called with (provider, model) before
-     *        each outbound request, so callers meter real spend per model.
+     * @param {Function} [opts.onAttempt] (provider, model) BEFORE each request
+     *        — a request about to be spent, whatever comes back.
+     * @param {Function} [opts.onResult]  ({provider, model, ok, usage,
+     *        latencyMs, errorKind}) AFTER each request, on both the success and
+     *        the failure path. Tokens and latency are only knowable here.
      */
-    async chatWithFallback(messages, tools, { onAttempt } = {}) {
+    async chatWithFallback(messages, tools, { onAttempt, onResult } = {}) {
         const { maxAttempts, backoffMs } = agentConfig.llm.retry;
         const failures = [];
 
@@ -114,14 +117,23 @@ export class ProviderManager {
             }
 
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                const startedAt = Date.now();
                 try {
                     onAttempt?.(name, model);
                     const res = await provider.chat(messages, tools);
                     res.provider = name;
                     res.model = model;
+                    onResult?.({
+                        provider: name, model, ok: true,
+                        usage: res.usage, latencyMs: Date.now() - startedAt,
+                    });
                     return res;
                 } catch (err) {
                     const { kind } = classifyQuotaError(err);
+                    onResult?.({
+                        provider: name, model, ok: false, usage: null,
+                        latencyMs: Date.now() - startedAt, errorKind: kind,
+                    });
 
                     // Daily buckets are per model per day. Sleeping cannot bring
                     // one back, but the NEXT entry may be a different model with
