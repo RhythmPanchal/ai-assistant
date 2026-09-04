@@ -38,6 +38,8 @@ const PROVIDER_FACTORIES = {
             model: model || agentConfig.llm.models.openrouter,
             apiKey: apiKey || process.env.OPENROUTER_API_KEY,
             baseURL: "https://openrouter.ai/api/v1",
+            // Prices the call for us — better than any local estimate.
+            reportUsage: true,
         }),
 
     ollama: (_apiKey, model) =>

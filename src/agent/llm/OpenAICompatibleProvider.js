@@ -1,10 +1,16 @@
-import { BaseLLMProvider, LLMResponse, ToolCall } from "./BaseLLMProvider.js";
+import { BaseLLMProvider, LLMResponse, ToolCall, makeUsage } from "./BaseLLMProvider.js";
 
 const DEFAULT_TIMEOUT_MS = 60000;
 
 /** Groq, OpenRouter, Ollama, NVIDIA — anything speaking the OpenAI wire format. */
 export class OpenAICompatibleProvider extends BaseLLMProvider {
-    constructor({ model, apiKey, baseURL, name, timeoutMs } = {}) {
+    /**
+     * @param {boolean} [reportUsage] ask the provider to price the call itself.
+     *        OpenRouter-only: it returns usage.cost, which beats any local
+     *        estimate. Off by default because an unknown body field is a 400
+     *        on stricter providers.
+     */
+    constructor({ model, apiKey, baseURL, name, timeoutMs, reportUsage = false } = {}) {
         super();
         if (!baseURL) throw new Error(`[${name}] baseURL is required`);
         this._model = model;
@@ -12,6 +18,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
         this._baseURL = baseURL.replace(/\/$/, "");
         this._name = name || "OpenAICompatible";
         this._timeoutMs = timeoutMs || DEFAULT_TIMEOUT_MS;
+        this._reportUsage = reportUsage;
     }
 
     async listModels() {
@@ -59,6 +66,8 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
             messages: this._formatMessages(messages),
         };
 
+        if (this._reportUsage) body.usage = { include: true };
+
         if (tools?.length) {
             body.tools = tools.map((t) => ({
                 type: "function",
@@ -97,6 +106,31 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
             return new ToolCall(tc.function.name, args, tc.id);
         });
 
-        return new LLMResponse({ text: msg.content || null, toolCalls, rawResponse: data });
+        return new LLMResponse({
+            text: msg.content || null,
+            toolCalls,
+            rawResponse: data,
+            usage: readUsage(data),
+        });
     }
+}
+
+/**
+ * usage -> the neutral shape.
+ *
+ * completion_tokens already includes reasoning_tokens here, so it maps to
+ * `output` untouched — the opposite of Gemini, which is why this lives in the
+ * provider. cost is present only when reportUsage asked for it.
+ */
+function readUsage(data) {
+    const u = data?.usage;
+    if (!u) return null;
+    return makeUsage({
+        input: u.prompt_tokens || 0,
+        output: u.completion_tokens || 0,
+        reasoning: u.completion_tokens_details?.reasoning_tokens || 0,
+        cached: u.prompt_tokens_details?.cached_tokens || 0,
+        total: u.total_tokens ?? null,
+        billedUsd: typeof u.cost === "number" ? u.cost : null,
+    });
 }

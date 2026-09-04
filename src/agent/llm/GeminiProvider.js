@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { GoogleGenAI } from "@google/genai";
-import { BaseLLMProvider, LLMResponse, ToolCall } from "./BaseLLMProvider.js";
+import { BaseLLMProvider, LLMResponse, ToolCall, makeUsage } from "./BaseLLMProvider.js";
 
 export class GeminiProvider extends BaseLLMProvider {
     constructor({ model, apiKey } = {}) {
@@ -105,6 +105,27 @@ export class GeminiProvider extends BaseLLMProvider {
             text: toolCalls.length ? null : response.text || null,
             toolCalls,
             rawResponse: response,
+            usage: readUsage(response),
         });
     }
+}
+
+/**
+ * usageMetadata -> the neutral shape.
+ *
+ * Gemini reports thoughts OUTSIDE candidatesTokenCount, so they are added into
+ * `output` here; leaving them out would under-report the billable output of
+ * every 3.x model. Google does not report a price, so billedUsd stays null.
+ */
+function readUsage(response) {
+    const u = response?.usageMetadata;
+    if (!u) return null;
+    const reasoning = u.thoughtsTokenCount || 0;
+    return makeUsage({
+        input: u.promptTokenCount || 0,
+        output: (u.candidatesTokenCount || 0) + reasoning,
+        reasoning,
+        cached: u.cachedContentTokenCount || 0,
+        total: u.totalTokenCount ?? null,
+    });
 }

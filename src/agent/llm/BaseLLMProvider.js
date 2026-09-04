@@ -12,11 +12,30 @@ export class ToolCall {
     }
 }
 
+/**
+ * Normalized token usage for one request.
+ *
+ * `output` ALWAYS includes reasoning tokens, because that is what is billed;
+ * `reasoning` is the informational subset of it. The providers disagree on
+ * this — Gemini reports thoughts alongside candidates, OpenAI reports them
+ * inside completion — so each reconciles its own dialect and callers never
+ * have to know which one answered.
+ *
+ * `cached` is a subset of `input`, not an addition to it.
+ * `billedUsd` is what the provider says it charged; null when it does not say.
+ */
+export function makeUsage({
+    input = 0, output = 0, reasoning = 0, cached = 0, total = null, billedUsd = null,
+} = {}) {
+    return { input, output, reasoning, cached, total: total ?? input + output, billedUsd };
+}
+
 export class LLMResponse {
-    constructor({ text = null, toolCalls = [], rawResponse = null } = {}) {
+    constructor({ text = null, toolCalls = [], rawResponse = null, usage = null } = {}) {
         this.text = text;
         this.toolCalls = toolCalls;
         this.rawResponse = rawResponse;
+        this.usage = usage;
     }
 
     hasToolCalls() {
