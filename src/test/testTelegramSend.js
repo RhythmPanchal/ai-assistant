@@ -68,6 +68,62 @@ const keyed = sends().filter(c => c.body.reply_markup);
 ok("reply_markup appears exactly once", keyed.length === 1, `got ${keyed.length}`);
 ok("reply_markup is on the final chunk", !!sends().at(-1).body.reply_markup);
 
+// ---------------------------------------------------------------- footer ---
+// The turn footer rides on the LAST message only. Repeating it under every
+// chunk of a split reply would triple the noise for the same information.
+
+const FOOTER = "gemini-3.5-flash-lite \u00b7 3.2s \u00b7 ~\u20b90.35";
+
+reset();
+await sendMessage(123, "*Logged.* Dinner 2100 kcal.", { footer: FOOTER });
+ok("a short reply still sends one message with a footer", sends().length === 1, `got ${sends().length}`);
+ok("the footer is italicised and separated",
+    sends()[0].body.text.endsWith(`\n\n<i>${FOOTER}</i>`),
+    sends()[0].body.text);
+
+reset();
+await sendMessage(123, long, { footer: FOOTER });
+const footered = sends().filter(c => c.body.text.includes("<i>"));
+ok("a split reply carries the footer exactly once", footered.length === 1, `got ${footered.length}`);
+ok("and it is on the last message", sends().at(-1).body.text.includes(`<i>${FOOTER}</i>`));
+ok("earlier chunks carry no footer", sends().slice(0, -1).every(c => !c.body.text.includes("<i>")));
+ok("the footer does not push any chunk over the cap",
+    sends().every(c => rendered(c.body.text) <= 4096),
+    `max = ${Math.max(...sends().map(c => rendered(c.body.text)))}`);
+
+// `footer` is ours, not Telegram's — it must never reach the API as a field.
+ok("footer is not forwarded to the Telegram API", sends().every(c => c.body.footer === undefined));
+
+// A model name with markup characters must not be re-read as markup.
+reset();
+await sendMessage(123, "done", { footer: "a_b*c <x> & y" });
+ok("the footer is escaped, not rendered",
+    sends()[0].body.text.includes("<i>a_b*c &lt;x&gt; &amp; y</i>"),
+    sends()[0].body.text);
+
+// No footer given: nothing extra, and no stray blank lines.
+reset();
+await sendMessage(123, "plain reply");
+ok("no footer means no <i> wrapper", !sends()[0].body.text.includes("<i>"));
+ok("no footer means no trailing blank line", sends()[0].body.text === "plain reply");
+
+// The footer can always be appended: a chunk is capped at CHUNK_BUDGET (3900
+// source chars, and rendering only shrinks), the footer at MAX_FOOTER_CHARS
+// (78), plus a blank line — 3980 at worst against a 4096 cap. sendMessage keeps
+// an overflow branch anyway, in case either budget is ever raised; this asserts
+// the arithmetic that currently makes it unreachable.
+reset();
+await sendMessage(123, "x".repeat(3890), { footer: FOOTER });
+ok("a maximal chunk plus a footer still fits one message",
+    sends().length === 1 && rendered(sends()[0].body.text) <= 4096,
+    `${sends().length} msg(s), ${rendered(sends()[0].body.text)} chars`);
+ok("and the footer is on it", sends()[0].body.text.includes(`<i>${FOOTER}</i>`));
+
+reset();
+await sendMessage(123, long, { footer: FOOTER, reply_markup: { inline_keyboard: [] } });
+ok("footer and keyboard coexist on the final chunk",
+    sends().at(-1).body.text.includes("<i>") && !!sends().at(-1).body.reply_markup);
+
 // ---------------------------------------------------------- nothing to say --
 
 reset();

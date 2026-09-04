@@ -3,6 +3,8 @@ import { resolveUserByChannel } from "../../identity/userManager.js";
 import { runWithUserContext } from "../../identity/userContext.js";
 import { NO_REPLY } from "../../agent/instruction.js";
 import { sendMessage, editMessage, startTyping, answerCallbackQuery } from "./sendMessage.js";
+import { buildTurnFooter } from "./turnFooter.js";
+import { getUserProfile } from "../../identity/userManager.js";
 import { dismissCallbackHandler } from "../../connectors/oauth/dismissCallbackHandler.js";
 
 
@@ -93,8 +95,7 @@ export async function handleTelegramMessage(message) {
     // is established from something authenticated, so it is the only place the
     // context may be bound. Everything runAgent touches — the loop, every tool,
     // every query underneath — reads userId from here instead of being told it.
-    // TODO(metrics): surface `metrics` to the user behind a debug toggle.
-    const { text: reply } = await runWithUserContext(
+    const { text: reply, metrics } = await runWithUserContext(
       { userId, channel: "telegram", address: chatId },
       () => runAgent(userId, text)
     );
@@ -108,7 +109,18 @@ export async function handleTelegramMessage(message) {
       return;
     }
 
-    await sendMessage(chatId, reply);
+    // The profile decides the currency the cost is written in. A lookup failure
+    // is not worth losing the reply over — the footer just falls back to USD.
+    let profile = null;
+    try {
+      profile = await getUserProfile(userId);
+    } catch (err) {
+      console.warn("[handleTelegramMessage] profile lookup failed, footer defaults to USD:", err.message);
+    }
+
+    await sendMessage(chatId, reply, {
+      footer: buildTurnFooter(metrics, { profile, locale: profile?.locale }),
+    });
   } catch (error) {
     console.error("[handleTelegramMessage] error:", error);
 

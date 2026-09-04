@@ -1,4 +1,4 @@
-import { renderForTelegram } from "./renderMarkdown.js";
+import { renderForTelegram, escapeHtml, renderedLength, TELEGRAM_LIMIT } from "./renderMarkdown.js";
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
@@ -76,6 +76,39 @@ async function postMessage(chatId, html, options = {}) {
 }
 
 /**
+ * Put the turn footer on the LAST message, and only there.
+ *
+ * A long reply is several messages, and a footer repeated under each one would
+ * be three times the noise for the same information — so it goes where the eye
+ * finishes. Telegram has no small-text or colour control in HTML parse mode, so
+ * "quiet" is italic and a blank line; that is the whole vocabulary available.
+ *
+ * The footer is escaped rather than rendered: it is generated text, not
+ * something the model wrote, and a model name containing "_" or "*" must not be
+ * read as markup.
+ *
+ * If appending would push the last message past the 4096 cap, the footer becomes
+ * its own trailing message instead of being dropped or truncating the reply.
+ * That branch is currently unreachable by arithmetic — a chunk is at most
+ * CHUNK_BUDGET (3900) source characters and rendering only shrinks, the footer
+ * is at most MAX_FOOTER_CHARS (78), so the worst case is 3980 against a 4096
+ * cap. It is kept because those two budgets live in different files and nothing
+ * would fail loudly if one were raised. Mutates `chunks` in place.
+ */
+function attachFooter(chunks, footer) {
+    const html = `<i>${escapeHtml(String(footer).trim())}</i>`;
+    const lastIndex = chunks.length - 1;
+    const candidate = `${chunks[lastIndex]}\n\n${html}`;
+
+    if (renderedLength(candidate) <= TELEGRAM_LIMIT) {
+        chunks[lastIndex] = candidate;
+    } else {
+        chunks.push(html);
+    }
+    return chunks;
+}
+
+/**
  * Send agent Markdown to a chat.
  *
  * Renders and splits: Telegram caps a message at 4096 characters after entity
@@ -88,12 +121,16 @@ async function postMessage(chatId, html, options = {}) {
  *
  * @param {number|string} chatId
  * @param {string}        text    - Markdown as the agent writes it
- * @param {object}        options - extra sendMessage fields (e.g. reply_markup)
+ * @param {object}        options - extra sendMessage fields (e.g. reply_markup),
+ *                                  plus `footer`: plain text appended to the
+ *                                  LAST message only, italicised.
  */
 export async function sendMessage(chatId, text, options = {}) {
     if (!chatId) {
         throw new Error(`[sendMessage] missing chat id : ${chatId}`);
     }
+
+    const { footer, ...telegramOptions } = options;
 
     const chunks = renderForTelegram(text);
     if (chunks.length === 0) {
@@ -101,13 +138,15 @@ export async function sendMessage(chatId, text, options = {}) {
         return { ok: false, description: "empty text" };
     }
 
+    if (footer) attachFooter(chunks, footer);
+
     let last;
     for (const [i, chunk] of chunks.entries()) {
         if (i > 0) await sleep(CHUNK_GAP_MS);
         // A keyboard belongs on the final chunk only, or it would be buried
         // mid-reply and repeated.
         const isLast = i === chunks.length - 1;
-        last = await postMessage(chatId, chunk, isLast ? options : {});
+        last = await postMessage(chatId, chunk, isLast ? telegramOptions : {});
     }
     return last;
 }
