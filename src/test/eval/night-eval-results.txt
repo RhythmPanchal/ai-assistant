@@ -1,0 +1,85 @@
+RASMALAI — NIGHT ROUTINE EVAL
+══════════════════════════════════════════════════════════════════════════════
+Generated : 2026-09-17
+Command   : node src/test/eval/evalNightRoutine.js --repeat 3 --show
+Scenarios : src/test/eval/nightScenarios.js (7 scripted wrap-ups x 3 runs)
+Database  : Rasmalai-eval — never the one .env names (see the harness header
+            for why: dev cannot build prod's unique indexes)
+Graded on : what landed in Mongo, not what the assistant replied
+
+MODELS — read this before comparing numbers
+══════════════════════════════════════════════════════════════════════════════
+The goodNight chain leads with gemini-3.5-flash. The baseline used up its daily
+bucket, so Phase 1 ran on gemini-3.5-flash-lite and the final run largely on
+gemini-3.1-flash-lite — the second and third models in the chain. Prod tries
+the stronger model first. These results are what the routine does on the
+FALLBACK models, which is the harder test.
+
+RESULT
+══════════════════════════════════════════════════════════════════════════════
+                                  baseline      Phase 1       final
+                                  (before)      (writes)      (conversation)
+  scenario runs fully clean       17/21         17/21         20/21
+  checks passed                   154/165       160/165       242/243
+
+The final run uses the stricter checks (exact counts, see below), which is why
+it has more checks. Baseline and Phase 1 recounted under the same strict
+duplicate/invention rules, from the database rows each run printed:
+
+                                  baseline      Phase 1       final
+  lunch WIPED when dinner added   3/3 party     0             0
+  calorie total != sum of meals   1             0             0
+  breakfast/lunch/dinner twice    0 *           1             0
+  same expense saved twice        3             1             0
+  work invented or missed         1 (missed)    1 (invented)  0
+  generated opener asked about
+    the party today's chat named  n/a template  n/a template  3/3
+  opener invented an event        0             0             0/3
+
+  * the baseline did not duplicate meals because it OVERWROTE them instead.
+
+THE REALISTIC NIGHT — party-opener (lunch and a ₹30 coke already logged;
+dinner at a party and a ₹50 rickshaw still to come)
+  baseline: 0/3 clean — lunch wiped 3/3, ₹50 saved 2-3 times in 3/3
+  final:    3/3 clean, 14/14 checks each
+
+WHAT EACH PHASE FIXED
+══════════════════════════════════════════════════════════════════════════════
+Baseline -> Phase 1 (write path)
+  addMeal / replaceMeal / addPerformedTask own the day's lists and totals; the
+  LOGGED SO FAR block is re-read every turn. Lunch stopped being wiped and the
+  totals stopped drifting. Duplicates dropped but did not stop.
+
+Phase 1 -> final (conversation + the Phase 1 findings)
+  One Phase 1 run answered "skipped breakfast today" by re-saving the previous
+  turn's dinner and ₹50 — both listed in LOGGED SO FAR — and logging a deck
+  review the user had only mentioned as a plan. Two fixes:
+    - code: Breakfast/Lunch/Dinner once a day, a repeat reported not added
+    - prompt: save what is new in the LATEST message; never save what was only
+      planned
+  Plus the generated opener and the conversational procedure.
+
+THE CHECKS THEMSELVES
+══════════════════════════════════════════════════════════════════════════════
+The first checks tested presence ("is pizza logged", "is a deck task logged")
+and passed a run that had saved dinner twice and invented a task. They now
+count: exact work per scenario, no main meal twice, no identical expense twice.
+A money-question check also misfired on "how much TIME did you spend on those
+tasks?" and was narrowed.
+
+KNOWN RESIDUAL — being fixed next
+══════════════════════════════════════════════════════════════════════════════
+meal-correction run 3 saved a ₹30 Food expense in a conversation that never
+mentioned money; the assistant's own recap said "no other expenses". The night
+overlay's opener example read "I've already got lunch and the ₹30 coke", and
+the save rule tells the model to save anything clearly absent from LOGGED SO
+FAR — the model copied the example in as data. Several prompt examples also
+reuse the eval scripts' own values (office party, pizza, ₹50 rickshaw, dal not
+rajma, deck review with ankit), which makes the eval easier to pass by copying.
+Fix: data values in prompt and tool examples become placeholders.
+
+COST
+══════════════════════════════════════════════════════════════════════════════
+addMeal 429 + addPerformedTask 425 + replaceMeal 423 = ~1,280 tokens on every
+request. The night overlay is ~2.7K (was ~2.4K) with the opener and
+conversation sections, after dropping the embedded diet and task schemas.
