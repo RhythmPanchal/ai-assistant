@@ -50,6 +50,11 @@ const INTENTIONAL_ADDITIONS = new Set([
     // Edits a locked-in userSchedule by slotId for the caller's own day. Cannot
     // create a schedule or reach any other collection.
     "updateSchedule",
+    // Food goes through these instead of createRecord/updateRecords on
+    // dietRegister. They reach only the caller's own day documents (userId from
+    // the context), and the model supplies one meal — never the day's list or
+    // its totals, which updateRecords made it rebuild and re-add every time.
+    "addMeal", "replaceMeal",
 ]);
 // Present in toolOperator but deliberately dropped.
 const INTENTIONAL_REMOVALS = new Set();

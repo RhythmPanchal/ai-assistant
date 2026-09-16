@@ -61,6 +61,12 @@ const ARGS = {
     manageFactKey: { action: "remove", key: "does.notexist" },
     updateTaskStatus: { updates: [] },
     deferTask: { task: "", newDeadline: "2020-01-01" },
+    // Empty items is refused before any read, so user 1's real food log in the
+    // database .env names is never touched by this sweep.
+    addMeal: { mealType: "Lunch", items: [] },
+    // A date with nothing logged: the correction fails on the lookup, which is
+    // scoped by the context's userId — the thing this sweep exists to prove.
+    replaceMeal: { mealType: "Lunch", items: [], date: "2000-01-01" },
 };
 
 const allTools = toolRegistry.getAllTools().map(t => t.constructor.name);

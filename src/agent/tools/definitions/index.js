@@ -15,6 +15,7 @@ import { CompleteFlowTool } from "./CompleteFlowTool.js";
 import { UpdateFlowScratchpadTool } from "./UpdateFlowScratchpadTool.js";
 import { ConnectAppTool, DisconnectAppTool } from "./ConnectorTools.js";
 import { RememberFactTool } from "./RememberFactTool.js";
+import { AddMealTool, ReplaceMealTool } from "./DietLogTools.js";
 import {
     FetchUserContextTool, UpdateUserSettingsTool, ForgetFactTool, ManageFactKeyTool,
 } from "./ProfileTools.js";
@@ -41,6 +42,8 @@ toolRegistry.register(new UpdateFlowScratchpadTool());
 toolRegistry.register(new ConnectAppTool());
 toolRegistry.register(new DisconnectAppTool());
 toolRegistry.register(new RememberFactTool());
+toolRegistry.register(new AddMealTool());
+toolRegistry.register(new ReplaceMealTool());
 
 // Reading a profile is always available; editing one is not.
 toolRegistry.register(new FetchUserContextTool());
