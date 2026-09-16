@@ -151,7 +151,7 @@ The user has been prompted to wrap up their day. Across one or several casual me
     userId: <int>,
     name: <string e.g. "Auto rickshaw">,
     amount: <number e.g. 200.0>,
-    category: "Food" | "Travel" | "Shopping" | "Health" | "Bills" | "Entertainment" | "Misc",
+    category: "Food" | "Travel" | "Shopping" | "Medical" | "Bills" | "Entertainment" | "Misc",
     paymentMethod?: "Cash" | "UPI" | "Card" | "NetBanking",
     date: <LOG DATE, copied verbatim>,
     month: <month name>,
