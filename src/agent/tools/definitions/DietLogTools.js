@@ -14,8 +14,8 @@ import { addMeal, replaceMeal, describeDay, MEAL_TYPES } from "../../../tools/mo
 const ITEM_SCHEMA = {
     type: "object",
     properties: {
-        name: { type: "string", description: "What was eaten, e.g. 'dal chawal'." },
-        quantity: { type: "string", description: "How much, in the user's terms, e.g. '1 plate', '2 rotis'." },
+        name: { type: "string", description: "What was eaten, in the user's words." },
+        quantity: { type: "string", description: "How much, in the user's words." },
         calories: {
             type: "integer",
             description: "Estimated calories for this item. Required — estimate from nutritional knowledge (nearest 10) when the user did not say.",
@@ -87,8 +87,8 @@ export class ReplaceMealTool extends BaseTool {
     static name = "replaceMeal";
     static description =
         "Correct or remove a meal that is ALREADY logged. " +
-        "'lunch was actually dal chawal, not rajma' → replaceMeal with the corrected items. " +
-        "'remove that snack, it was yesterday's' → replaceMeal with items: []. " +
+        "The user corrects what a meal was → replaceMeal with the corrected items. " +
+        "A meal was logged by mistake → replaceMeal with items: []. " +
         "The whole meal is replaced by what you send, and totals are recalculated. " +
         "Not for a second meal of the same type — two snacks is addMeal twice.";
     static parameters = {

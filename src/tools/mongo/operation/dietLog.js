@@ -65,7 +65,7 @@ const toInt = (v) => {
  */
 export function normalizeMealItems(items) {
     if (!Array.isArray(items) || items.length === 0) {
-        throw new Error("items must list at least one thing eaten, e.g. [{ name: \"dal chawal\", quantity: \"1 plate\", calories: 450 }].");
+        throw new Error("items must list at least one thing eaten, each with a name, a quantity and estimated calories.");
     }
 
     return items.map((raw, i) => {

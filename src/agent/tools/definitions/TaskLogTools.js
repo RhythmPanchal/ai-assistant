@@ -12,7 +12,7 @@ export class AddPerformedTaskTool extends BaseTool {
     static parameters = {
         type: "object",
         properties: {
-            title: { type: "string", description: "The work, in the user's words, e.g. 'Q3 deck review with Ankit'." },
+            title: { type: "string", description: "The work, in the user's words." },
             actualDurationMinutes: {
                 type: "integer",
                 description: "How long it took, in minutes. If the user did not say, ask — do not guess.",
