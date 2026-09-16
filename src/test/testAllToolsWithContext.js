@@ -42,6 +42,7 @@ const ARGS = {
     deleteRecord: { collectionName: "expenseRegister", id: "aaaaaaaaaaaaaaaaaaaaaaaa", reason: "test" },
     createTask: { title: "" },
     insertSchedule: { date: "2026-01-01", slots: [] },
+    updateSchedule: { date: "2026-01-01", add: [] },
     createOneTimeReminder: { title: "", nextExecutionAt: "2020-01-01T00:00:00", message: "" },
     createMultiTimeReminder: { title: "", cron: "bad", nextExecutionAt: "2020-01-01T00:00:00", message: "", expiryDate: "2020-01-01" },
     // A well-formed id that matches nothing, so the call gets past validation

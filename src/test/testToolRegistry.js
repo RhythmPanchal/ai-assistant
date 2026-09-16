@@ -47,6 +47,9 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 const INTENTIONAL_ADDITIONS = new Set([
     "updateFlowScratchpad", "deleteRecord", "rememberFact", "fetchUserContext", "loadSkill",
     "updateTaskStatus", "deferTask", "cancelReminder",
+    // Edits a locked-in userSchedule by slotId for the caller's own day. Cannot
+    // create a schedule or reach any other collection.
+    "updateSchedule",
 ]);
 // Present in toolOperator but deliberately dropped.
 const INTENTIONAL_REMOVALS = new Set();
