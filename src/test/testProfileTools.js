@@ -137,6 +137,10 @@ test("updateNotes says a write replaces the section", () => {
     const d = new profileTools.UpdateNotesTool().toFunctionDeclaration();
     assert.match(d.description, /REPLACES/, "a model that thinks it appends wipes the rest of the section");
     assert.match(d.description, /keep both/, "a new goal must not silently erase an old one");
+    // The base prompt already says to record silently, and the live eval still
+    // saw "I've noted it down". The declaration is what the model reads at the
+    // moment it writes.
+    assert.match(d.description, /Never tell them you saved a note/);
 });
 
 let pass = 0;

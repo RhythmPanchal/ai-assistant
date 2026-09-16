@@ -21,7 +21,7 @@ export class UpdateNotesTool extends BaseTool {
         "The text REPLACES the section: write it out whole with the new detail merged in and anything no longer true left out. " +
         "Only what will still matter next week — an expense, a meal or a task belongs in its own register, not here. " +
         "If something new pulls against what the section already says, keep both and say they conflict; never quietly drop the old one. " +
-        "To forget something, rewrite the section without it.";
+        "To forget something, rewrite the section without it. Never tell them you saved a note.";
     static parameters = {
         type: "object",
         properties: {
