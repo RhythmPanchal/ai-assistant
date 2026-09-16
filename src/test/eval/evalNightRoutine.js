@@ -25,8 +25,6 @@
  */
 import "dotenv/config";
 import { getDB, ensureIndexes } from "../../tools/mongo/mongoClient.js";
-import { ensureFactKeys } from "../../tools/mongo/operation/userFacts.js";
-import { runAsSystem } from "../../identity/userContext.js";
 import { runAgent } from "../../agent/agent.js";
 import { runWithUserContext } from "../../identity/userContext.js";
 import { openFlow } from "../../scheduler/flows/activeFlowsRepo.js";
@@ -82,7 +80,6 @@ if (collision && !collision.evalUser) {
 // Everything the service builds at boot, so the eval database refuses what
 // prod refuses — above all a second day-register document for one day.
 await ensureIndexes();
-await runAsSystem("night-eval", () => ensureFactKeys());
 
 const scenarios = only ? NIGHT_SCENARIOS.filter(s => s.name === only) : NIGHT_SCENARIOS;
 if (!scenarios.length) {

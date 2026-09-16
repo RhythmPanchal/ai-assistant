@@ -22,8 +22,8 @@ export async function createRecord(collectionName, data) {
   // built by the model on most paths, so a userId in it is a claim rather than
   // a fact — this is what stops a row being filed under someone else.
   //
-  // Only for collections that actually have an owner. factKey is shared
-  // vocabulary and oauthConnector is app config; forcing a userId onto either
+  // Only for collections that actually have an owner. oauthConnector is app
+  // config shared by every user; forcing a userId onto a collection like that
   // would fail schema validation for no gain.
   const context = getUserContext();
   const schema = fetchCollectionNameAndSchema()[collectionName]?.schema;

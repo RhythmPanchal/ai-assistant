@@ -156,11 +156,12 @@ export default usersSchema;
  * to IST. Requiring it would mean either blocking signup on a question or
  * writing a guess that looks like a stated fact.
  *
- * REMOVED in the userFact split: age, profession, dailySchedule, lifestyle.
- * They were free prose that no code ever read, which is the definition of a
- * userFact row — they now live there as identity.*, work.role and routine.*.
- * Nothing enforces their absence ($jsonSchema allows extra fields), so this
- * note is the only thing stopping them being re-added here.
+ * REMOVED as typed fields: age, profession, dailySchedule, lifestyle. They were
+ * free prose that no code ever read. That kind of thing belongs in `notes`,
+ * which the model rewrites — a typed field for it is one nothing updates and
+ * the prompt asserts forever. Nothing enforces their absence ($jsonSchema
+ * allows extra fields), so this note is the only thing stopping them being
+ * re-added at the top level.
  */
 export const USERS_INDEXES = [
   { key: { userId: 1 }, name: "userId_1", unique: true },

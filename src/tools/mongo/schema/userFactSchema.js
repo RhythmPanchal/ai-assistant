@@ -1,3 +1,12 @@
+/**
+ * RETIRED. The notes on the users document replaced this store; 005 copied
+ * every user's facts across, and nothing reads or writes userFact any more.
+ *
+ * The file stays for one reason: migrations 002 and 005 import USER_FACT, and a
+ * migration has to keep working for as long as a fresh database might run it.
+ * The collection itself is left in place in production as the backup of what
+ * 005 copied. Everything below describes the store as it was.
+ */
 export const USER_FACT = "userFact";
 
 // Bare schema + default export, matching every other file here. createCollection

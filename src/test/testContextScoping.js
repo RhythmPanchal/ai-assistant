@@ -114,7 +114,7 @@ test("updateRecords scopes the match, not just a check afterwards", async () => 
 test("createRecord only stamps an owner on collections that have one", async () => {
     const src = (await import("node:fs")).readFileSync("src/tools/mongo/createRecord.js", "utf8");
     assert.match(src, /schema\?\.properties\?\.userId/,
-        "forcing userId onto factKey or oauthConnector would fail schema validation");
+        "forcing userId onto shared config like oauthConnector would fail schema validation");
 });
 
 // ── system work is exempt, and only reachable from server-side code ──────────
@@ -165,7 +165,6 @@ test("both Telegram handlers key on the authenticated sender", async () => {
 
 test("boot work runs as the system so nothing is scoped away", async () => {
     const src = (await import("node:fs")).readFileSync("src/index.js", "utf8");
-    assert.match(src, /runAsSystem\("ensureFactKeys"/);
     assert.match(src, /runAsSystem\("startupMigrations"/,
         "a migration scoped to one user would migrate nobody");
 });

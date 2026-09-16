@@ -16,11 +16,11 @@ export const CHAT_SUMMARY = "chatSummary";
  * prompt inject one full row plus a week of bare headlines and still lose
  * nothing: a commitment made on Monday is still in Thursday's `state`.
  *
- * The split between this and userFact is episodic vs durable. "Vegetarian" is a
- * fact and belongs in the profile block, asserted forever. "Advised rest until
- * Sunday" is a state — true now, false next week, and never worth asserting
- * again after it lapses. Writing the second kind into userFact is how the prompt
- * ends up insisting someone is still job hunting a year later.
+ * The split between this and the notes on users is episodic vs durable.
+ * "Vegetarian" belongs in the notes, in the profile block on every turn.
+ * "Advised rest until Sunday" is a state — true now, false next week, and never
+ * worth asserting again after it lapses. Writing the second kind into the notes
+ * is how the prompt ends up insisting someone is still job hunting a year later.
  */
 const chatSummarySchema = {
   title: "chatSummary",

@@ -2,7 +2,6 @@ import "dotenv/config";
 import express from "express";
 
 import { getDB, ensureIndexes } from "./tools/mongo/mongoClient.js";
-import { ensureFactKeys } from "./tools/mongo/operation/userFacts.js";
 import { startTelegramPolling } from "./tools/telegram/telegramPoller.js";
 import { handleTelegramMessage, handleCallbackQuery } from "./tools/telegram/telegramHandler.js"
 import initCron from "./scheduler/initCron.js";
@@ -23,10 +22,6 @@ async function initService(){
     // from the first tick. Never throws — a failed index build is reported
     // and the bot still starts.
     await ensureIndexes();
-
-    // Materialise the reviewed key spine into factKey. After ensureIndexes so
-    // the unique index on key exists before the seed upserts against it.
-    await runAsSystem("ensureFactKeys", () => ensureFactKeys());
 
     // After ensureIndexes, because the repointing writes depend on the unique
     // indexes existing. BEFORE the Telegram loop below, because the identity
