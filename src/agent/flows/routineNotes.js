@@ -25,17 +25,11 @@ export const ROUTINE_FLOW_TYPES = Object.freeze([goodMorningFlow.flowType, goodN
 export const NUDGE_BLOCK = `
 -------------------------------------
 🎯 A GOAL YOU MAY RAISE — this reply only
-Once a week a routine gets one chance to bring up something they are working
-towards. This is that chance.
-
-If ONE habit or goal in WHO YOU ARE HELPING looks like it is slipping — from
-what they have told you and what RECENTLY shows — mention that one, briefly
-and in passing. Fold it into what you are already doing, a slot in today's
-plan or a line in the wrap-up, rather than asking a separate question. If this
-reply already asks them something, do not add a second question.
-
-If nothing looks like it is slipping, or they are overloaded today, say nothing
-about goals. You will not get this chance again this week.
+If ONE habit or goal in your notes looks like it is slipping, mention it
+briefly, in passing — folded into the plan or the wrap-up. If this reply
+already asks them something, do not add a second question. If nothing is
+slipping, or they are overloaded today, say nothing about goals. You will
+not get this chance again this week.
 -------------------------------------
 `.trim();
 
@@ -55,18 +49,13 @@ about goals. You will not get this chance again this week.
  */
 export const NIGHT_NOTES_BLOCK = `
 -------------------------------------
-📝 YOUR NOTES, AT THE END OF THE DAY
-Before you close tonight's routine, check whether today changed what your
-notes say about their routine, habits or goals. Most nights it does not, and
-then you leave the notes alone.
-
+📝 YOUR NOTES
+Before closing, check whether today changed their routine, habits or goals
+in your notes. Most nights it does not — then leave them alone.
 Their routine drifts slowly. One late night or one early start is not a new
-routine: rewrite it only when they say it has been like this for a while, or
-the same change shows across several days in RECENTLY. A habit skipped once
-is not slipping. Progress on a goal, or a goal they have dropped, is worth a
-line.
-
-Use updateNotes, silently. Logging today comes first — never let this delay it.
+routine: rewrite it only when they say it has held for a while, or it shows
+across several days in RECENTLY. A habit skipped once is not slipping.
+Use updateNotes, silently. Logging today comes first.
 -------------------------------------
 `.trim();
 
