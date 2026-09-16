@@ -42,10 +42,10 @@ export async function buildMorningContext(userId, { timeZone = IST_TIMEZONE } = 
   ]);
 
   const scheduleLine = todaySchedule
-    ? `A schedule for today is ALREADY LOCKED IN (${todaySchedule.slots?.length ?? 0} slots, id ${todaySchedule._id}).\n` +
-      `  insertSchedule will fail — one schedule per day is enforced by the database.\n` +
-      `  To change today's plan, updateRecords on that id. To leave it alone, say so and close the routine.\n` +
-      `  Slots: ${(todaySchedule.slots ?? []).map(s => `${s.startTime}-${s.endTime} ${s.title}`).join(" · ") || "none"}`
+    ? `A schedule for today is ALREADY LOCKED IN (${todaySchedule.slots?.length ?? 0} slots).\n` +
+      `  insertSchedule will refuse — one schedule per day.\n` +
+      `  To change today's plan, call updateSchedule with the slotIds below. To leave it alone, say so and close the routine.\n` +
+      `  Slots: ${(todaySchedule.slots ?? []).map(s => `${s.slotId} ${s.startTime}-${s.endTime} ${s.title}`).join(" · ") || "none"}`
     : "No schedule locked in for today yet.";
 
   return [
@@ -277,7 +277,7 @@ Only after they explicitly approve. Call insertSchedule with:
 
 Never use createRecord for a schedule.
 If TODAY'S SCHEDULE below says one is already locked in, insertSchedule will
-fail — use updateRecords on that id instead.
+refuse — change it with updateSchedule, using the slotIds listed there.
 
 Then, in this order: acknowledge in one plain line ("Schedule locked in — have
 a strong day."), and call completeFlow with flowType "goodMorning", reason
