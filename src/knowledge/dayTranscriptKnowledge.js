@@ -27,6 +27,12 @@ const MAX_TRANSCRIPT_CHARS = 24000;
 // proposing a plan to a silent user, not a conversation — knowing that is the
 // difference between "planned a full day" and "the user agreed to a full day",
 // and followThrough depends on the distinction.
+//
+// In such a turn the "user" message is not the user. It is the job's trigger —
+// "It is time for the morning planning routine" — and it used to be printed as
+// "user (replying to the morning routine)", so the summarizer read the job's
+// own instruction as something the person had said. The user's actual reply
+// is a later turn from telegram, and is labelled as the user.
 const SOURCE_LABELS = {
     goodMorningJob: "morning routine",
     goodNightJob: "night routine",
@@ -72,9 +78,8 @@ export default async function dayTranscriptKnowledge(userId, date, { timeZone = 
             const time = new Date(msg.timestamp ?? turn.createdAt)
                 .toLocaleTimeString("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" });
             const context = SOURCE_LABELS[turn.source];
-            const who = msg.role === "user"
-                ? (context ? `user (replying to the ${context})` : "user")
-                : (context ? `rasmalai (${context})` : "rasmalai");
+            if (context && msg.role === "user") continue;
+            const who = msg.role === "user" ? "user" : (context ? `rasmalai (${context})` : "rasmalai");
             const line = `[${time}] ${who}: ${clip(msg.content, MAX_MESSAGE_CHARS)}`;
 
             if (line.length > budget) {

@@ -29,12 +29,12 @@ export const SCENARIOS = [
   09:30-11:00  Q3 deck - review Ankit's comments
   11:30-13:00  Standup + inbox
   Skipping the gym block.
-[09:05] user (replying to the morning routine): ok fine
+[09:05] user: ok fine
 [14:20] user: fever went up, going to the hospital now
 [19:40] user: they admitted me, overnight for observation. blood tests done, reports tomorrow
 [19:42] user: told ankit the deck review has to move to monday
 [21:15] user: watching loki in the hospital bed lol, actually pretty good
-[23:14] user (replying to the night routine): barely ate, just hospital khichdi. spent 800 on the cab and admission. didn't touch the deck
+[23:14] user: barely ate, just hospital khichdi. spent 800 on the cab and admission. didn't touch the deck
 [23:15] rasmalai (night routine): Logged: 1 meal (Dinner), Rs 800 on Health. Nothing on tasks.
 `.trim(),
         checks: [
@@ -117,9 +117,9 @@ export const SCENARIOS = [
   14:00-16:00  Q3 deck rework
   16:00-17:00  Review PRs
   19:00-20:00  Gym - legs
-[09:41] user (replying to the morning routine): ok
+[09:41] user: ok
 [23:00] rasmalai (night routine): How was the day - what did you finish, eat, spend?
-[23:52] user (replying to the night routine): honestly did nothing from the plan, got pulled into a prod issue all day. no gym. ordered food, 460
+[23:52] user: honestly did nothing from the plan, got pulled into a prod issue all day. no gym. ordered food, 460
 `.trim(),
         checks: [
             { field: "headline", mustNot: /09:30|10:30|12:30|14:00|16:00/, why: "slot times are stored in userSchedule" },

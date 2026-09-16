@@ -35,7 +35,7 @@ const FIXTURE_TRANSCRIPT = `
   11:00-11:30  break
   11:30-13:00  Standup + inbox
   Afternoon kept free. Skipping the gym block today.
-[09:05] user (replying to the morning routine): ok fine
+[09:05] user: ok fine
 [14:20] user: fever went up, going to the hospital now
 [14:21] rasmalai: Go. I'll hold everything. Tell me when you're out.
 [19:40] user: they admitted me, keeping me overnight for observation. blood tests done, reports tomorrow
@@ -43,9 +43,9 @@ const FIXTURE_TRANSCRIPT = `
 [19:42] user: told ankit the deck review has to move to monday
 [21:15] user: watching loki in the hospital bed lol, actually pretty good
 [23:00] rasmalai (night routine): Before we wrap up the day, give me a quick update - how was your day, what did you complete, what did you eat, what did you spend?
-[23:14] user (replying to the night routine): barely ate, just hospital khichdi for dinner. spent 800 on the cab and admission stuff. didn't finish anything on the deck
+[23:14] user: barely ate, just hospital khichdi for dinner. spent 800 on the cab and admission stuff. didn't finish anything on the deck
 [23:15] rasmalai (night routine): Logged: 1 meal (Dinner, khichdi), Rs 800 on Health. Nothing on tasks.
-[23:16] user (replying to the night routine): ya that's it, gn
+[23:16] user: ya that's it, gn
 `.trim();
 
 const FIXTURE_PREVIOUS = {
