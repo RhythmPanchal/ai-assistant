@@ -70,7 +70,28 @@ export async function insertSchedule(userId, date, slots, summary, motivationalN
     const db = await getDB();
     const collection = db.collection(USER_SCHEDULE);
 
-    const result = await collection.insertOne(record);
+    // One schedule per user per day. Looked up here as well as enforced by the
+    // unique index, because the index can be missing: on prod it failed to build
+    // behind old duplicates, and a second lock-in on 2026-09-14 inserted a rival
+    // schedule that every reader then ignored.
+    const alreadyLocked = {
+        success: false,
+        error: `A schedule for ${date} is already locked in. To change it, read it with fetchRecord and ` +
+            `call updateSchedule — insertSchedule only creates a day's first schedule.`,
+    };
+    const dayEnd = new Date(parsedDate.getTime() + 24 * 60 * 60 * 1000);
+    if (await collection.findOne({ userId, date: { $gte: parsedDate, $lt: dayEnd } }, { projection: { _id: 1 } })) {
+        return alreadyLocked;
+    }
+
+    let result;
+    try {
+        result = await collection.insertOne(record);
+    } catch (err) {
+        // The index closes the race the lookup above leaves open.
+        if (err?.code === 11000) return alreadyLocked;
+        throw err;
+    }
     console.log("[insertSchedule] Created schedule for", date);
 
     // Background, not awaited — the reply should not wait on Google. Synced for
