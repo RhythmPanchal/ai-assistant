@@ -7,6 +7,17 @@ import nightLogKnowledge from "../../knowledge/nightLogKnowledge.js";
  * memory. Throwing is safe — buildFlowOverlay turns it into a note telling the
  * model to fetch instead, and the turn goes on.
  */
+/**
+ * What goodNightJob sends to start the routine. It is a knock, not the
+ * procedure — that lives in the overlay's OPENER section, where it is not
+ * replayed as chat history all night. The marker makes it unmistakable that
+ * this message is the system, not the person.
+ */
+export const NIGHT_TRIGGER = "[night routine] Write tonight's opening message.";
+export function buildNightTriggerPrompt() {
+  return NIGHT_TRIGGER;
+}
+
 export async function buildNightContext(userId, { timeZone = IST_TIMEZONE, flow } = {}) {
   const logDate = localDateOf(flow?.startedAt, timeZone);
   if (!logDate) throw new Error("the night routine has no start time, so its LOG DATE is unknown");
@@ -24,6 +35,7 @@ export const goodNightFlow = {
   computeExpiry: (timeZone) => atLocalHour(10, timeZone, 1),
 
   buildContext: buildNightContext,
+  buildTriggerPrompt: buildNightTriggerPrompt,
 
   openerMessage:
     `Hey! 😊
@@ -40,6 +52,28 @@ Just drop everything casually — I'll take care of organizing it and keeping yo
 -------------------------------------
 🌙 ACTIVE FLOW: GOOD NIGHT WRAP-UP
 -------------------------------------
+
+-------------------------------------
+🌙 THE OPENER — when the latest message is "[night routine] Write tonight's opening message."
+-------------------------------------
+That message comes from the system, not the person. Reply with the message that
+starts tonight's wrap-up. Call NO tools on this turn: it is a message, not a save.
+Saving starts with their reply.
+
+Write it like someone who was around today, not a form to fill in:
+  • If today's conversation mentioned something worth asking about — a plan
+    ("office party tonight"), a worry, a doctor's visit, a big piece of work —
+    open with that. "How was the office party? Did you end up eating there?"
+  • If RECENTLY carries something still true — they were unwell, waiting on
+    results — a word about it belongs here too.
+  • Mention ONLY what is actually in today's conversation, LOGGED SO FAR, the
+    day's plan, or RECENTLY. Never invent an event, a meal or a plan. If nothing
+    stands out, "Hey, how did today go?" is exactly right.
+  • If part of the day is already logged, say so in a few words so they don't
+    repeat it — "I've already got lunch and the ₹30 coke."
+  • Ask about one or two things. Not a checklist of food, tasks and spending,
+    and no bullet points.
+  • Two or three short sentences.
 
 🛑 ABSOLUTE RULE — TOOLS BEFORE TEXT
 Before producing ANY reply text, save every concrete thing the user just told you:

@@ -15,6 +15,17 @@ import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
 import goodMorningFlow from "./flows/goodMorningFlow.js";
 
+/**
+ * The replies runAgent substitutes when the model produced nothing usable.
+ *
+ * Exported so a caller that needs a real message — a routine opener, which is
+ * sent to the user unprompted — can tell one of these apart from something the
+ * model actually wrote, and fall back instead of delivering "I had to stop".
+ */
+export const STEP_LIMIT_REPLY =
+    "I had to stop — that took more steps than expected. Here's where I got to; ask me to continue if you'd like.";
+export const WORK_DONE_REPLY = "Done — saved. Ask me if you want the details.";
+
 // The wire name, taken from the class rather than repeated as a literal —
 // `static name` shadows the class name, so these cannot drift apart.
 const LOAD_SKILL_TOOL = LoadSkillTool.name;
@@ -317,8 +328,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
 
         if (steps >= maxSteps && !LLMresponse) {
             console.warn(`[runAgent] hit maxSteps (${maxSteps})`);
-            LLMresponse =
-                "I had to stop — that took more steps than expected. Here's where I got to; ask me to continue if you'd like.";
+            LLMresponse = STEP_LIMIT_REPLY;
         }
 
         // A blank reply has reached Telegram ten times since June, always on a
@@ -328,9 +338,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         if (!LLMresponse || !LLMresponse.trim()) {
             const didWork = conversation.messages.some(m => m.role === "tool" && m.result?.success);
             console.warn(`[runAgent] empty response — substituting ${didWork ? "a fallback" : "NO_REPLY"}`);
-            LLMresponse = didWork
-                ? "Done — saved. Ask me if you want the details."
-                : NO_REPLY;
+            LLMresponse = didWork ? WORK_DONE_REPLY : NO_REPLY;
         }
 
         console.log("FINAL LLM RESPONSE:", LLMresponse);
