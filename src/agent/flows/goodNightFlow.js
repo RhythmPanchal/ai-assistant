@@ -1,4 +1,17 @@
-import { atLocalHour } from "../../tools/mongo/dateUtils.js";
+import { atLocalHour, localDateOf, IST_TIMEZONE } from "../../tools/mongo/dateUtils.js";
+import nightLogKnowledge from "../../knowledge/nightLogKnowledge.js";
+
+/**
+ * The live half of the overlay: what is actually saved for LOG DATE, re-read
+ * every turn. See nightLogKnowledge.js for why the routine must not work from
+ * memory. Throwing is safe — buildFlowOverlay turns it into a note telling the
+ * model to fetch instead, and the turn goes on.
+ */
+export async function buildNightContext(userId, { timeZone = IST_TIMEZONE, flow } = {}) {
+  const logDate = localDateOf(flow?.startedAt, timeZone);
+  if (!logDate) throw new Error("the night routine has no start time, so its LOG DATE is unknown");
+  return nightLogKnowledge(userId, logDate, { nothingToLog: flow?.scratchpad?.nothingToLog });
+}
 
 export const goodNightFlow = {
   flowType: "goodNight",
@@ -9,6 +22,8 @@ export const goodNightFlow = {
    * explicitly; this is only the backstop if that job never runs.
    */
   computeExpiry: (timeZone) => atLocalHour(10, timeZone, 1),
+
+  buildContext: buildNightContext,
 
   openerMessage:
     `Hey! 😊

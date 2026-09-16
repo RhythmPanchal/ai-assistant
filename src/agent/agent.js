@@ -124,7 +124,9 @@ export async function buildFlowOverlay(flow, { userId, timeZone = IST_TIMEZONE, 
 
     if (typeof definition.buildContext === "function") {
         try {
-            const context = await definition.buildContext(userId, { timeZone });
+            // `flow` so a context can read the routine's own state — the night
+            // block needs its LOG DATE (from startedAt) and its scratchpad.
+            const context = await definition.buildContext(userId, { timeZone, flow });
             if (context) parts.push(context);
         } catch (err) {
             console.warn(`[runAgent] ${flow.flowType} live context unavailable:`, err.message);
