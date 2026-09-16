@@ -137,7 +137,36 @@ test("two snacks: replaceMeal refuses to guess which one", async () => {
     assert.deepStrictEqual(doc.meals.filter(m => m.mealType === "Snack").map(m => m.items[0].name), ["banana"]);
 });
 
+test("a second Dinner is reported as already logged, not added", async () => {
+    await cleanup();
+    await addMeal(USER, { mealType: "Dinner", items: [food("pizza and pasta", 650)] });
+    const r = await addMeal(USER, { mealType: "Dinner", items: [food("pizza and pasta at party", 700)] });
+    assert.strictEqual(r.duplicate, true);
+    const [doc] = await day();
+    assert.strictEqual(doc.meals.filter(m => m.mealType === "Dinner").length, 1);
+    assert.strictEqual(doc.dailyTotals.caloriesConsumed, 650, "a refused duplicate must not move the total");
+});
+
+test("two Dinners racing in one turn still land once", async () => {
+    await cleanup();
+    await Promise.all([
+        addMeal(USER, { mealType: "Dinner", items: [food("biryani", 700)] }),
+        addMeal(USER, { mealType: "Dinner", items: [food("biryani", 700)] }),
+    ]);
+    const [doc] = await day();
+    assert.strictEqual(doc.meals.filter(m => m.mealType === "Dinner").length, 1);
+    assert.strictEqual(doc.dailyTotals.caloriesConsumed, 700);
+});
+
+test("snacks stay plural", async () => {
+    await addMeal(USER, { mealType: "Snack", items: [food("chips", 150)] });
+    const r = await addMeal(USER, { mealType: "Snack", items: [food("chips", 150)] });
+    assert.strictEqual(r.duplicate, false);
+});
+
 test("correcting a meal that was never logged points at addMeal", async () => {
+    await cleanup();
+    await addMeal(USER, { mealType: "Lunch", items: [food("dal", 400)] });
     await assert.rejects(replaceMeal(USER, { mealType: "Dinner", items: [food("x", 1)] }), /use addMeal/);
 });
 

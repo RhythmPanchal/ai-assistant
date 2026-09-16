@@ -24,6 +24,12 @@ import { resolveLogDate } from "./logDate.js";
  */
 
 export const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack"];
+
+// One of each per day. A second Dinner is almost never a second dinner: in the
+// Phase 1 night eval it was the model re-reading the previous turn and saving
+// "pizza and pasta at party" beside the "pizza and pasta" it had already saved,
+// double-counting the day's calories. Snacks are genuinely plural and stay so.
+export const ONCE_A_DAY = ["Breakfast", "Lunch", "Dinner"];
 const MACROS = ["protein", "carbs", "fat"];
 const DUPLICATE_KEY = 11000;
 
@@ -128,6 +134,19 @@ export async function addMeal(userId, { mealType, items, date } = {}) {
     const { date: logDate, note, timeZone } = await resolveLogDate(userId, date);
     const { date: day, within, month, year } = dayFields(logDate, timeZone);
     const now = new Date();
+    const db = await getDB();
+
+    // A main meal already logged is reported, not added. The read gives the
+    // model its message; the $cond below is what holds when two calls race.
+    const onceADay = ONCE_A_DAY.includes(meal.mealType);
+    if (onceADay) {
+        const existing = await db.collection(DIET_REGISTER).findOne({ userId, date: within });
+        const logged = (existing?.meals ?? []).find(m => m.mealType === meal.mealType);
+        if (logged) return { date: logDate, note, meal: logged, day: existing, duplicate: true };
+    }
+
+    const appended = { $concatArrays: [{ $ifNull: ["$meals", []] }, [{ $literal: meal }]] };
+    const alreadyHasIt = { $in: [meal.mealType, { $ifNull: ["$meals.mealType", []] }] };
 
     const update = [
         {
@@ -137,7 +156,7 @@ export async function addMeal(userId, { mealType, items, date } = {}) {
                 date: { $ifNull: ["$date", day] },
                 month: { $ifNull: ["$month", month] },
                 year: { $ifNull: ["$year", year] },
-                meals: { $concatArrays: [{ $ifNull: ["$meals", []] }, [{ $literal: meal }]] },
+                meals: onceADay ? { $cond: [alreadyHasIt, { $ifNull: ["$meals", []] }, appended] } : appended,
                 createdAt: { $ifNull: ["$createdAt", now] },
                 updatedAt: now,
             },
@@ -145,7 +164,6 @@ export async function addMeal(userId, { mealType, items, date } = {}) {
         RECOMPUTE_TOTALS,
     ];
 
-    const db = await getDB();
     const write = () => db.collection(DIET_REGISTER).findOneAndUpdate(
         { userId, date: within },
         update,
@@ -163,7 +181,7 @@ export async function addMeal(userId, { mealType, items, date } = {}) {
         doc = await write();
     }
 
-    return { date: logDate, note, meal, day: doc };
+    return { date: logDate, note, meal, day: doc, duplicate: false };
 }
 
 /**

@@ -40,6 +40,7 @@ export class AddMealTool extends BaseTool {
         "Log ONE meal the user ate. It is added to that day's food log — the day is created if needed — " +
         "and the day's calorie and macro totals are recalculated for you, so never add numbers up yourself. " +
         "Call it once per meal; several addMeal calls in one turn are fine. " +
+        "Breakfast, Lunch and Dinner are once a day: if one is already logged, nothing is added and you are told how to change it. " +
         "NEVER write food with createRecord or updateRecords: those rewrite the whole day and erase meals already logged. " +
         "To change or remove a meal that is already logged, use replaceMeal instead.";
     static parameters = {
@@ -56,6 +57,19 @@ export class AddMealTool extends BaseTool {
         try {
             const r = await addMeal(userId, { mealType, items, date });
             const note = r.note ? ` Note: ${r.note}` : "";
+            if (r.duplicate) {
+                // success:true — a failure invites a retry, and the retry is the
+                // duplicate being refused. The message carries the way forward
+                // for the one real case: more food at a meal already logged.
+                const logged = r.meal.items.map(i => i.name).join(", ");
+                return new ToolResult(
+                    true,
+                    `${r.meal.mealType} is already logged for ${r.date}: ${logged} (${r.meal.mealCalories} kcal) — nothing added.${note} ` +
+                    `If this is the same meal, you are done. If the user had MORE at that meal, call replaceMeal for ${r.meal.mealType} ` +
+                    `with every item — the logged ones and the new ones. If it corrects that meal, call replaceMeal with the corrected items.`,
+                    { date: r.date, duplicate: true, dietRegisterId: String(r.day._id) }
+                );
+            }
             return new ToolResult(
                 true,
                 `Logged ${r.meal.mealType} (${r.meal.mealCalories} kcal) for ${r.date}.${note} Day now: ${describeDay(r.day)}`,
