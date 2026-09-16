@@ -26,6 +26,22 @@ export async function insertSchedule(userId, date, slots, summary, motivationalN
         return { success: false, error: "slots must be a non-empty array." };
     }
 
+    // slotId is what updateSchedule and the calendar sync match on. Two slots
+    // sharing one collapse into a single event and a single edit target, so the
+    // second is silently lost. Checked here because ValidateSchema does not
+    // enforce `required` inside array items — a missing slotId passes it too.
+    const slotIds = slots.map(s => s?.slotId);
+    const missing = slotIds.filter(id => typeof id !== "string" || !id.trim()).length;
+    const repeated = [...new Set(slotIds.filter((id, i) => id && slotIds.indexOf(id) !== i))];
+    if (missing || repeated.length) {
+        return {
+            success: false,
+            error: (missing ? `${missing} slot(s) have no slotId. ` : "") +
+                (repeated.length ? `slotId ${repeated.join(", ")} is used more than once. ` : "") +
+                `Every slot needs its own: slot_1, slot_2, slot_3…`,
+        };
+    }
+
     const parsedDate = toIST(date);
     if (!parsedDate || isNaN(parsedDate.getTime())) {
         return { success: false, error: "Invalid date format. Use ISO string like '2026-05-01'." };
