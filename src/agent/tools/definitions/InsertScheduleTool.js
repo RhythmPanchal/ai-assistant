@@ -3,7 +3,7 @@ import { insertSchedule } from "../../../tools/mongo/operation/insertSchedule.js
 
 export class InsertScheduleTool extends BaseTool {
     static name = "insertSchedule";
-    static description = `Insert the user's confirmed daily schedule. Call this ONLY after the user has reviewed and approved the schedule. The function automatically sorts slots by startTime and derives the day name from the date. Will fail if a schedule already exists for that userId + date.`;
+    static description = `Insert the user's confirmed daily schedule. Call this ONLY after the user has reviewed and approved the schedule. The function automatically sorts slots by startTime and derives the day name from the date. Only for a day that has no schedule yet — once one is locked in, change it with updateSchedule.`;
     static parameters = {
         type: "object",
         properties: {

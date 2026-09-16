@@ -78,7 +78,8 @@ export class UpdateTaskStatusTool extends BaseTool {
 export class DeferTaskTool extends BaseTool {
     static name = "deferTask";
     static description =
-        "Move a task's deadline and record that it moved. Use when the user pushes something back — " +
+        "Move a task's deadline and record that it moved. For backlog tasks only — a block on a day's schedule is not a task; move that with updateSchedule. " +
+        "Use when the user pushes something back — " +
         "'not this week', 'next Sunday', 'after the release'. Do NOT edit a deadline through updateRecords: " +
         "this keeps the original deadline and counts the pushes, which is the only way anyone can later see " +
         "that a task is being avoided rather than planned.";

@@ -3,7 +3,7 @@ import { updateRecords } from "../../../tools/mongo/updateRecord.js";
 
 export class UpdateRecordsTool extends BaseTool {
     static name = "updateRecords";
-    static description = "Update one or more records by _id. You MUST call fetchRecord first to get real _ids — NEVER fabricate an _id. Send a single-element array for one record, or multiple elements for batch updates.";
+    static description = "Update one or more records by _id. You MUST call fetchRecord first to get real _ids — NEVER fabricate an _id. Send a single-element array for one record, or multiple elements for batch updates. Not for userSchedule — a locked-in day is changed with updateSchedule.";
     static parameters = {
         type: "object",
         properties: {
