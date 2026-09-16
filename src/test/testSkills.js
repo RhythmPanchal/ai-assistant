@@ -52,8 +52,8 @@ test("a skill's declarations can be fetched on demand", () => {
 
 test("an unknown tool name is skipped, not thrown", () => {
     // A skill outliving one of its tools should lose that tool, not break turns.
-    const declarations = toolRegistry.getDeclarationsFor(["forgetFact", "toolThatWasDeleted"]);
-    assert.deepStrictEqual(declarations.map(d => d.name), ["forgetFact"]);
+    const declarations = toolRegistry.getDeclarationsFor(["updateUserSettings", "toolThatWasDeleted"]);
+    assert.deepStrictEqual(declarations.map(d => d.name), ["updateUserSettings"]);
 });
 
 test("the unknown-tool error does not leak undeclared tool names", async () => {
@@ -135,8 +135,8 @@ test("a failed load leaves the turn untouched", () => {
 test("other tool results in the same step are ignored", () => {
     const turn = freshTurn();
     const results = [
-        { name: "rememberFact", result: { success: true, data: { saved: [] } } },
-        { name: "fetchUserContext", result: { success: true, data: {} } },
+        { name: "updateNotes", result: { success: true, data: { ok: true, section: "about" } } },
+        { name: "fetchRecord", result: { success: true, data: {} } },
     ];
     const after = applyLoadedSkills(results, turn);
     assert.strictEqual(after.length, turn.toolDeclarations.length);

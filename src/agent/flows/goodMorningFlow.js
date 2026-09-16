@@ -256,8 +256,8 @@ REFINE LOOP
   They will push back — "Saturday is a workday", "keep personal for the
   evening". Rebuild and present again. Still no insertSchedule.
   Their corrections are facts about how their life works. If one is durable —
-  working hours, when they will not do a kind of work — rememberFact it, once,
-  silently, and carry on.
+  working hours, when they will not do a kind of work — add it to their
+  routine with updateNotes, once, silently, and carry on.
 
 -------------------------------------
 STEP 5 — LOCK IT IN

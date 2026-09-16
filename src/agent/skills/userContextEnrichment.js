@@ -1,6 +1,7 @@
 /**
- * The skill the agent loads when it needs to do more to a profile than record a
- * single stated fact.
+ * The skill the agent loads when something changed that the SYSTEM acts on —
+ * where someone lives, what currency they think in, when they want to be
+ * messaged — rather than something that is only worth knowing.
  *
  * Everything here is deliberately absent from the base prompt. Its procedure is
  * only correct while a profile is actually being edited, and §7 records what
@@ -14,44 +15,32 @@ export default {
     // Shown in loadSkill's description — the only thing the model reads when
     // deciding whether to load this, so it has to say when, not what.
     summary:
-        "Fill in or correct what you know about the user. Load when you have learned something " +
-        "that needs more than a single rememberFact call — a correction, a settings change such as " +
-        "timezone or currency, several new facts at once, or something to forget.",
+        "Change a setting the system acts on — timezone, currency, locale, or when the daily routines run. " +
+        "Load when they move, settle somewhere for a while, or ask to be messaged at a different time.",
 
-    toolNames: ["updateUserSettings", "forgetFact", "manageFactKey"],
+    toolNames: ["updateUserSettings"],
 
     instruction: `
 =====================================================================
 SKILL — USER CONTEXT ENRICHMENT
 =====================================================================
-You loaded this because you learned something about the user that the
-stored profile does not have, or has wrong.
-
-ALWAYS START BY READING
-  Call fetchUserContext first, every time. WHO YOU ARE HELPING shows you
-  the facts but not the KEYS they are stored under, and a write needs the
-  exact key. Reusing "work.status" updates what you know; inventing
-  "employment.status" leaves two entries that contradict each other and
-  neither of them wrong enough to notice.
-
-  Its \`unused\` list is the keys nobody has filled in for this user. That
-  is your map of what is missing — not a questionnaire.
+You loaded this because something changed that the system itself acts
+on, not just something worth knowing about them.
 
 WHERE EACH THING GOES
   updateUserSettings   name, timezone, currency, locale, routine hours.
                        These drive behaviour: timezone decides when the
                        daily routines fire, currency is the unit on every
                        amount you log.
-  rememberFact         everything else about who they are. Batch them.
-  forgetFact           only when something is WRONG, or they ask you to
-                       forget it. If a fact merely CHANGED, use
-                       rememberFact — it replaces and keeps the old value.
-  manageFactKey        only to name a category before a fact exists for
-                       it. Recording under a new key does not need it.
+  updateNotes          everything else about who they are and what they
+                       are working towards.
+
+  One change is often both. "I've moved to Toronto" is a timezone and a
+  currency for updateUserSettings, and a line in about for updateNotes.
 
 INFER RATHER THAN ASK
-  "I'm in Toronto now" gives you location.current, a timezone and a
-  currency. Do not ask for a timezone; nobody thinks of themselves as
+  "I'm in Toronto now" gives you a timezone, a currency and a line in
+  about. Do not ask for a timezone; nobody thinks of themselves as
   living in Asia/Kolkata. Anything you can derive, derive.
 
 IF YOU DO ASK, ASK ONE THING
@@ -59,7 +48,7 @@ IF YOU DO ASK, ASK ONE THING
   only if it genuinely matters. Then stop and answer what they came for.
   Two questions in a row is an interview and people stop answering.
 
-  Never read back what you saved. No "noted", no summary of the profile,
+  Never read back what you saved. No "noted", no summary of their notes,
   no confirmation list. Record it and carry on.
 
 THIS SKILL IS SUBORDINATE
@@ -69,11 +58,10 @@ THIS SKILL IS SUBORDINATE
   enriching a profile change the subject.
 
 WHAT NOT TO STORE
-  Anything that will be untrue next week and is not marked temporary.
   Anything that belongs in a register: an expense, a meal, a task, a
   reminder. A mood. A one-off. Guesses about health, money or
   relationships that the user did not actually state — if you are
-  inferring, mark it inferred and let it be shown as unconfirmed.
+  inferring, say so in the note.
 
 HARD RULE 1 APPLIES
   A tool call has to have returned successfully before you say anything

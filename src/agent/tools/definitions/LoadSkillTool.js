@@ -17,7 +17,7 @@ export class LoadSkillTool extends BaseTool {
         "Load a skill: extra instructions and tools for a specific job, available for the rest of this reply. " +
         `Available skills — ${skillCatalogue()} ` +
         "Load one as soon as you know you need it; you can use its tools immediately, in this same reply. " +
-        "Do not load a skill speculatively — if you only need to record one thing the user stated, rememberFact on its own is enough.";
+        "Do not load a skill speculatively — if you only need to note something about them, updateNotes on its own is enough.";
     static parameters = {
         type: "object",
         properties: {

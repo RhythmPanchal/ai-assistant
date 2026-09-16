@@ -4,8 +4,8 @@ import { USERS } from "../schema/usersSchema.js";
 /**
  * Typed settings on the users document — the half of a profile that CODE reads.
  *
- * Separate from rememberFacts on purpose. userFact is prose only the model
- * consumes and can be wrong without breaking anything; these fields drive
+ * Separate from the notes on purpose. Notes are prose only the model reads
+ * back and can be wrong without breaking anything; these fields drive
  * behaviour. timezone decides when routines fire, currency is the unit on every
  * amount in expenseRegister, morningHour and nightHour decide when the bot
  * speaks first. A wrong value here is silent and lasting, so each one is

@@ -13,7 +13,6 @@ import "dotenv/config";
 import assert from "node:assert";
 
 const { updateUserSettings, validateSettings, EDITABLE_SETTINGS } = await import("../tools/mongo/operation/userSettings.js");
-const { forgetFacts } = await import("../tools/mongo/operation/userFacts.js");
 const toolRegistry = (await import("../agent/tools/definitions/index.js")).default;
 const profileTools = await import("../agent/tools/definitions/ProfileTools.js");
 
@@ -89,27 +88,27 @@ test("unknown fields are refused and the editable set is named", async () => {
 
 test("a non-integer userId is refused before any write", async () => {
     await assert.rejects(() => updateUserSettings("1", { timezone: "UTC" }), /integer/);
-    await assert.rejects(() => forgetFacts("1", ["work.status"]), /integer/);
 });
 
-test("forgetting nothing is a no-op, not a connection", async () => {
-    assert.deepStrictEqual(await forgetFacts(1, []), { removed: [], missing: [] });
+test("notes are declared; settings are skill-loaded", () => {
+    assert.ok(toolRegistry.isDeclared("updateNotes"),
+        "notes are written mid-conversation and cannot wait for a skill to load");
+
+    // Registered so the skill can run it, undeclared so a normal turn neither
+    // sees it nor pays for its declaration.
+    assert.ok(toolRegistry.getTool("updateUserSettings"), "updateUserSettings must be executable once the skill loads it");
+    assert.strictEqual(toolRegistry.isDeclared("updateUserSettings"), false,
+        "updateUserSettings belongs to the enrichment skill, not every request");
 });
 
-test("only the read tool is advertised; the editors are skill-loaded", () => {
-    assert.ok(toolRegistry.isDeclared("fetchUserContext"), "reading a profile must always be possible");
-
-    for (const gated of ["updateUserSettings", "forgetFact", "manageFactKey"]) {
-        // Registered so the skill can run them, undeclared so a normal turn
-        // neither sees them nor pays for their declarations.
-        assert.ok(toolRegistry.getTool(gated), `${gated} must be executable once the skill loads it`);
-        assert.strictEqual(toolRegistry.isDeclared(gated), false,
-            `${gated} belongs to the enrichment skill, not every request`);
+test("the fact tools are gone from the registry", () => {
+    for (const gone of ["rememberFact", "fetchUserContext", "forgetFact", "manageFactKey"]) {
+        assert.strictEqual(toolRegistry.getTool(gone), undefined, `${gone} was replaced by updateNotes`);
     }
 });
 
-test("all four tools exist and declare correctly", () => {
-    const classes = ["FetchUserContextTool", "UpdateUserSettingsTool", "ForgetFactTool", "ManageFactKeyTool"];
+test("both profile tools exist and declare correctly", () => {
+    const classes = ["UpdateNotesTool", "UpdateUserSettingsTool"];
     for (const name of classes) {
         assert.ok(profileTools[name], `${name} must be exported for the skill to load it`);
         const d = new profileTools[name]().toFunctionDeclaration();
@@ -121,10 +120,23 @@ test("all four tools exist and declare correctly", () => {
     }
 });
 
-test("forgetFact steers changed facts back to rememberFact", () => {
-    const d = new profileTools.ForgetFactTool().toFunctionDeclaration();
-    assert.match(d.description, /rememberFact/,
-        "deleting a fact that merely changed throws away previousValue");
+test("updateNotes offers exactly the sections the schema defines", async () => {
+    const { NOTE_SECTIONS, NOTE_SECTION_LIMIT } = await import("../tools/mongo/schema/usersSchema.js");
+    const d = new profileTools.UpdateNotesTool().toFunctionDeclaration();
+    assert.deepStrictEqual(d.parameters.properties.section.enum, NOTE_SECTIONS.map(s => s.key),
+        "an enum that drifts from the schema offers a section every write will refuse");
+    for (const s of NOTE_SECTIONS) {
+        assert.ok(d.parameters.properties.section.description.includes(s.holds),
+            `the model is not told what belongs in ${s.key}`);
+    }
+    assert.match(d.parameters.properties.text.description, new RegExp(String(NOTE_SECTION_LIMIT)),
+        "the model should learn the cap before a write is refused for it");
+});
+
+test("updateNotes says a write replaces the section", () => {
+    const d = new profileTools.UpdateNotesTool().toFunctionDeclaration();
+    assert.match(d.description, /REPLACES/, "a model that thinks it appends wipes the rest of the section");
+    assert.match(d.description, /keep both/, "a new goal must not silently erase an old one");
 });
 
 let pass = 0;

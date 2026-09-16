@@ -63,25 +63,6 @@ test("promotion needs more than one person", () => {
         "a threshold of 1 promotes one user's idiosyncrasy into everyone's onboarding questions");
 });
 
-test("rememberFact is exposed to the model and correctly shaped", () => {
-    const tool = toolRegistry.getTool("rememberFact");
-    assert.ok(tool, "the model cannot record anything about the user without this");
-
-    const d = tool.toFunctionDeclaration();
-    // userId is absent by design — the registry supplies it from the bound
-    // context, so the model cannot choose whose profile it writes to.
-    assert.deepStrictEqual(d.parameters.required, ["facts"]);
-    assert.ok(!("userId" in d.parameters.properties), "userId must not be model-supplied");
-    assert.strictEqual(d.parameters.properties.facts.type, "array",
-        "batching matters: onboarding learns several things in one message");
-    assert.deepStrictEqual(d.parameters.properties.facts.items.required, ["key", "fact"],
-        "stability and confidence must stay optional or the model will omit the fact to satisfy them");
-
-    // The description is the only thing steering when it fires; without the
-    // contrast the model logs 'spent 200 on lunch' as a fact about the person.
-    assert.match(d.description, /expense|meal|task/i);
-});
-
 test("the model can write facts but cannot query them back", async () => {
     const { USER_FACT } = await import("../tools/mongo/schema/userFactSchema.js");
     const src = (await import("node:fs")).readFileSync("src/tools/mongo/fetchRecords.js", "utf8");

@@ -53,12 +53,12 @@ const ARGS = {
     updateFlowScratchpad: { flowType: "goodMorning", scratchpad: {} },
     connectApp: { appName: "unknownApp" },
     disconnectApp: { appName: "unknownApp" },
-    rememberFact: { facts: [] },
-    fetchUserContext: {},
+    // A valid write, so it gets past validation and reaches the users lookup —
+    // which is filtered by the userId the context supplies. The scratch database
+    // has no users row, so it fails there, which is the point.
+    updateNotes: { section: "about", text: "Test note." },
     loadSkill: { skill: "userContextEnrichment" },
     updateUserSettings: {},
-    forgetFact: { keys: [] },
-    manageFactKey: { action: "remove", key: "does.notexist" },
     updateTaskStatus: { updates: [] },
     deferTask: { task: "", newDeadline: "2020-01-01" },
     // Empty items is refused before any read, so user 1's real food log in the

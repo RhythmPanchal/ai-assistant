@@ -18,14 +18,13 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 // showing up as an extra means an unreviewed capability reached the model.
 // deleteRecord is scoped to the three day registers only — see
 // DELETABLE_COLLECTIONS in tools/mongo/deleteRecord.js.
-// rememberFact writes only to userFact, only for the userId it is given, and
-// every key it accepts must match KEY_PATTERN. It cannot reach any other
-// collection, and userFact is not in the fetchRecord whitelist, so the model can
-// write facts but cannot query them back — it sees them only as injected prompt.
-// fetchUserContext is read-only and scoped to the userId it is given. Its three
-// siblings in ProfileTools.js — updateUserSettings, forgetFact, manageFactKey —
-// are deliberately NOT registered here; they load with the userContextEnrichment
-// skill, so a normal turn cannot reach them.
+// updateNotes writes one notes.<section> field of the caller's own users row —
+// the userId comes from the bound context and is the whole filter. The section
+// must be one of the fixed six and the text is capped, so it cannot reach the
+// typed settings beside it, another user's row, or any other collection. The
+// model reads notes back only as injected prompt, never by query. Its sibling
+// updateUserSettings is deliberately NOT declared; it loads with the
+// userContextEnrichment skill, so a normal turn cannot reach it.
 // loadSkill is the one always-present door to everything undeclared. It cannot
 // reach data itself — it returns an instruction and a tool list, and only the
 // agent loop acts on them, against the explicit SKILLS map.
@@ -45,7 +44,7 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 // "[object Object]" rows firing nightly from 2026-08-18 had to be removed by
 // hand against the production database.
 const INTENTIONAL_ADDITIONS = new Set([
-    "updateFlowScratchpad", "deleteRecord", "rememberFact", "fetchUserContext", "loadSkill",
+    "updateFlowScratchpad", "deleteRecord", "updateNotes", "loadSkill",
     "updateTaskStatus", "deferTask", "cancelReminder",
     // Edits a locked-in userSchedule by slotId for the caller's own day. Cannot
     // create a schedule or reach any other collection.
@@ -100,7 +99,9 @@ test("only tools that change nothing are marked read-only", () => {
         .map((t) => t.constructor.name)
         .filter((n) => toolRegistry.isReadOnly(n))
         .sort();
-    assert.deepStrictEqual(readOnly, ["fetchCollectionNameAndSchema", "fetchRecord", "fetchUserContext", "loadSkill"]);
+    // updateNotes is deliberately absent: it writes, so an identical second call
+    // in one turn must be refused like any other write.
+    assert.deepStrictEqual(readOnly, ["fetchCollectionNameAndSchema", "fetchRecord", "loadSkill"]);
 });
 
 test("sendMessage stays scheduler-only", () => {

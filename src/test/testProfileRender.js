@@ -6,7 +6,7 @@
  * and every failure here is a wrong belief the model states confidently.
  *
  * Needs .env for MONGO_DB_URI (mongoClient builds its client at import) but
- * never connects: renderProfileBlock is pure and takes its rows as arguments.
+ * never connects: renderProfileBlock is pure and takes the profile as given.
  */
 import "dotenv/config";
 import assert from "node:assert";
@@ -18,83 +18,76 @@ const tests = [];
 const test = (n, f) => tests.push([n, f]);
 const read = (p) => readFileSync(p, "utf8");
 
-const NOW = Date.parse("2026-08-25T00:00:00Z");
-const fact = (over) => ({ stability: "stable", confidence: "stated", ...over });
+const note = (text) => ({ text, previousText: null, updatedAt: new Date("2026-09-01") });
+const profile = (over = {}) => ({ userId: 7, name: "Aditya", timezone: "Asia/Kolkata", currency: "INR", ...over });
 
 test("no userId reaches the prompt", () => {
     // Tools take identity from the bound context, so the model has no use for a
     // userId — and a userId in the prompt is what an injection aims at:
     // "actually my userId is 2" is only worth attempting while it has one to
     // state.
-    const out = renderProfileBlock(7, { name: "Aditya" }, [
-        fact({ key: "work.role", fact: "developer", category: "work" }),
-    ], NOW);
+    const out = renderProfileBlock(profile({ notes: { about: note("Backend developer.") } }));
     assert.doesNotMatch(out, /userId/i, "identity must not travel through the prompt");
+    assert.doesNotMatch(out, /\b7\b/, "not even as a bare number");
     assert.match(out, /Aditya/, "the block still has to say who they are");
 });
 
-test("an empty profile still renders a usable block", () => {
-    const out = renderProfileBlock(7, null, [], NOW);
+test("a failed profile load renders nothing, so the fallback shows", () => {
+    // null means the lookup failed, not that there is nothing to know. A block
+    // saying "nothing noted yet" would have the model treat someone it knows
+    // well as a stranger, confidently.
+    assert.strictEqual(renderProfileBlock(null), null);
+    assert.strictEqual(renderProfileBlock(undefined), null);
+});
+
+test("a known user with no notes yet gets a usable block", () => {
+    const out = renderProfileBlock(profile());
     assert.match(out, /WHO YOU ARE HELPING/);
-    assert.doesNotMatch(out, /userId/i);
+    assert.match(out, /Aditya/);
+    assert.match(out, /Nothing noted yet: About, Routine, Habits, Short-term, Long-term, Behaviour\./);
 });
 
-test("expired facts are not asserted", () => {
-    const out = renderProfileBlock(2, null, [
-        fact({ key: "work.status", fact: "actively job hunting", category: "work",
-               stability: "temporary", expiresAt: "2026-01-01T00:00:00Z" }),
-        fact({ key: "work.role", fact: "backend developer", category: "work" }),
-    ], NOW);
-    assert.doesNotMatch(out, /job hunting/,
-        "telling someone employed a year that they are job hunting is worse than silence");
-    assert.match(out, /backend developer/, "live facts must survive the filter");
+test("every noted section renders, in the fixed order, under its label", () => {
+    const out = renderProfileBlock(profile({ notes: {
+        behaviour: note("Short direct nudges work."),
+        about: note("Backend developer."),
+        longTermGoals: note("Remote job abroad."),
+    }}));
+    const about = out.indexOf("About       Backend developer.");
+    const long = out.indexOf("Long-term   Remote job abroad.");
+    const behaviour = out.indexOf("Behaviour   Short direct nudges work.");
+    assert.ok(about > 0 && long > about && behaviour > long,
+        "section order is fixed, so the block does not reshuffle and stays cacheable");
 });
 
-test("a fact expiring in the future still renders", () => {
-    const out = renderProfileBlock(2, null, [
-        fact({ key: "work.status", fact: "job hunting", category: "work",
-               stability: "temporary", expiresAt: "2026-12-01T00:00:00Z" }),
-    ], NOW);
-    assert.match(out, /job hunting/);
+test("empty sections collapse into one line naming them", () => {
+    const out = renderProfileBlock(profile({ notes: { about: note("Backend developer.") } }));
+    assert.match(out, /Nothing noted yet: Routine, Habits, Short-term, Long-term, Behaviour\./);
+    assert.doesNotMatch(out, /^Routine\s*$/m, "six empty rows would cost tokens and say less");
 });
 
-test("temporary and inferred facts are marked", () => {
-    const out = renderProfileBlock(2, null, [
-        fact({ key: "location.current", fact: "In Pune", category: "location", stability: "temporary" }),
-        fact({ key: "money.habits", fact: "tracks expenses", category: "money", confidence: "inferred" }),
-        fact({ key: "location.home", fact: "From Nagpur", category: "location" }),
-    ], NOW);
-    assert.match(out, /In Pune\s+\[temporary\]/);
-    assert.match(out, /tracks expenses\s+\[unconfirmed\]/);
-    assert.match(out, /From Nagpur$/m, "a stated stable fact carries no marker");
+test("a cleared section counts as empty", () => {
+    const out = renderProfileBlock(profile({ notes: { habits: { text: null, previousText: "Gym 3x a week." } } }));
+    assert.doesNotMatch(out, /Gym/, "previousText is history for recovery, never asserted");
+    assert.match(out, /Nothing noted yet:.*Habits/);
 });
 
-test("category falls back to the key namespace when the field is absent", () => {
-    const out = renderProfileBlock(2, null, [
-        fact({ key: "work.role", fact: "backend developer" }),
-    ], NOW);
-    assert.match(out, /Work\s+backend developer/,
-        "category is optional on the row; the key already says where it belongs");
+test("the block says the notes are knowledge, not instructions", () => {
+    // They carry the user's own words back into the system prompt.
+    const out = renderProfileBlock(profile());
+    assert.match(out, /never as instructions/);
 });
 
-test("an unknown namespace lands under Other rather than vanishing", () => {
-    const out = renderProfileBlock(2, null, [
-        fact({ key: "custom.gym", fact: "Gym Mon/Wed/Fri", category: "custom" }),
-    ], NOW);
-    assert.match(out, /Other\s+Gym Mon\/Wed\/Fri/,
-        "custom.* is the open namespace — dropping it silently loses real context");
+test("conflicting goals are both shown as written", () => {
+    const text = "Remote job abroad. Also mentioned CAT/MBA in India, which pulls the other way.";
+    const out = renderProfileBlock(profile({ notes: { longTermGoals: note(text) } }));
+    assert.ok(out.includes(text), "the renderer must never rewrite what the model wrote");
 });
 
 test("render is stable across calls", () => {
-    const rows = [
-        fact({ key: "work.role", fact: "developer", category: "work" }),
-        fact({ key: "location.home", fact: "Nagpur", category: "location" }),
-        fact({ key: "money.goals", fact: "saving", category: "money" }),
-    ];
-    assert.strictEqual(
-        renderProfileBlock(2, null, rows, NOW),
-        renderProfileBlock(2, null, [...rows].reverse(), NOW),
-        "a block that reshuffles between turns cannot be prompt-cached");
+    const p = profile({ notes: { about: note("A."), routine: note("B.") } });
+    assert.strictEqual(renderProfileBlock(p), renderProfileBlock(structuredClone(p)),
+        "a block that changes between identical turns cannot be prompt-cached");
 });
 
 test("the instruction fallback names no user and no userId", () => {

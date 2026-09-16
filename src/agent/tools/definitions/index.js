@@ -14,12 +14,9 @@ import { CreateOneTimeReminderTool, CreateMultiTimeReminderTool, CancelReminderT
 import { CompleteFlowTool } from "./CompleteFlowTool.js";
 import { UpdateFlowScratchpadTool } from "./UpdateFlowScratchpadTool.js";
 import { ConnectAppTool, DisconnectAppTool } from "./ConnectorTools.js";
-import { RememberFactTool } from "./RememberFactTool.js";
 import { AddMealTool, ReplaceMealTool } from "./DietLogTools.js";
 import { AddPerformedTaskTool } from "./TaskLogTools.js";
-import {
-    FetchUserContextTool, UpdateUserSettingsTool, ForgetFactTool, ManageFactKeyTool,
-} from "./ProfileTools.js";
+import { UpdateNotesTool, UpdateUserSettingsTool } from "./ProfileTools.js";
 import { LoadSkillTool } from "./LoadSkillTool.js";
 import { allSkillToolNames } from "../../skills/index.js";
 
@@ -42,22 +39,21 @@ toolRegistry.register(new CompleteFlowTool());
 toolRegistry.register(new UpdateFlowScratchpadTool());
 toolRegistry.register(new ConnectAppTool());
 toolRegistry.register(new DisconnectAppTool());
-toolRegistry.register(new RememberFactTool());
 toolRegistry.register(new AddMealTool());
 toolRegistry.register(new ReplaceMealTool());
 toolRegistry.register(new AddPerformedTaskTool());
 
-// Reading a profile is always available; editing one is not.
-toolRegistry.register(new FetchUserContextTool());
+// Declared, not skill-loaded. Notes are written reactively, in the middle of a
+// conversation about something else, and a skill round trip in front of that is
+// how the thing someone just said stops getting written down at all.
+toolRegistry.register(new UpdateNotesTool());
 toolRegistry.register(new LoadSkillTool());
 
-// Registered so they can be EXECUTED, undeclared so they are not advertised.
-// A skill adds their declarations to a single turn when it loads. They are
-// rarer, destructive or structural, and a declaration costs tokens on every
-// request whether or not the turn has anything to do with a profile.
+// Registered so it can be EXECUTED, undeclared so it is not advertised. The
+// userContextEnrichment skill adds its declaration to a single turn when it
+// loads. Settings change rarely, and a declaration costs tokens on every
+// request whether or not the turn has anything to do with one.
 toolRegistry.register(new UpdateUserSettingsTool(), { declared: false });
-toolRegistry.register(new ForgetFactTool(), { declared: false });
-toolRegistry.register(new ManageFactKeyTool(), { declared: false });
 
 // Every tool a skill can name must be registered above, or loading the skill
 // widens the declaration list with something execute() cannot find — the model
