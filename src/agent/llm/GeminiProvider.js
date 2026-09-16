@@ -2,6 +2,24 @@ import { randomUUID } from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import { BaseLLMProvider, LLMResponse, ToolCall, makeUsage } from "./BaseLLMProvider.js";
 
+/**
+ * The signature sent on a replayed function call that has no real one.
+ *
+ * Gemini 3.x rejects a whole request — "Function call is missing a
+ * thought_signature in functionCall parts" — if ANY function call in the
+ * history lacks a signature, and calls that did not come from a Gemini 3 turn
+ * never have one: a call Cohere made after a 503, or one an older Gemini
+ * returned. Before this, a single fallback step handed every remaining step of
+ * the turn to the fallback model; in the night eval that model looped and saved
+ * one ₹30 expense eight times.
+ *
+ * This value tells Gemini to skip validation for that call. Checked against the
+ * live API on 2026-09-17: gemini-3.1-flash-lite answered 400 without a
+ * signature and 200 with this one, and gemini-2.5-flash-lite — which does not
+ * use signatures — accepted it too. A real signature always wins over it.
+ */
+export const FOREIGN_CALL_SIGNATURE = "skip_thought_signature_validator";
+
 export class GeminiProvider extends BaseLLMProvider {
     constructor({ model, apiKey } = {}) {
         super();
@@ -40,9 +58,10 @@ export class GeminiProvider extends BaseLLMProvider {
                     const part = {
                         functionCall: { name: tc.name, args: tc.args, ...(tc.id && { id: tc.id }) },
                     };
-                    // Gemini 3.x rejects a replayed call without its original
-                    // signature: "Function call is missing a thought_signature".
-                    if (tc.meta?.thoughtSignature) part.thoughtSignature = tc.meta.thoughtSignature;
+                    // Gemini 3.x rejects a replayed call without a signature:
+                    // "Function call is missing a thought_signature". Its own
+                    // calls carry theirs back; any other call gets the placeholder.
+                    part.thoughtSignature = tc.meta?.thoughtSignature ?? FOREIGN_CALL_SIGNATURE;
                     parts.push(part);
                 }
                 if (parts.length) history.push({ role: "model", parts });

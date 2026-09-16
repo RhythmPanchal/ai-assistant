@@ -4,7 +4,7 @@
  */
 import assert from "node:assert";
 import { agentConfig } from "../config/agent.config.js";
-import { GeminiProvider } from "../agent/llm/GeminiProvider.js";
+import { GeminiProvider, FOREIGN_CALL_SIGNATURE } from "../agent/llm/GeminiProvider.js";
 import { OpenAICompatibleProvider } from "../agent/llm/OpenAICompatibleProvider.js";
 import { ProviderManager } from "../agent/llm/createProvider.js";
 
@@ -82,6 +82,29 @@ test("splits system out and pops the newest turn for sendMessage", () => {
     assert.ok(!history.some((h) => h.parts?.[0]?.text === "thanks"), "newest turn must not also be in history");
     assert.strictEqual(history.find((h) => h.role === "model").parts[0].functionCall.name, "createRecord");
     assert.ok(history.some((h) => h.parts[0].functionResponse?.name === "createRecord"));
+});
+
+test("a replayed call keeps its own thought signature", () => {
+    const g = new GeminiProvider({ apiKey: "test", model: "test-model" });
+    const { history } = g._split([
+        { role: "user", content: "spent 30" },
+        { role: "assistant", content: null, toolCalls: [{ name: "createRecord", args: {}, id: "c1", meta: { thoughtSignature: "REAL-SIG" } }] },
+        { role: "tool_result", toolCallId: "c1", toolName: "createRecord", content: { success: true } },
+    ]);
+    assert.strictEqual(history.find((h) => h.role === "model").parts[0].thoughtSignature, "REAL-SIG");
+});
+
+test("a call another provider made gets the placeholder, not nothing", () => {
+    // Without it Gemini 3.x refuses the whole request, and one Cohere step after
+    // a 503 locks the rest of the turn onto Cohere.
+    const g = new GeminiProvider({ apiKey: "test", model: "test-model" });
+    const { history } = g._split([
+        { role: "user", content: "spent 30" },
+        { role: "assistant", content: null, toolCalls: [{ name: "createRecord", args: {}, id: "cohere_1", meta: null }] },
+        { role: "tool_result", toolCallId: "cohere_1", toolName: "createRecord", content: { success: true } },
+    ]);
+    assert.strictEqual(history.find((h) => h.role === "model").parts[0].thoughtSignature, FOREIGN_CALL_SIGNATURE);
+    assert.strictEqual(FOREIGN_CALL_SIGNATURE, "skip_thought_signature_validator");
 });
 
 // ── Fallback policy ────────────────────────────────────────────────────────
