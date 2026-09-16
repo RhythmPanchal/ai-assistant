@@ -1,5 +1,6 @@
 import toolRegistry from "./tools/definitions/index.js";
 import { LoadSkillTool } from "./tools/definitions/LoadSkillTool.js";
+import { ToolResult } from "./tools/BaseTool.js";
 import { ProviderManager, resolveMaxSteps, resolveTaskChain } from "./llm/createProvider.js";
 import { startTurn } from "./llm/usageMeter.js";
 import { agentConfig } from "../config/agent.config.js";
@@ -176,6 +177,57 @@ export function resolveTask({ source, openFlows = [], override = null }) {
     return SOURCE_TASKS[source] || "conversation";
 }
 
+/**
+ * Remembers each write that succeeded in this turn, so an IDENTICAL one in a
+ * later step is not run again.
+ *
+ * A model that loses track of its own results calls the same write again, and
+ * again. In the night eval one turn saved the same ₹30 expense eight times
+ * before the step limit stopped it. Whatever makes a model spin — a wrong date
+ * on screen, a fallback model, a history it misreads — this caps the damage
+ * at one row.
+ *
+ * Narrow on purpose:
+ *  - reads are never guarded; re-reading after a write is how the model sees
+ *    what changed
+ *  - only a call from an EARLIER step counts. Two identical calls in one step
+ *    are one message asking for two things — two rickshaws, ₹50 each
+ *  - only a call that SUCCEEDED counts, so a failed write can be retried
+ *  - identical means same tool and same arguments, key order aside
+ *
+ * `registry` is injectable for the same reason applyLoadedSkills takes one.
+ */
+export function createRepeatGuard(registry = toolRegistry) {
+    const done = new Map();
+    const keyOf = (tc) => `${tc.name}:${stableStringify(tc.args ?? {})}`;
+    return {
+        /** The earlier result if this exact write already succeeded in an earlier step, else null. */
+        earlier(tc, step) {
+            if (registry.isReadOnly(tc.name)) return null;
+            const hit = done.get(keyOf(tc));
+            return hit && hit.step < step ? hit.result : null;
+        },
+        record(tc, result, step) {
+            if (registry.isReadOnly(tc.name) || !result?.success) return;
+            const key = keyOf(tc);
+            if (!done.has(key)) done.set(key, { step, result });
+        },
+    };
+}
+
+function stableStringify(value) {
+    if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+    if (value && typeof value === "object" && !(value instanceof Date)) {
+        return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",")}}`;
+    }
+    return JSON.stringify(value);
+}
+
+// Consecutive steps in which every call was a refused repeat. At this many the
+// model is going round in circles, and the turn ends rather than spending the
+// rest of maxSteps on it.
+const MAX_IDLE_REPEAT_STEPS = 2;
+
 // A tool that never returns would hang the turn forever, holding the Telegram
 // "thinking" animation open with no way out.
 function withTimeout(promise, ms, toolName) {
@@ -253,6 +305,8 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
 
         let LLMresponse = "";
         let steps = 0;
+        const repeatGuard = createRepeatGuard();
+        let idleRepeatSteps = 0;
 
         // Each iteration is at least one billable request, so the loop is bounded.
         while (steps < maxSteps) {
@@ -294,6 +348,20 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
             // needs catching here.
             const results = await Promise.all(
                 response.toolCalls.map(async (tc) => {
+                    const earlier = repeatGuard.earlier(tc, steps);
+                    if (earlier) {
+                        console.warn(`[runAgent] step ${steps}: ${tc.name} repeats a write that already succeeded this turn — not run again`);
+                        return {
+                            ...tc,
+                            repeated: true,
+                            result: new ToolResult(
+                                true,
+                                `Already done earlier in this turn with exactly these arguments, so it was NOT run again. ` +
+                                `Earlier result: ${earlier.message} Do not call it again — tell the user what was done.`,
+                                earlier.data
+                            ),
+                        };
+                    }
                     try {
                         const result = await withTimeout(
                             toolRegistry.execute(tc.name, tc.args), toolTimeoutMs, tc.name
@@ -304,6 +372,9 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
                     }
                 })
             );
+
+            // After the whole step, so identical calls within one step all run.
+            for (const r of results) if (!r.repeated) repeatGuard.record(r, r.result, steps);
 
             for (const r of results) {
                 console.log(`  -> ${r.name}:`, r.result?.message ?? r.result);
@@ -331,6 +402,16 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
             toolDeclarations = applyLoadedSkills(results, {
                 messages, toolDeclarations, loadedSkills,
             });
+
+            if (results.every((r) => r.repeated)) {
+                idleRepeatSteps++;
+                if (idleRepeatSteps >= MAX_IDLE_REPEAT_STEPS) {
+                    console.warn(`[runAgent] ${idleRepeatSteps} steps of nothing but repeated writes — ending the turn`);
+                    break;
+                }
+            } else {
+                idleRepeatSteps = 0;
+            }
         }
 
         if (steps >= maxSteps && !LLMresponse) {

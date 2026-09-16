@@ -15,7 +15,7 @@ import { ObjectId } from "mongodb";
 
 process.env.MONGODB_DB_NAME = "Rasmalai-eval";
 
-const { runAgent } = await import("../agent/agent.js");
+const { runAgent, WORK_DONE_REPLY } = await import("../agent/agent.js");
 const { ProviderManager } = await import("../agent/llm/createProvider.js");
 const { LLMResponse, ToolCall } = await import("../agent/llm/BaseLLMProvider.js");
 const { ToolResult } = await import("../agent/tools/BaseTool.js");
@@ -74,6 +74,62 @@ test("a stored IST-midnight date reaches the model as its own day, not UTC", asy
     assert.ok(toolMessage, "the second request carries the tool result");
     assert.strictEqual(toolMessage.content.data[0].date, "2026-09-17");
     assert.ok(!JSON.stringify(wire[1]).includes("2026-09-16T18:30:00.000Z"), "the UTC form must not reach the model at all");
+});
+
+// ── repeated writes ───────────────────────────────────────────────────────
+const WRITE = { collectionName: "expenseRegister", data: { name: "coke", amount: 30, category: "Food" } };
+const ok = () => new ToolResult(true, "Successfully inserted record into expenseRegister", { insertedId: "x" });
+const countOf = (calls, name) => calls.filter(c => c.name === name).length;
+
+test("an identical successful write in a later step is not run again", async () => {
+    const wire = scriptModel([callTool("createRecord", WRITE, "c1"), callTool("createRecord", WRITE, "c2"), say("Logged ₹30.")]);
+    const calls = stubTools(ok);
+    await turn("spent 30 on a coke");
+    assert.strictEqual(countOf(calls, "createRecord"), 1, "the repeat must not reach the database");
+    const repeat = wire[2].find(m => m.role === "tool_result" && m.toolCallId === "c2");
+    assert.match(repeat.content.message, /NOT run again/);
+});
+
+test("a turn that only repeats itself ends instead of spending the step limit", async () => {
+    const wire = scriptModel([
+        callTool("createRecord", WRITE, "c1"), callTool("createRecord", WRITE, "c2"),
+        callTool("createRecord", WRITE, "c3"), callTool("createRecord", WRITE, "c4"), say("never reached"),
+    ]);
+    const calls = stubTools(ok);
+    const { text } = await turn("spent 30 on a coke");
+    assert.strictEqual(countOf(calls, "createRecord"), 1);
+    assert.strictEqual(wire.length, 3, `the model was asked ${wire.length} times; two idle repeat steps should end the turn`);
+    assert.strictEqual(text, WORK_DONE_REPLY);
+});
+
+test("a read is always run again — the fresh answer is the point", async () => {
+    scriptModel([callTool("fetchRecord", { collection: "expenseRegister", filters: {} }, "r1"), callTool("fetchRecord", { collection: "expenseRegister", filters: {} }, "r2"), say("done")]);
+    const calls = stubTools(() => new ToolResult(true, "Fetched 0 records", []));
+    await turn();
+    assert.strictEqual(countOf(calls, "fetchRecord"), 2);
+});
+
+test("identical writes in ONE step both run — two rickshaws, ₹50 each", async () => {
+    scriptModel([() => new LLMResponse({ toolCalls: [new ToolCall("createRecord", WRITE, "p1"), new ToolCall("createRecord", WRITE, "p2")] }), say("Logged both.")]);
+    const calls = stubTools(ok);
+    await turn("two rickshaws, 50 each");
+    assert.strictEqual(countOf(calls, "createRecord"), 2);
+});
+
+test("a write that failed can be retried with the same arguments", async () => {
+    scriptModel([callTool("createRecord", WRITE, "f1"), callTool("createRecord", WRITE, "f2"), say("Logged.")]);
+    let n = 0;
+    const calls = stubTools(() => (n++ === 0 ? new ToolResult(false, "timeout") : ok()));
+    await turn("spent 30 on a coke");
+    assert.strictEqual(countOf(calls, "createRecord"), 2);
+});
+
+test("argument key order does not disguise a repeat", async () => {
+    const reordered = { data: { category: "Food", amount: 30, name: "coke" }, collectionName: "expenseRegister" };
+    scriptModel([callTool("createRecord", WRITE, "k1"), callTool("createRecord", reordered, "k2"), say("Logged.")]);
+    const calls = stubTools(ok);
+    await turn("spent 30 on a coke");
+    assert.strictEqual(countOf(calls, "createRecord"), 1);
 });
 
 let pass = 0;
