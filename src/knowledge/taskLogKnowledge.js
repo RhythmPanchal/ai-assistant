@@ -1,19 +1,20 @@
 import { getDB } from "../tools/mongo/mongoClient.js";
+import { datesForModel } from "../tools/mongo/dateUtils.js";
 import { TASK_REGISTER } from "../tools/mongo/schema/taskRegisterSchema.js";
 
 function formatTaskLogsForLLM(records) {
     const cleanData = (Array.isArray(records) ? records : [records]).map(item => {
-        const { _id, userId, createdAt, ...cleanItem } = item;
+        const { _id, userId, createdAt, updatedAt, ...cleanItem } = item;
 
-        if (cleanItem.date) {
-            cleanItem.date = new Date(cleanItem.date).toISOString().split('T')[0];
-        }
+        // datesForModel, not toISOString().split("T")[0]. Rows are stored at IST
+        // midnight, which is the previous day in UTC — so that slice dated every
+        // logged day one day early, in the data the morning routine plans from.
 
         // taskId is KEPT. It used to be stripped here, on the same token-thrift
         // reasoning that removed _id from the pending list — and with the same
         // result: the one field that links what was done to what was planned
         // never reached the model, so nothing could ever be reconciled.
-        return cleanItem;
+        return datesForModel(cleanItem);
     });
 
     return JSON.stringify(cleanData);

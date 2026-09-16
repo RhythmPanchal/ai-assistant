@@ -1,15 +1,15 @@
 import { getDB } from "../tools/mongo/mongoClient.js";
+import { datesForModel } from "../tools/mongo/dateUtils.js";
 import { DIET_REGISTER } from "../tools/mongo/schema/dietRegisterSchema.js";
 
 function formatDietLogsForLLM(records) {
     const cleanData = (Array.isArray(records) ? records : [records]).map(item => {
-        const { _id, createdAt, month, year, ...cleanItem } = item;
+        const { _id, createdAt, updatedAt, month, year, ...cleanItem } = item;
 
-        if (cleanItem.date) {
-            cleanItem.date = new Date(cleanItem.date).toISOString().split('T')[0];
-        }
-
-        return cleanItem;
+        // datesForModel, not toISOString().split("T")[0]. Rows are stored at IST
+        // midnight, which is the previous day in UTC — so that slice dated every
+        // logged day one day early, in the data the morning routine plans from.
+        return datesForModel(cleanItem);
     });
 
     return JSON.stringify(cleanData);
