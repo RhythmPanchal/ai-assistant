@@ -29,9 +29,20 @@ const taskTitles = (s) => s.performed.map(t => t.title).join(" | ");
 // else in the reply. "Logged ₹0. What did you get done today?" mentions money
 // and asks a question, but the question is about tasks; judging the whole reply
 // flagged exactly that on the first baseline.
+//
+// "Spend" is not always money: "how much time did you spend on those tasks?"
+// flagged a Phase 1 run that was asking about work. A question about time is
+// not a question about spending.
 const asksAboutMoney = (text) => String(text ?? "")
     .split(/(?<=[.!?])\s+|\n+/)
-    .some(sentence => sentence.includes("?") && /spen[dt]|expens|money|kharch|paid|₹/i.test(sentence));
+    .some(sentence => sentence.includes("?")
+        && /spen[dt]|expens|money|kharch|paid|₹/i.test(sentence)
+        && !/\btime\b|hours?|minutes?|\bmins?\b/i.test(sentence));
+
+// Exact counts, not presence. Presence checks passed a Phase 1 run that had
+// saved dinner twice and logged a deck review the user never reported doing.
+const tasksExactly = (n, why) => ({ why, fn: s => s.performed.length === n, detail: s => `${s.performed.length}: ${taskTitles(s) || "none"}` });
+const noExpenses = (why) => ({ why, fn: s => s.expenses.length === 0, detail: s => JSON.stringify(amounts(s)) });
 
 export const NIGHT_SCENARIOS = [
     {
@@ -56,6 +67,8 @@ export const NIGHT_SCENARIOS = [
             { why: "LUNCH SURVIVES dinner being added later", fn: s => /dal/i.test(mealText(s, "Lunch")), detail: s => mealText(s, "Lunch") || "(no lunch)" },
             { why: "₹30 and ₹50 are two rows, nothing merged or overwritten", fn: s => JSON.stringify(amounts(s)) === "[30,50]", detail: s => JSON.stringify(amounts(s)) },
             { why: "the deck work is logged as a performed task", fn: s => /deck/i.test(taskTitles(s)), detail: s => taskTitles(s) || "(none)" },
+            tasksExactly(1, "only the deck review is logged — a plan mentioned in the morning is not work done"),
+            { why: "exactly one dinner", fn: s => mealsOf(s, "Dinner").length === 1, detail: s => `${mealsOf(s, "Dinner").length} dinners` },
         ],
     },
 
@@ -78,6 +91,7 @@ export const NIGHT_SCENARIOS = [
             { why: "no expense rows on a day with no spending", fn: s => s.expenses.length === 0, detail: s => JSON.stringify(amounts(s)) },
             { why: "does not ask about money again after 'no expenses today'", fn: s => s.turns.slice(1).every(t => !asksAboutMoney(t.agent)), detail: s => s.turns.slice(1).map(t => t.agent).find(asksAboutMoney) },
             { why: "the bug fix is logged as a performed task", fn: s => /login|bug/i.test(taskTitles(s)), detail: s => taskTitles(s) || "(none)" },
+            tasksExactly(1, "the bug fix is logged exactly once"),
         ],
     },
 
@@ -95,6 +109,8 @@ export const NIGHT_SCENARIOS = [
             { why: "BREAKFAST SURVIVES two later meals", fn: s => /paratha/i.test(mealText(s, "Breakfast")), detail: s => mealText(s, "Breakfast") || "(no breakfast)" },
             { why: "LUNCH SURVIVES a later meal", fn: s => /dal/i.test(mealText(s, "Lunch")), detail: s => mealText(s, "Lunch") || "(no lunch)" },
             { why: "dinner logged", fn: s => /paneer|roti/i.test(mealText(s, "Dinner")), detail: s => mealText(s, "Dinner") || "(no dinner)" },
+            tasksExactly(0, "no work logged — the user said nothing work-wise"),
+            noExpenses("no expenses — the user said no spends"),
         ],
     },
 
@@ -110,6 +126,8 @@ export const NIGHT_SCENARIOS = [
         checks: [
             { why: "exactly one lunch after the correction", fn: s => mealsOf(s, "Lunch").length === 1, detail: s => `${mealsOf(s, "Lunch").length} lunch entries` },
             { why: "the lunch is the corrected one", fn: s => /dal/i.test(mealText(s, "Lunch")) && !/rajma/i.test(mealText(s, "Lunch")), detail: s => mealText(s, "Lunch") },
+            tasksExactly(0, "no work logged — the user said no tasks"),
+            noExpenses("no expenses — the user said none"),
         ],
     },
 
@@ -124,6 +142,7 @@ export const NIGHT_SCENARIOS = [
         ],
         checks: [
             { why: "two expense rows, ₹30 and ₹50", fn: s => JSON.stringify(amounts(s)) === "[30,50]", detail: s => JSON.stringify(amounts(s)) },
+            tasksExactly(0, "no work logged — the user said no tasks"),
         ],
     },
 
@@ -137,6 +156,8 @@ export const NIGHT_SCENARIOS = [
         checks: [
             { why: "dinner saved without a closing turn", fn: s => /biryani/i.test(mealText(s, "Dinner")), detail: s => mealText(s, "Dinner") || "(no dinner)" },
             { why: "₹250 saved without a closing turn", fn: s => amounts(s).includes(250), detail: s => JSON.stringify(amounts(s)) },
+            tasksExactly(0, "no work invented for a user who went to sleep"),
+            { why: "₹250 saved exactly once", fn: s => amounts(s).filter(a => a === 250).length === 1, detail: s => JSON.stringify(amounts(s)) },
         ],
     },
 
@@ -151,6 +172,8 @@ export const NIGHT_SCENARIOS = [
         checks: [
             { why: "₹800 row saved", fn: s => amounts(s).includes(800), detail: s => JSON.stringify(amounts(s)) },
             { why: "filed as Medical", fn: s => s.expenses.some(e => e.amount === 800 && e.category === "Medical"), detail: s => JSON.stringify(s.expenses.map(e => [e.amount, e.category])) },
+            tasksExactly(0, "a doctor's visit is not logged as work"),
+            { why: "₹800 saved exactly once", fn: s => amounts(s).filter(a => a === 800).length === 1, detail: s => JSON.stringify(amounts(s)) },
         ],
     },
 ];

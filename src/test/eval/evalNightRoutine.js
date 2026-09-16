@@ -194,6 +194,17 @@ const GLOBAL_CHECKS = [
         fn: s => s.diet.every(d => (d.dailyTotals?.caloriesConsumed ?? -1) === (d.meals ?? []).reduce((n, m) => n + (m.mealCalories ?? 0), 0)),
         detail: s => s.diet.map(d => `stored ${d.dailyTotals?.caloriesConsumed} vs meals ${(d.meals ?? []).reduce((n, m) => n + (m.mealCalories ?? 0), 0)}`).join("; "),
     },
+    {
+        why: "no breakfast, lunch or dinner saved twice",
+        fn: s => ["Breakfast", "Lunch", "Dinner"].every(t => s.meals.filter(m => m.mealType === t).length <= 1),
+        detail: s => s.meals.map(m => m.mealType).join(","),
+    },
+    {
+        // No script here has two identical spends, so an identical pair is a re-save.
+        why: "no expense saved twice",
+        fn: s => new Set(s.expenses.map(e => `${e.amount}|${e.category}`)).size === s.expenses.length,
+        detail: s => JSON.stringify(s.expenses.map(e => [e.amount, e.category])),
+    },
     { why: `no more than ${MAX_QUESTIONS} questions across the whole wrap-up`, fn: s => s.questions <= MAX_QUESTIONS, detail: s => `${s.questions} questions` },
     { why: "every turn got a reply", fn: s => s.turns.every(t => t.agent && t.agent.trim()), detail: s => `${s.turns.filter(t => !t.agent?.trim()).length} empty` },
 ];
