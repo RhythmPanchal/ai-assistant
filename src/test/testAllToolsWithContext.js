@@ -67,6 +67,8 @@ const ARGS = {
     // A date with nothing logged: the correction fails on the lookup, which is
     // scoped by the context's userId — the thing this sweep exists to prove.
     replaceMeal: { mealType: "Lunch", items: [], date: "2000-01-01" },
+    // No title is refused before any read — nothing is appended to user 1's log.
+    addPerformedTask: { title: "" },
 };
 
 const allTools = toolRegistry.getAllTools().map(t => t.constructor.name);

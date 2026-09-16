@@ -55,6 +55,10 @@ const INTENTIONAL_ADDITIONS = new Set([
     // the context), and the model supplies one meal — never the day's list or
     // its totals, which updateRecords made it rebuild and re-add every time.
     "addMeal", "replaceMeal",
+    // Work goes through this instead of createRecord/updateRecords on
+    // taskRegister, for the same reason: it appends one task to the caller's
+    // own day and cannot erase the rest of the list.
+    "addPerformedTask",
 ]);
 // Present in toolOperator but deliberately dropped.
 const INTENTIONAL_REMOVALS = new Set();
