@@ -86,7 +86,7 @@ copied from an example did not recur. Three failures:
 
   On runs Cohere touched: 2 of 6 failed. On flash-lite alone: 1 of 15.
 
-INFRASTRUCTURE FINDINGS — outside the night routine, not yet fixed
+INFRASTRUCTURE FINDINGS — outside the night routine, all three FIXED
 ══════════════════════════════════════════════════════════════════════════════
 1. One fallback step locks the rest of a turn onto the fallback model.
    Gemini 3.x requires a thought_signature on every function call replayed in
@@ -95,6 +95,10 @@ INFRASTRUCTURE FINDINGS — outside the night routine, not yet fixed
    Gemini model rejects the turn with "Function call is missing a
    thought_signature", and Cohere serves every remaining step.
    (src/agent/llm/GeminiProvider.js, _split)
+   FIXED 0b238be: a call without a real signature carries
+   skip_thought_signature_validator. Checked on the live API first —
+   gemini-3.1-flash-lite 400 without it, 200 with it; gemini-2.5-flash-lite
+   accepts it.
 
 2. fetchRecord shows the model the wrong day.
    Records are returned raw, so a day stored at IST midnight serialises as
@@ -103,12 +107,37 @@ INFRASTRUCTURE FINDINGS — outside the night routine, not yet fixed
    Cohere fetched its correctly dated ₹30 row, read it as the 16th, and spent
    the turn "fixing" it: update, delete, re-create, fetch, repeat.
    (src/agent/tools/definitions/FetchRecordTool.js, src/tools/mongo/fetchRecords.js)
+   FIXED da68b3e: every tool result is converted at the runAgent boundary by
+   datesForModel — a `date` at IST midnight reads "2026-09-17", other Dates
+   naive local time. 9b4666e: the diet, expense and task log blocks the
+   morning routine plans from had the same UTC slicing and dated every day one
+   day early; fixed the same way. The dead formatForLLM is gone.
 
 3. Nothing stops a turn repeating an identical successful write.
    runAgent re-executes a createRecord identical to one that succeeded two
    steps earlier. A turn-level guard on repeated identical calls would have
    capped the damage at one row whatever the cause.
    (src/agent/agent.js, the tool loop)
+   FIXED 88c9b0e (with 6d7d21d marking read-only tools): the same tool with the
+   same arguments in a later step returns the earlier result, not run again;
+   two steps of nothing but repeats end the turn. Reads always re-run,
+   identical calls in one step both run, failed calls can be retried.
+
+REGRESSION PASS AFTER THE THREE FIXES — 1 run of each scenario
+══════════════════════════════════════════════════════════════════════════════
+6/7 as graded · 80/81 checks, and 7/7 · 81/81 on inspection: the one failure
+was the check, not the assistant. no-event-opener was flagged for asking about
+money after "no expenses today"; the sentence was "…marked off expenses, could
+you tell me how long that debugging work took…" — a question about work time.
+The check now excludes how-long questions.
+
+  duplicates / invented or missed work (strict recount)     0
+  "missing a thought_signature" errors                      0
+    One run fell to Cohere for two steps and Gemini carried the rest of the
+    turn — before 0b238be that turn would have stayed on Cohere to the end.
+  repeated writes refused by the guard                      0 (nothing looped)
+
+Models: gemini-3.1-flash-lite throughout, Cohere for two steps of one run.
 
 KNOWN RESIDUAL (resolved by 9b4c5c6)
 ══════════════════════════════════════════════════════════════════════════════
