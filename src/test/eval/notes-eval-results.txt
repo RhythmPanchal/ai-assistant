@@ -1,0 +1,61 @@
+NOTES EVAL — a live model keeping the user's notes, graded on the database
+Run with: node src/test/eval/evalNotes.js --show
+
+2026-09-17 · Rasmalai-notes-eval · one run per scenario
+
+Both runs below were on fallback models: the conversation chain's first model
+had no quota left that day. Turns ran on gemini-3.1-flash-lite, and on cohere
+command-a-plus where that also fell through. Neither run is evidence about the
+chain's first model. Re-run when it is available before trusting these.
+
+A network outage killed an earlier attempt after one scenario ("fetch failed"
+from every provider, while Mongo kept working); it is not counted here.
+
+-------------------------------------------------------------------------------
+BEFORE the instruction, nudge and tool-description fixes
+(an earlier version of the eval — see the note under it)
+-------------------------------------------------------------------------------
+8/11 scenarios fully passed
+
+  pass  fact-about             about: "I live in Pune, having moved there last month for work."
+  pass  merge-not-wipe         about: "Backend developer." -> "Backend developer. Vegetarian."
+  pass  habit                  habits: "I want to go to the gym three times a week."
+  pass  short-term-goal        shortTermGoals written
+  pass  event-not-note         meal and spend logged; notes untouched
+  pass  small-talk             [[NO_REPLY]]; notes untouched
+  pass  night-one-early-start  one 6am flight; routine untouched
+  pass  night-routine-changed  "waking at 7 for three weeks" -> routine moved to 07:00/23:00
+  FAIL  long-term-conflict     the new goal was recorded, but the reply never raised the
+                               existing one it pulls against
+  FAIL  drift-in-conversation  scheduled the off-goal work without a word about the goal
+  FAIL  night-weekly-nudge     the week's chance was claimed; the model never used it, with
+                               the habit skipped five nights running
+
+  That version reused phrases from the prompt's own examples ("AI agents", "work
+  abroad") and did not grade announced saves — though four replies announced one
+  ("I've noted it down", "Your routine is updated to 07:00–23:00").
+
+-------------------------------------------------------------------------------
+AFTER — current eval, current prompt
+-------------------------------------------------------------------------------
+5/11 scenarios fully passed
+
+Every check on WHAT WAS RECORDED passed, in both runs. What fails is the model
+speaking up about goals, and announcing saves.
+
+  pass  fact-about
+  pass  long-term-conflict     FIXED. "That's a big shift—does that mean you're reconsidering
+                               your plan to move to Canada, or are you looking at the flat as
+                               a potential investment?" Notes kept both goals.
+  pass  event-not-note
+  pass  small-talk
+  pass  night-one-early-start
+  FAIL  merge-not-wipe         note correct; reply: "I've updated your profile to reflect..."
+  FAIL  habit                  note correct; reply: "I've noted that you want to start..."
+  FAIL  short-term-goal        note correct; reply: "I've noted your goal of learning Rust..."
+  FAIL  night-routine-changed  note correct; reply: "I've updated your routine to reflect..."
+  FAIL  drift-in-conversation  "Added the React tutorial (120 minutes) to your tasks." No
+                               mention of the Rust goal.
+  FAIL  night-weekly-nudge     claimed, not used (cohere). Its replies also carried a literal
+                               "[[NO_REPLY]]" after real text, which telegramHandler only
+                               suppresses when it is the whole reply.
