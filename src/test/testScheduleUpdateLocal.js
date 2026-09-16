@@ -122,6 +122,9 @@ step("an edit patches the same event; Skipped takes one off the calendar but not
 
     const [doc] = await schedules();
     assert.strictEqual(doc.slots.find(s => s.slotId === "slot_3").status, "Skipped", "but stays on the day's record");
+    const ids = doc.slots.map(s => s.slotId);
+    assert.strictEqual(ids.length, 8, "Skipped changes a slot in place — it never adds one");
+    assert.strictEqual(new Set(ids).size, ids.length, "every slotId on the day is still unique");
 });
 
 step("a sync with nothing to change writes nothing", async () => {
@@ -162,6 +165,20 @@ step("an unknown slotId is refused, lists the real slots, and moves nothing", as
     const [after] = await schedules();
     assert.deepStrictEqual(after.slots, before.slots);
     assert.deepStrictEqual(writesSince(mark), []);
+});
+
+step("a schedule whose slots share or lack a slotId is refused before anything is written", async () => {
+    const other = "2026-09-15";
+    const repeated = await call("insertSchedule", { date: other, slots: [
+        { slotId: "slot_1", startTime: "10:00", endTime: "11:00", title: "A" },
+        { slotId: "slot_1", startTime: "11:00", endTime: "12:00", title: "B" },
+    ] });
+    assert.strictEqual(repeated.success, false);
+    assert.match(repeated.message, /slot_1 is used more than once/);
+    const unnamed = await call("insertSchedule", { date: other, slots: [{ startTime: "10:00", endTime: "11:00", title: "A" }] });
+    assert.strictEqual(unnamed.success, false);
+    assert.match(unnamed.message, /no slotId/);
+    assert.strictEqual((await schedules()).length, 1, "no schedule was created for the 15th");
 });
 
 step("updateRecords cannot rewrite the day behind the calendar's back", async () => {
