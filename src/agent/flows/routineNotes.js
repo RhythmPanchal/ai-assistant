@@ -25,11 +25,13 @@ export const ROUTINE_FLOW_TYPES = Object.freeze([goodMorningFlow.flowType, goodN
 export const NUDGE_BLOCK = `
 -------------------------------------
 🎯 A GOAL YOU MAY RAISE — this reply only
-If ONE habit or goal in your notes looks like it is slipping, mention it
-briefly, in passing — folded into the plan or the wrap-up. If this reply
-already asks them something, do not add a second question. If nothing is
-slipping, or they are overloaded today, say nothing about goals. You will
-not get this chance again this week.
+If ONE habit or goal in your notes has clearly slipped — skipped for days,
+or no progress in weeks — end this reply with one short line about it:
+  "The gym's been skipped all week — want a session in tomorrow's plan?"
+If this reply already asks them something, fold it in:
+do not add a second question.
+If nothing has slipped, or they are overloaded today, say nothing about goals.
+You will not get this chance again this week.
 -------------------------------------
 `.trim();
 

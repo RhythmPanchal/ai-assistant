@@ -85,9 +85,13 @@ test("the permission is for this reply only", () => {
         "without it the model raises the goal again on the next turn of the same routine");
 });
 
-test("it is one thing, in passing, never a second question", () => {
+test("it is one short line, never a second question", () => {
+    // "You may raise one" alone was read as optional: in the live eval the
+    // model skipped a habit missed five nights running. The block now says
+    // what to do when something has slipped, with a worked example.
     assert.match(NUDGE_BLOCK, /ONE habit or goal/);
-    assert.match(NUDGE_BLOCK, /in passing/);
+    assert.match(NUDGE_BLOCK, /end this reply with one short line/);
+    assert.doesNotMatch(NUDGE_BLOCK, /rasmalai/i, "the example must not be what the live eval grades");
     assert.match(NUDGE_BLOCK, /do not add a second question/,
         "the morning message already asks about a slipping task; two questions is an interview");
 });
