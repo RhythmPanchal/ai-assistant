@@ -15,6 +15,7 @@ import { localDateOf, IST_TIMEZONE, datesForModel } from "../tools/mongo/dateUti
 import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
 import goodMorningFlow from "./flows/goodMorningFlow.js";
+import { routineNudge } from "./flows/routineNotes.js";
 
 /**
  * The replies runAgent substitutes when the model produced nothing usable.
@@ -257,9 +258,17 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
 
         // Active flow overlays. Lazy expiry inside getOpenFlowsForUser. keeps stale flows from leaking.
         const openFlows = await getOpenFlowsForUser(userId);
-        const overlays = (await Promise.all(
-            openFlows.map(f => buildFlowOverlay(f, { userId, timeZone }))
-        )).filter(Boolean);
+        const [routineOverlays, nudge] = await Promise.all([
+            Promise.all(openFlows.map(f => buildFlowOverlay(f, { userId, timeZone }))),
+            // Once a week at most, and only inside a routine — see routineNotes.js.
+            // Claimed here, once per turn, rather than per flow: with both
+            // routines open two claims would race for the same week.
+            routineNudge(openFlows, { userId }),
+        ]);
+        // The nudge goes first. A routine's own procedure and live data stay
+        // last, where recency gives them the most weight: raising a goal is
+        // something a routine may do on the way, never its point.
+        const overlays = [nudge, ...routineOverlays].filter(Boolean);
 
         // 3. Persona + live IST time + overlays. Rebuilt every turn.
         // The profile is rendered here rather than cached: facts change between
