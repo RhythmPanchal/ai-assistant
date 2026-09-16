@@ -55,8 +55,8 @@ export function renderLoggedSoFar({ logDate, diet = [], tasks = [], expenses = [
         `📒 LOGGED SO FAR FOR ${logDate} — read from the database at the top of THIS turn`,
         "-------------------------------------",
         "This is what is actually saved. Trust it over your memory of earlier turns.",
-        "  • Something the user told you that is NOT below was NOT saved — save it now.",
-        "  • Something that IS below is saved — never save it a second time.",
+        "  • Something below IS saved — never save it a second time, even worded differently.",
+        "  • Only something clearly absent below — no meal of that kind, no row with that amount — was never saved.",
         "",
     ];
 

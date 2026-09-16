@@ -61,8 +61,8 @@ test("the model's near-miss words still count as declined", () => {
 
 test("the block tells the model to trust it over memory, both ways", () => {
     const b = renderLoggedSoFar({ logDate: "d" });
-    assert.match(b, /NOT below was NOT saved — save it now/);
-    assert.match(b, /never save it a second time/);
+    assert.match(b, /never save it a second time, even worded differently/);
+    assert.match(b, /Only something clearly absent below/);
 });
 
 test("the day's plan is shown when there is one", () => {
