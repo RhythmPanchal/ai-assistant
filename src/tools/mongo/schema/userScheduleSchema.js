@@ -96,8 +96,8 @@ export default userScheduleSchema;
 
 /**
  * Serves:
- *  - insertTodaySchedule — findOne({ userId, date: {$gte,$lt} }) on every
- *    calendar sync
+ *  - syncScheduleDay — find({ userId, date: {$gte,$lt} }) on every calendar
+ *    sync, and insertSchedule / updateSchedule for the same day
  *
  * unique: the collection description and insertSchedule's own comment both
  * already claim "one record per user per day (unique index on userId + date)".

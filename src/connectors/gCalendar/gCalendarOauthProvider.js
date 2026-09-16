@@ -1,5 +1,6 @@
 import { BaseOAuthProvider } from "../oauth/oauthProvider.js";
-import { insertTodaySchedule } from "./insertTodaySchedule.js";
+import { localDateOf } from "../../tools/mongo/dateUtils.js";
+import { serialiseCalendarSync, syncScheduleDay } from "./syncScheduleDay.js";
 
 export class GCalendarOauthProvider extends BaseOAuthProvider {
   authorizationURI = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -36,8 +37,11 @@ export class GCalendarOauthProvider extends BaseOAuthProvider {
     };
   }
 
+  // Straight to the day sync rather than syncScheduleToCalendar: the connection
+  // was just made ACTIVE, and that module reaches Telegram, which reaches back
+  // into the OAuth layer this provider belongs to.
   async onConnectionEstablished(userId) {
-    await insertTodaySchedule(userId);
+    await serialiseCalendarSync(userId, () => syncScheduleDay(userId, localDateOf(new Date())));
   }
 
   // Google token refresh: same endpoint, swap grant_type and pass refresh_token.

@@ -56,9 +56,10 @@ test("INACTIVE is a status the schema already allows", async () => {
 });
 
 test("the schedule sync prompts on INACTIVE and still stays quiet on DISABLED", () => {
-    // Source-level, because syncScheduleToCalendar is module-private and the
-    // behaviour worth pinning is which statuses reach the connect button.
-    const src = readFileSync(new URL("../tools/mongo/operation/insertSchedule.js", import.meta.url), "utf8");
+    // Source-level, because running syncScheduleToCalendar needs a connection
+    // row and Telegram, and the behaviour worth pinning is which statuses reach
+    // the connect button.
+    const src = readFileSync(new URL("../connectors/gCalendar/syncScheduleToCalendar.js", import.meta.url), "utf8");
 
     assert.ok(
         /status === "INACTIVE"/.test(src),
@@ -75,7 +76,7 @@ test("the schedule sync prompts on INACTIVE and still stays quiet on DISABLED", 
 });
 
 test("a sync that dies mid-flight asks again immediately, not tomorrow", () => {
-    const src = readFileSync(new URL("../tools/mongo/operation/insertSchedule.js", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../connectors/gCalendar/syncScheduleToCalendar.js", import.meta.url), "utf8");
 
     // The row is ACTIVE when the sync starts and INACTIVE by the time it fails.
     // Schedules are written about once a day, so leaving the prompt to the next
