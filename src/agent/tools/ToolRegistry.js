@@ -51,6 +51,11 @@ export class ToolRegistry {
             .map(t => t.toFunctionDeclaration());
     }
 
+    /** Whether a tool only reads. Unknown tools are treated as writes. */
+    isReadOnly(name) {
+        return this._tools.get(name)?.constructor.readOnly === true;
+    }
+
     isDeclared(name) {
         return this._tools.has(name) && !this._undeclared.has(name);
     }

@@ -91,6 +91,18 @@ test("no unreviewed tool was added", () => {
     assert.deepStrictEqual(extra, [], `unexpected new tools: ${extra.join(", ")}`);
 });
 
+test("only tools that change nothing are marked read-only", () => {
+    // runAgent re-runs any read but refuses to repeat an identical successful
+    // write within a turn. A writing tool wrongly marked read-only loses that
+    // protection — which is how one ₹30 expense was saved eight times — so
+    // widening this set is a deliberate, reviewed change.
+    const readOnly = toolRegistry.getAllTools()
+        .map((t) => t.constructor.name)
+        .filter((n) => toolRegistry.isReadOnly(n))
+        .sort();
+    assert.deepStrictEqual(readOnly, ["fetchCollectionNameAndSchema", "fetchRecord", "fetchUserContext", "loadSkill"]);
+});
+
 test("sendMessage stays scheduler-only", () => {
     assert.ok(!ported.has("sendMessage"), "model must not be able to send arbitrary Telegram messages");
 });

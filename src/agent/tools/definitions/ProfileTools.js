@@ -15,6 +15,7 @@ import { updateUserSettings, EDITABLE_SETTINGS } from "../../../tools/mongo/oper
 
 export class FetchUserContextTool extends BaseTool {
     static name = "fetchUserContext";
+    static readOnly = true;
     static description =
         "Read the user's stored profile: every fact with its key, the vocabulary of keys available, and which of those keys they have nothing under yet. " +
         "The WHO YOU ARE HELPING block in your instructions is a readable summary and does NOT show keys — call this before changing anything, because updating a fact needs the exact key it is stored under. " +

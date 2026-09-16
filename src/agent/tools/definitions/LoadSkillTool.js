@@ -12,6 +12,7 @@ import { SKILLS, SKILL_NAMES, skillCatalogue } from "../../skills/index.js";
  */
 export class LoadSkillTool extends BaseTool {
     static name = "loadSkill";
+    static readOnly = true;
     static description =
         "Load a skill: extra instructions and tools for a specific job, available for the rest of this reply. " +
         `Available skills — ${skillCatalogue()} ` +

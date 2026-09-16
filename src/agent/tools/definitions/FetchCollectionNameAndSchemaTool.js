@@ -3,6 +3,7 @@ import fetchCollectionNameAndSchema from "../../../tools/mongo/fetchCollectionSc
 
 export class FetchCollectionNameAndSchemaTool extends BaseTool {
     static name = "fetchCollectionNameAndSchema";
+    static readOnly = true;
     static description = "Fetches all available collection names, their schemas, and descriptions from MongoDB. You MUST call this before any read or write operation to know the correct collection name and its schema.";
     static parameters = {
         type: "object",
