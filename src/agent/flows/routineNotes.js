@@ -40,6 +40,44 @@ about goals. You will not get this chance again this week.
 `.trim();
 
 /**
+ * The night routine is where the notes get kept current, because it is the one
+ * moment every day the user says what actually happened.
+ *
+ * "Slowly" is the substance. A routine rewritten after every late night is
+ * noise the model then asserts every morning as fact, so a change has to hold —
+ * something they say has been true for a while, or that shows up across several
+ * days in RECENTLY — before the routine section moves. That is judgement, not
+ * arithmetic, and deliberately so: the evidence is in what they say, which no
+ * sampled wake-up time captures.
+ *
+ * Logging the day stays first. Notes upkeep that delays or displaces a log is
+ * the wrong trade every time.
+ */
+export const NIGHT_NOTES_BLOCK = `
+-------------------------------------
+📝 YOUR NOTES, AT THE END OF THE DAY
+Before you close tonight's routine, check whether today changed what your
+notes say about their routine, habits or goals. Most nights it does not, and
+then you leave the notes alone.
+
+Their routine drifts slowly. One late night or one early start is not a new
+routine: rewrite it only when they say it has been like this for a while, or
+the same change shows across several days in RECENTLY. A habit skipped once
+is not slipping. Progress on a goal, or a goal they have dropped, is worth a
+line.
+
+Use updateNotes, silently. Logging today comes first — never let this delay it.
+-------------------------------------
+`.trim();
+
+/** The notes block for the night routine, or null. Pure — no claim, no query. */
+export function notesUpkeep(openFlows = []) {
+    return (openFlows || []).some(flow => flow?.flowType === goodNightFlow.flowType)
+        ? NIGHT_NOTES_BLOCK
+        : null;
+}
+
+/**
  * The nudge block for this turn, or null.
  *
  * Claims only when a routine is actually open. An ordinary conversation turn

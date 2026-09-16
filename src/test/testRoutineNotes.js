@@ -5,7 +5,8 @@
  * decides WHETHER; this is everything around it — that only a routine ever
  * asks, that a turn asks once however many routines are open, that a broken
  * claim costs the nudge and never the turn, and that the permission the model
- * reads cannot be mistaken for an instruction to nag.
+ * reads cannot be mistaken for an instruction to nag. And the night routine's
+ * notes upkeep: that it drifts the routine slowly and never displaces the log.
  *
  * Needs .env for MONGO_DB_URI (mongoClient builds its client at import) but
  * never connects: the claim is injected everywhere.
@@ -14,7 +15,7 @@ import "dotenv/config";
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
 
-const { routineNudge, NUDGE_BLOCK, ROUTINE_FLOW_TYPES } = await import("../agent/flows/routineNotes.js");
+const { routineNudge, NUDGE_BLOCK, ROUTINE_FLOW_TYPES, notesUpkeep, NIGHT_NOTES_BLOCK } = await import("../agent/flows/routineNotes.js");
 const toolRegistry = (await import("../agent/tools/definitions/index.js")).default;
 
 const tests = [];
@@ -106,6 +107,38 @@ test("the block asks for no tool call", () => {
     }
 });
 
+// ── the night routine keeps the notes ────────────────────────────────────────
+
+test("only the night routine is asked to keep the notes", () => {
+    assert.strictEqual(notesUpkeep([night]), NIGHT_NOTES_BLOCK);
+    assert.strictEqual(notesUpkeep([night, morning]), NIGHT_NOTES_BLOCK, "the morning overlap does not hide it");
+    assert.strictEqual(notesUpkeep([morning]), null,
+        "the morning routine already notes durable corrections in its refine loop");
+    assert.strictEqual(notesUpkeep([]), null);
+    assert.strictEqual(notesUpkeep(null), null);
+});
+
+test("the routine section drifts slowly", () => {
+    assert.match(NIGHT_NOTES_BLOCK, /drifts slowly/);
+    assert.match(NIGHT_NOTES_BLOCK, /One late night or one early start is not a new\s+routine/,
+        "one outlier night must not rewrite what the model asserts every morning");
+    assert.match(NIGHT_NOTES_BLOCK, /several\s+days in RECENTLY/, "the evidence it may use must be named");
+});
+
+test("most nights change nothing, and the notes are left alone", () => {
+    assert.match(NIGHT_NOTES_BLOCK, /Most nights it does not/,
+        "a model told to maintain notes every night rewrites them every night");
+});
+
+test("logging the day stays first", () => {
+    assert.match(NIGHT_NOTES_BLOCK, /Logging today comes first/);
+});
+
+test("the tool it names exists and is always declared", () => {
+    assert.match(NIGHT_NOTES_BLOCK, /updateNotes/);
+    assert.ok(toolRegistry.isDeclared("updateNotes"), "a block naming an undeclared tool earns a refusal");
+});
+
 // ── wiring ───────────────────────────────────────────────────────────────────
 
 const agentSrc = readFileSync("src/agent/agent.js", "utf8");
@@ -116,8 +149,8 @@ test("runAgent claims once per turn, for the bound user", () => {
         "one call site: a second would claim twice in a turn");
 });
 
-test("the nudge sits before the routine's own overlay, not after it", () => {
-    assert.match(agentSrc, /\[nudge, \.\.\.routineOverlays\]/,
+test("the notes blocks sit before the routine's own overlay, not after it", () => {
+    assert.match(agentSrc, /\[nudge, notesUpkeep\(openFlows\), \.\.\.routineOverlays\]/,
         "the routine's procedure and data stay last, where recency weighs most");
 });
 
