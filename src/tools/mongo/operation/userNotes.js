@@ -1,5 +1,9 @@
 import { getDB } from "../mongoClient.js";
-import { USERS, NOTE_SECTIONS, NOTE_SECTION_LIMIT } from "../schema/usersSchema.js";
+import {
+    USERS, NOTE_SECTIONS, NOTE_SECTION_LIMIT, NUDGEABLE_SECTIONS, NUDGE_COOLDOWN_DAYS,
+} from "../schema/usersSchema.js";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The model's notes on a person — one short paragraph per fixed section, stored
@@ -99,4 +103,46 @@ export async function updateNoteSection(userId, section, text, now = new Date())
 
     const action = after === null ? "cleared" : before === null ? "created" : "updated";
     return { ok: true, section, action, length: after?.length ?? 0 };
+}
+
+/**
+ * Claim this week's chance for a routine to raise a goal unprompted. Returns
+ * true for exactly one caller per cooldown window, false for everyone else.
+ *
+ * One atomic findOneAndUpdate, so the rule holds under any interleaving: both
+ * routines can be open at once (the night flow runs until 10:00, the morning
+ * one opens at 09:00), and two turns claiming together still produce one nudge.
+ *
+ * Nothing is claimed when there is nothing to raise. A user whose notes hold no
+ * habit or goal keeps their window — otherwise the first week of someone's notes
+ * would be spent on a claim with nothing behind it.
+ *
+ * The window is spent when the chance is GIVEN, not when the model uses it. The
+ * model deciding nothing is slipping is still a week without a nudge, which is
+ * the conservative reading of "rarely", and it means the model never has to
+ * report back for the cooldown to hold.
+ */
+export async function claimNudge(userId, now = new Date()) {
+    if (!Number.isInteger(userId)) {
+        throw new Error(`[claimNudge] userId must be an integer, got ${userId}`);
+    }
+
+    const cutoff = new Date(now.getTime() - NUDGE_COOLDOWN_DAYS * DAY_MS);
+    const db = await getDB();
+
+    const claimed = await db.collection(USERS).findOneAndUpdate(
+        {
+            userId,
+            $and: [
+                // `: null` matches a missing field as well as a null one.
+                { $or: [{ "notes.lastNudgedAt": null }, { "notes.lastNudgedAt": { $lte: cutoff } }] },
+                // A cleared section is stored as null, so a string means real text.
+                { $or: NUDGEABLE_SECTIONS.map(section => ({ [`notes.${section}.text`]: { $type: "string" } })) },
+            ],
+        },
+        { $set: { "notes.lastNudgedAt": now } },
+        { projection: { _id: 1 } }
+    );
+
+    return Boolean(claimed);
 }

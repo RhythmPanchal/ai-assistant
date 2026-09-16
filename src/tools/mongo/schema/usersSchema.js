@@ -37,6 +37,23 @@ export const NOTE_SECTIONS = Object.freeze([
  */
 export const NOTE_SECTION_LIMIT = 400;
 
+/**
+ * The sections a routine may raise unprompted — the ones about where someone is
+ * trying to get to. About, routine and behaviour describe them; there is
+ * nothing in them to fall behind on.
+ */
+export const NUDGEABLE_SECTIONS = Object.freeze(["habits", "shortTermGoals", "longTermGoals"]);
+
+/**
+ * Minimum days between two unprompted goal nudges, across BOTH routines.
+ *
+ * This is the whole of "every day nudging is very bad", enforced in code rather
+ * than asked of the model. A model told to raise goals "rarely" in a routine
+ * that runs twice a day raises them twice a day; a claim that can only succeed
+ * once a week cannot.
+ */
+export const NUDGE_COOLDOWN_DAYS = 7;
+
 const noteSectionSchema = {
   bsonType: "object",
   properties: {
@@ -130,7 +147,14 @@ const usersSchema = {
       bsonType: "object",
       description:
         "The model's own notes on this person, rendered as WHO YOU ARE HELPING on every turn. Never null — a $set on notes.<section> cannot create a field inside a null.",
-      properties: Object.fromEntries(NOTE_SECTIONS.map(({ key }) => [key, noteSectionSchema])),
+      properties: {
+        ...Object.fromEntries(NOTE_SECTIONS.map(({ key }) => [key, noteSectionSchema])),
+        lastNudgedAt: {
+          bsonType: ["date", "null"],
+          description:
+            "When a routine was last allowed to raise a goal unprompted. Written only by claimNudge, never by the model.",
+        },
+      },
     },
     createdAt: { bsonType: "date" },
     updatedAt: { bsonType: "date" },

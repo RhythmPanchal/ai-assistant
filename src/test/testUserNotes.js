@@ -39,8 +39,9 @@ test("an invented section is refused, with the real ones named", () => {
 });
 
 test("the schema is built from the same list", () => {
+    // Every section, plus the one piece of bookkeeping the nudge claim keeps.
     const declared = Object.keys(usersSchema.properties.notes.properties);
-    assert.deepStrictEqual(declared, NOTE_SECTIONS.map(s => s.key));
+    assert.deepStrictEqual(declared, [...NOTE_SECTIONS.map(s => s.key), "lastNudgedAt"]);
 });
 
 test("notes can never be null in the schema", () => {
