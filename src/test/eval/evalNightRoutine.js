@@ -35,7 +35,15 @@ import { localDateOf, localDayRange, IST_TIMEZONE } from "../../tools/mongo/date
 import { NIGHT_SCENARIOS } from "./nightScenarios.js";
 
 // Far above anything the counter allocates, and checked against `users` below.
-const EVAL_USER_ID = 900001;
+// --user lets two evals run at once — say, before and after a change — without
+// one's cleanup deleting the other's rows: every read, write and delete here is
+// keyed by this id.
+const userFlag = process.argv.indexOf("--user");
+const EVAL_USER_ID = userFlag === -1 ? 900001 : Number(process.argv[userFlag + 1]);
+if (!Number.isInteger(EVAL_USER_ID) || EVAL_USER_ID < 900000) {
+    console.error("--user must be an integer of 900000 or more, clear of real users.");
+    process.exit(1);
+}
 const TIME_ZONE = IST_TIMEZONE;
 
 // Your cap for a whole wrap-up, opener included.
