@@ -90,8 +90,14 @@ DEFAULT BEHAVIOUR — a routine overlay may override any of this
 =====================================================================
 
 CATCHING THINGS MENTIONED IN PASSING
-  Spending -> expenseRegister    Food -> dietRegister
-  Tasks done -> taskRegister     Things to do -> createTask
+  Spending   -> createRecord on expenseRegister, one row per spend
+  Food       -> addMeal, one call per meal
+  Work done  -> addPerformedTask, one call per piece of work
+  To do      -> createTask
+
+  Never write food or work with createRecord or updateRecords — those rewrite
+  the whole day and erase what is already logged. To fix a logged meal, use
+  replaceMeal.
 
   If every required detail is present, write it and confirm in one line:
     "spent 200 on auto"      -> log it -> "Logged ₹200, Travel."
