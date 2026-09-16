@@ -1,12 +1,15 @@
 /**
  * Hand-run:  node src/test/testDaySummary.js
  *
- * Guards the day-summary pass. No .env, no network, no DB — the parse and the
+ * Guards the day-summary pass. No network, no DB — the parse and the
  * row build are pure, which is the point of the model returning content fields
  * rather than writing the row itself.
  *
  * For the model's actual output, see testSummarizeLive.js.
  */
+// Loaded only because importing the agent constructs the Mongo client at
+// module load, which needs MONGO_DB_URI. Nothing here connects.
+import "dotenv/config";
 import assert from "node:assert";
 
 import { extractJson, coerceRow, buildMessages } from "../agent/summarize/summarizeDay.js";

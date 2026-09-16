@@ -1,10 +1,13 @@
 /**
  * Hand-run:  node src/test/testNightLogBlock.js
  *
- * The LOGGED SO FAR block the night routine reads every turn. Pure — no .env,
+ * The LOGGED SO FAR block the night routine reads every turn. Pure — no network,
  * no database — except the last test, which only checks buildFlowOverlay hands
  * the flow to buildContext.
  */
+// Loaded only because importing the agent constructs the Mongo client at
+// module load, which needs MONGO_DB_URI. Nothing here connects.
+import "dotenv/config";
 import assert from "node:assert";
 import { renderLoggedSoFar, normaliseNothingToLog } from "../knowledge/nightLogKnowledge.js";
 import { buildFlowOverlay } from "../agent/agent.js";

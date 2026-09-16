@@ -1,11 +1,14 @@
 /**
  * Hand-run:  node src/test/testRecentBlock.js
  *
- * Guards the RECENTLY block — the half of the memory the agent reads. No .env,
- * no network, no DB: the render is pure and takes rows as an argument.
+ * Guards the RECENTLY block — the half of the memory the agent reads. No network,
+ * no DB: the render is pure and takes rows as an argument.
  *
  * Pass --show to print a rendered example.
  */
+// Loaded only because importing the agent constructs the Mongo client at
+// module load, which needs MONGO_DB_URI. Nothing here connects.
+import "dotenv/config";
 import assert from "node:assert";
 import { renderRecentBlock } from "../knowledge/chatSummaryKnowledge.js";
 import { buildSystemInstruction, SECTION_ORDER } from "../agent/instruction.js";
