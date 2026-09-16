@@ -31,13 +31,14 @@ const taskTitles = (s) => s.performed.map(t => t.title).join(" | ");
 // flagged exactly that on the first baseline.
 //
 // "Spend" is not always money: "how much time did you spend on those tasks?"
-// flagged a Phase 1 run that was asking about work. A question about time is
-// not a question about spending.
+// flagged a Phase 1 run that was asking about work, and "…marked off expenses,
+// could you tell me how long that debugging work took?" flagged a later one.
+// A question about how long something took is not a question about spending.
 const asksAboutMoney = (text) => String(text ?? "")
     .split(/(?<=[.!?])\s+|\n+/)
     .some(sentence => sentence.includes("?")
         && /spen[dt]|expens|money|kharch|paid|₹/i.test(sentence)
-        && !/\btime\b|hours?|minutes?|\bmins?\b/i.test(sentence));
+        && !/\btime\b|hours?|minutes?|\bmins?\b|how long|\btook\b|duration/i.test(sentence));
 
 // Exact counts, not presence. Presence checks passed a Phase 1 run that had
 // saved dinner twice and logged a deck review the user never reported doing.
