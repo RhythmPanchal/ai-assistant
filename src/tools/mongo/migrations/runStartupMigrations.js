@@ -3,6 +3,7 @@ import { runIdentityMigration } from "./001-internal-user-ids.js";
 import { runPurgeAndRenumber } from "./002-purge-and-renumber.js";
 import { runTaskHygiene } from "./003-task-hygiene.js";
 import { runBackfillDaySummaries } from "./004-backfill-day-summaries.js";
+import { runFactsIntoNotes } from "./005-facts-into-notes.js";
 
 /**
  * Run pending data migrations at boot, before anything can read or write the
@@ -34,6 +35,10 @@ const PENDING = [
     // the following seven hours. Last, and after 001/002, so the userIds it
     // queues against are the internal ones the jobs will resolve.
     { name: "004-backfill-day-summaries", run: runBackfillDaySummaries },
+    // Before the Telegram loop, like every migration here — which is what makes
+    // it safe: the first turn that renders notes already finds each user's facts
+    // in them. After 002, so no purged account's facts are copied anywhere.
+    { name: "005-facts-into-notes", run: runFactsIntoNotes },
 ];
 
 /**
