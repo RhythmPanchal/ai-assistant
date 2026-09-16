@@ -79,10 +79,28 @@ test("a conflicting goal is kept and named, not resolved silently", () => {
     assert.match(section, /keep\s+both/);
 });
 
-test("drift is raised once and in passing", () => {
-    assert.match(section, /once, in passing/);
-    assert.match(section, /Never open a conversation with it/,
+test("drift from a goal is named in one line, then the request is done anyway", () => {
+    // Stated abstractly ("say so once, in passing"), the live eval showed the
+    // model scheduling work that pulled away from a goal without a word. The
+    // concrete pairs are what it follows.
+    assert.match(section, /HOLDING THEM TO WHAT THEY SAID/);
+    assert.match(section, /say so in ONE line — then do what they asked/,
+        "raising a goal must never become refusing the request");
+    assert.ok((section.match(/^\s+-> "/gm) || []).length >= 2, "at least two worked examples");
+});
+
+test("the goal nudge is never an opener and never repeated", () => {
+    assert.match(section, /Once per topic, never as an opener, and never a lecture/,
         "a reminder at the top of every chat is nagging, which the user asked not to get");
+});
+
+test("its examples do not reuse what the live eval grades", () => {
+    // A pass on a phrase the prompt already contains could be the model
+    // copying the example back rather than applying the rule.
+    const holding = section.slice(section.indexOf("HOLDING THEM TO WHAT THEY SAID"));
+    for (const graded of [/rust/i, /react/i, /canada/i, /rasmalai/i]) {
+        assert.doesNotMatch(holding, graded);
+    }
 });
 
 test("settings are sent to the skill, not written as notes", () => {
