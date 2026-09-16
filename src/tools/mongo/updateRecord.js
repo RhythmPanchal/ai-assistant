@@ -4,6 +4,7 @@ import fetchCollectionNameAndSchema from "./fetchCollectionSchema.js";
 import ValidateSchema from "./validateSchema.js";
 import { normalizeDates } from "./validateSchema.js";
 import { getUserContext } from "../../identity/userContext.js";
+import { USER_SCHEDULE } from "./schema/userScheduleSchema.js";
 
 async function processUpdate(collectionName, id, data) {
     // Identity first, before parsing or connecting. An unbound caller must fail
@@ -28,6 +29,13 @@ async function processUpdate(collectionName, id, data) {
         throw new Error(`Unknown collection: "${collectionName}". Call fetchCollectionNameAndSchema to get valid collection names.`);
     }
     const resolvedCollectionName = collectionConfig.collectionName;
+
+    // Refused, not just discouraged in a description: on 2026-09-13 the agent
+    // rewrote a whole day through here and the calendar never heard about it.
+    // updateSchedule is the write that also moves the calendar.
+    if (resolvedCollectionName === USER_SCHEDULE) {
+        throw new Error("userSchedule cannot be changed with updateRecords — use updateSchedule, which also updates the user's calendar.");
+    }
 
     // 3. Normalize date strings to Date objects
     const refinedData = normalizeDates(data);
