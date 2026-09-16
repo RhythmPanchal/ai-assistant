@@ -67,7 +67,50 @@ count: exact work per scenario, no main meal twice, no identical expense twice.
 A money-question check also misfired on "how much TIME did you spend on those
 tasks?" and was narrowed.
 
-KNOWN RESIDUAL — being fixed next
+RE-RUN AFTER REMOVING DATA VALUES FROM PROMPT EXAMPLES (9b4c5c6)
+══════════════════════════════════════════════════════════════════════════════
+18/21 clean · 238/243 checks — worse than the run before it, and not because
+of the change. By now both stronger Gemini buckets were exhausted: 15 runs were
+served by gemini-3.1-flash-lite alone and 6 fell partly to Cohere. The ₹30
+copied from an example did not recur. Three failures:
+
+  expense-across-turns run 2  (flash-lite, then Cohere)
+    ₹30 saved EIGHT times in one turn, hitting the 20-step limit. Traced to
+    three bugs that predate this work and affect every flow, not the night
+    routine alone — see INFRASTRUCTURE FINDINGS.
+  party-opener run 2          (flash-lite, then Cohere)
+    work logged twice: the deck review as planned in the morning, then as
+    reported. The Phase 1 failure mode, once in 21.
+  no-event-opener run 1       (flash-lite only)
+    "fixed the login bug, took like 3 hours. gn" was never saved.
+
+  On runs Cohere touched: 2 of 6 failed. On flash-lite alone: 1 of 15.
+
+INFRASTRUCTURE FINDINGS — outside the night routine, not yet fixed
+══════════════════════════════════════════════════════════════════════════════
+1. One fallback step locks the rest of a turn onto the fallback model.
+   Gemini 3.x requires a thought_signature on every function call replayed in
+   history. GeminiProvider only attaches one the call originally had, and a
+   call Cohere made has none — so after a single 503 served by Cohere, every
+   Gemini model rejects the turn with "Function call is missing a
+   thought_signature", and Cohere serves every remaining step.
+   (src/agent/llm/GeminiProvider.js, _split)
+
+2. fetchRecord shows the model the wrong day.
+   Records are returned raw, so a day stored at IST midnight serialises as
+   "2026-09-16T18:30:00.000Z" — the previous day. formatForLLM, which would
+   format it, is defined in fetchRecords.js and never called. In the ×8 run
+   Cohere fetched its correctly dated ₹30 row, read it as the 16th, and spent
+   the turn "fixing" it: update, delete, re-create, fetch, repeat.
+   (src/agent/tools/definitions/FetchRecordTool.js, src/tools/mongo/fetchRecords.js)
+
+3. Nothing stops a turn repeating an identical successful write.
+   runAgent re-executes a createRecord identical to one that succeeded two
+   steps earlier. A turn-level guard on repeated identical calls would have
+   capped the damage at one row whatever the cause.
+   (src/agent/agent.js, the tool loop)
+
+KNOWN RESIDUAL (resolved by 9b4c5c6)
 ══════════════════════════════════════════════════════════════════════════════
 meal-correction run 3 saved a ₹30 Food expense in a conversation that never
 mentioned money; the assistant's own recap said "no other expenses". The night
@@ -76,7 +119,7 @@ the save rule tells the model to save anything clearly absent from LOGGED SO
 FAR — the model copied the example in as data. Several prompt examples also
 reuse the eval scripts' own values (office party, pizza, ₹50 rickshaw, dal not
 rajma, deck review with ankit), which makes the eval easier to pass by copying.
-Fix: data values in prompt and tool examples become placeholders.
+Fixed in 9b4c5c6: data values in prompt and tool examples are placeholders.
 
 COST
 ══════════════════════════════════════════════════════════════════════════════
