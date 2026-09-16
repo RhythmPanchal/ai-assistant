@@ -74,6 +74,66 @@ export function previousDay(date) {
   return new Date(at.getTime() - 86400000).toISOString().slice(0, 10);
 }
 
+/**
+ * An instant as wall-clock time in `timeZone`: "YYYY-MM-DDTHH:mm:ss", naive.
+ *
+ * Naive on purpose — it is the exact form HARD RULE 4 tells the model to WRITE,
+ * so what it reads back and what it sends round-trip through toIST unchanged.
+ */
+export function localDateTimeOf(instant, timeZone = IST_TIMEZONE) {
+  if (instant == null) return null;
+  const d = instant instanceof Date ? instant : new Date(instant);
+  if (isNaN(d.getTime())) return null;
+  const part = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    }).formatToParts(d).map((x) => [x.type, x.value])
+  );
+  return `${part.year}-${part.month}-${part.day}T${part.hour}:${part.minute}:${part.second}`;
+}
+
+/**
+ * A copy of `value` with every Date rewritten as the user's local time — for
+ * anything a model is about to read.
+ *
+ * Left alone, a Date serialises as UTC, and every day-scoped row here is stored
+ * at IST midnight: 2026-09-17 becomes "2026-09-16T18:30:00.000Z", which reads as
+ * the day before. Every row a tool returned was shown to the model a day early.
+ * In the night eval a model fetched a correctly dated expense, read it as
+ * yesterday, and spent twenty steps deleting and re-creating it.
+ *
+ *  - a `date` field at local midnight  → "2026-09-17"
+ *  - any other Date                    → "2026-09-18T21:00:00"
+ *
+ * Only `date` collapses to a bare day: a reminder due at midnight must keep its
+ * time, and a `date` that is NOT at midnight — a row stamped before the date
+ * handling was fixed — shows its real time rather than being tidied into a
+ * plausible day.
+ *
+ * ObjectIds become their hex string and class instances (a ToolResult) become
+ * plain objects, which is what they serialised to anyway.
+ */
+export function datesForModel(value, { timeZone = IST_TIMEZONE, key = null, depth = 0 } = {}) {
+  if (depth > 20) return value;
+  if (value instanceof Date) {
+    const local = localDateTimeOf(value, timeZone);
+    if (!local) return null;
+    return key === "date" && local.endsWith("T00:00:00") ? local.slice(0, 10) : local;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => datesForModel(v, { timeZone, key, depth: depth + 1 }));
+  }
+  if (value && typeof value === "object") {
+    if (value._bsontype) return typeof value.toJSON === "function" ? value.toJSON() : String(value);
+    if (ArrayBuffer.isView(value)) return value;
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, datesForModel(v, { timeZone, key: k, depth: depth + 1 })])
+    );
+  }
+  return value;
+}
+
 /** That zone's UTC offset at that instant, as "+05:30". Honours DST. */
 function zoneOffset(timeZone, at) {
   const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })

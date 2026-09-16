@@ -10,7 +10,7 @@ import { buildSystemInstruction, NO_REPLY } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
 import userProfileKnowledge from "../knowledge/userProfileKnowledge.js";
 import chatSummaryKnowledge from "../knowledge/chatSummaryKnowledge.js";
-import { localDateOf, IST_TIMEZONE } from "../tools/mongo/dateUtils.js";
+import { localDateOf, IST_TIMEZONE, datesForModel } from "../tools/mongo/dateUtils.js";
 import { getOpenFlowsForUser } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
 import goodMorningFlow from "./flows/goodMorningFlow.js";
@@ -310,11 +310,18 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
                 conversation.addToolResult(r.name, r.result);
                 // Whole ToolResult, not just .data — otherwise a failure's
                 // message never reaches the model and it cannot self-correct.
+                //
+                // Dates rewritten to local time on the way in. Both providers
+                // serialise a Date as UTC, so every IST-midnight row read as the
+                // day before, and a model that trusts what it reads "fixes" a
+                // correctly dated row by deleting and re-creating it. IST, not
+                // the profile zone: it is the zone toIST stores in. chatHistory
+                // keeps the raw result.
                 messages.push({
                     role: "tool_result",
                     toolCallId: r.id,
                     toolName: r.name,
-                    content: r.result,
+                    content: datesForModel(r.result),
                 });
             }
 

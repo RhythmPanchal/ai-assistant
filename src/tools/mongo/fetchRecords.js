@@ -158,21 +158,3 @@ export async function fetchRecord(collection, filters = {}, sortBy, sortOrder = 
 	// duplicate insert.
 	return { records, applied, truncated: records.length === effectiveLimit };
 }
-
-function formatForLLM(records) {
-	const cleanData = (Array.isArray(records) ? records : [records]).map(item => {
-		const { _id, createdAt, ...cleanItem } = item;
-
-		// Format any date fields
-		for (const [key, val] of Object.entries(cleanItem)) {
-			if (val instanceof Date) {
-				cleanItem[key] = val.toISOString().split("T")[0];
-			}
-		}
-
-		return cleanItem;
-	});
-
-	return JSON.stringify(cleanData);
-}
-
