@@ -210,7 +210,8 @@ same("minutes read as hours", [150, 60, 45, 0].map(formatMinutes), ["2h 30m", "1
     ok("a block dropped during the day says so", text.includes("[skipped during the day]"), text);
     ok("unplanned work is named", text.includes("Not on the plan: Prod outage firefight (5h)"), text);
     ok("no plan says so", describeComparison(comparePlan({ blocks: [], work: [] })).includes("No schedule was locked in"));
-    ok("nothing logged says so", describeComparison(comparePlan({ blocks: workBlocksOf(DAY), work: [] })).includes("No work was logged"));
+    ok("nothing logged says so, and that it is not nothing done",
+        describeComparison(comparePlan({ blocks: workBlocksOf(DAY), work: [] })).includes("No work was logged — which is not the same as none being done"));
     ok("no productivity renders nothing", describeComparison(null) === "");
 }
 

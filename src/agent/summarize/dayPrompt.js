@@ -119,9 +119,10 @@ week's news forever.
   What was planned against what actually happened. Be accurate rather than
   kind — this is what the assistant uses to confront work that keeps slipping,
   and a generous version of it is worthless.
-  When PLAN VS LOGGED WORK is given, write this line from it: it comes from the
-  saved schedule and the saved task log, and outranks your own reading of the
-  chat. Add the reason from the transcript when there is one.
+  When PLAN VS LOGGED WORK is given, write this line from it: it is the saved
+  schedule measured against the saved task log, and it outranks your own
+  reading of a plan in the chat. The transcript adds the reason — and anything
+  they said they did that was never logged, which still happened.
     "Planned gym and deck work; did neither, sick from midday."
     "Followed the schedule except the evening block."
 

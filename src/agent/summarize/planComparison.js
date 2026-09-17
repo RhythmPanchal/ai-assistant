@@ -243,7 +243,9 @@ export function describeComparison(productivity) {
             ? `  Not on the plan: ${p.unplanned.map(u => `${u.title} (${formatMinutes(u.minutes)})`).join(", ")}.`
             : "  All logged work was on the plan.");
     } else {
-        out.push("  No work was logged.");
+        // A night with no wrap-up logs nothing. Said plainly, or "nothing logged"
+        // is read as "nothing done" and written up as a failed day.
+        out.push("  No work was logged — which is not the same as none being done.");
     }
     return out.join("\n");
 }
