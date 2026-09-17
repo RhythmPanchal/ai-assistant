@@ -14,6 +14,7 @@ import assert from "node:assert";
 
 import { extractJson, coerceRow, buildMessages } from "../agent/summarize/summarizeDay.js";
 import { DAY_SUMMARY_INSTRUCTION } from "../agent/summarize/dayPrompt.js";
+import { comparePlan, workBlocksOf, workItemsOf } from "../agent/summarize/planComparison.js";
 import { ACTION_MAP } from "../scheduler/actionDispatcher.js";
 import { summarizeDayJob } from "../scheduler/jobs/summarizeDayJob.js";
 import fetchCollectionNameAndSchema from "../tools/mongo/fetchCollectionSchema.js";
@@ -131,6 +132,24 @@ const carried = buildMessages({
 });
 ok("previous state is handed over for carry-forward",
     carried[1].content.includes("still true") && carried[1].content.includes("still open"));
+
+// followThrough used to be read from the chat alone, and a morning draft reads
+// much like a finished day. With the comparison in hand it is written from rows.
+ok("with no comparison, the plan block is left out", !/PLAN VS LOGGED WORK/.test(messages[1].content));
+const measured = buildMessages({
+    logDate: "2026-09-03",
+    transcript: "[23:10] user: outage ate the day",
+    previous: null,
+    productivity: comparePlan({
+        blocks: workBlocksOf({ slots: [{ slotId: "slot_1", startTime: "10:00", endTime: "12:00", title: "Q3 deck review", category: "Work", status: "Planned" }] }),
+        work: workItemsOf({ performedTasks: [{ title: "Prod outage firefight", actualDurationMinutes: 300, status: "Completed" }] }),
+    }),
+})[1].content;
+ok("the comparison is handed over", measured.includes("PLAN VS LOGGED WORK") && measured.includes("Verdict: did different work"), measured);
+ok("the comparison comes before the transcript",
+    measured.indexOf("PLAN VS LOGGED WORK") < measured.indexOf("TRANSCRIPT"));
+ok("the instruction writes followThrough from the comparison when there is one",
+    /When PLAN VS LOGGED WORK is given, write this line from it/.test(DAY_SUMMARY_INSTRUCTION));
 
 ok("the instruction forbids retelling the schedule draft",
     /Do NOT retell it/.test(DAY_SUMMARY_INSTRUCTION));

@@ -119,6 +119,9 @@ week's news forever.
   What was planned against what actually happened. Be accurate rather than
   kind — this is what the assistant uses to confront work that keeps slipping,
   and a generous version of it is worthless.
+  When PLAN VS LOGGED WORK is given, write this line from it: it comes from the
+  saved schedule and the saved task log, and outranks your own reading of the
+  chat. Add the reason from the transcript when there is one.
     "Planned gym and deck work; did neither, sick from midday."
     "Followed the schedule except the evening block."
 
@@ -159,8 +162,11 @@ object: a headline saying so, and empty lists.
  *
  * Everything the pass may use is in here. It has no tools, so there is nothing
  * to fetch and nothing to be told not to fetch.
+ *
+ * @param {string|null} [plan] the day's schedule measured against its task log
+ *        (describeComparison). Absent, followThrough is read from the chat alone.
  */
-export function buildDaySummaryInput({ logDate, weekday, transcript, previous }) {
+export function buildDaySummaryInput({ logDate, weekday, transcript, previous, plan = null }) {
     const previousBlock = previous
         ? [
             `PREVIOUS STATE — carried over from ${previous.dateLabel}.`,
@@ -173,11 +179,16 @@ export function buildDaySummaryInput({ logDate, weekday, transcript, previous })
         ].join("\n")
         : "PREVIOUS STATE — none. This is the first day summarised, so there is\nnothing to carry forward. Build state and openThreads from the transcript alone.";
 
+    const planBlock = plan
+        ? ["PLAN VS LOGGED WORK — the saved schedule measured against the saved task log", plan, ""]
+        : [];
+
     return [
         `THE DAY: ${logDate} (${weekday})`,
         "",
         previousBlock,
         "",
+        ...planBlock,
         "=====================================================================",
         `TRANSCRIPT — everything said on ${logDate}, in order`,
         "=====================================================================",

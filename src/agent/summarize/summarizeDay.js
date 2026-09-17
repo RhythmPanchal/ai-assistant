@@ -1,6 +1,7 @@
 import { ProviderManager, resolveTaskChain } from "../llm/createProvider.js";
 import { startTurn } from "../llm/usageMeter.js";
 import { DAY_SUMMARY_INSTRUCTION, buildDaySummaryInput } from "./dayPrompt.js";
+import { describeComparison } from "./planComparison.js";
 import { toIST, IST_TIMEZONE } from "../../tools/mongo/dateUtils.js";
 
 /**
@@ -100,8 +101,13 @@ export function coerceRow(parsed, { userId, logDate }) {
     };
 }
 
-/** The two messages sent. Exported so a dry run can print them without spending a request. */
-export function buildMessages({ logDate, transcript, previous = null, timeZone = IST_TIMEZONE }) {
+/**
+ * The two messages sent. Exported so a dry run can print them without spending a request.
+ *
+ * @param {object} [productivity] the day's plan comparison, when the review has
+ *        run — followThrough is then written from it instead of from the chat
+ */
+export function buildMessages({ logDate, transcript, previous = null, timeZone = IST_TIMEZONE, productivity = null }) {
     const weekday = new Date(`${logDate}T12:00:00+05:30`)
         .toLocaleDateString("en-GB", { timeZone, weekday: "long" });
 
@@ -120,6 +126,7 @@ export function buildMessages({ logDate, transcript, previous = null, timeZone =
                     state: previous.state,
                     openThreads: previous.openThreads,
                 },
+                plan: productivity ? describeComparison(productivity) : null,
             }),
         },
     ];
@@ -131,11 +138,11 @@ export function buildMessages({ logDate, transcript, previous = null, timeZone =
  *          rather than swallowed so the scheduler's retry and backoff apply —
  *          a day lost to a quota block should be tried again, not written badly.
  */
-export async function summarizeDay({ userId, logDate, transcript, previous = null, timeZone = IST_TIMEZONE, apiKeys = {} }) {
+export async function summarizeDay({ userId, logDate, transcript, previous = null, timeZone = IST_TIMEZONE, apiKeys = {}, productivity = null }) {
     if (!Number.isInteger(userId)) throw new Error("[summarizeDay] userId must be an integer");
     if (!logDate) throw new Error("[summarizeDay] logDate is required");
 
-    const messages = buildMessages({ logDate, transcript, previous, timeZone });
+    const messages = buildMessages({ logDate, transcript, previous, timeZone, productivity });
     // The task is known up front here, unlike a conversation where it is
     // resolved from the open flows — so it goes in the constructor rather than
     // through setTask.
