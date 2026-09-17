@@ -40,6 +40,32 @@ test("a failed profile load renders nothing, so the fallback shows", () => {
     assert.strictEqual(renderProfileBlock(undefined), null);
 });
 
+// ── the routines line ────────────────────────────────────────────────────────
+
+test("routines on show their times, defaults filled in", async () => {
+    const { routinesLine } = await import("../knowledge/userProfileKnowledge.js");
+    assert.strictEqual(routinesLine({ preferences: { triggersOptIn: true } }), "routines on — morning 09:00, night 23:00");
+    assert.strictEqual(
+        routinesLine({ preferences: { triggersOptIn: true, morningHour: 7, nightHour: 21 } }),
+        "routines on — morning 07:00, night 21:00");
+    assert.strictEqual(routinesLine({ preferences: { triggersOptIn: true, morningHour: 0 } }),
+        "routines on — morning 00:00, night 23:00", "midnight is a real hour, not a missing one");
+});
+
+test("routines off says whether onboarding is what they are waiting on", async () => {
+    const { routinesLine } = await import("../knowledge/userProfileKnowledge.js");
+    assert.strictEqual(routinesLine({ onboardedAt: new Date(), preferences: { triggersOptIn: false } }), "routines off");
+    assert.strictEqual(routinesLine({ onboardedAt: null, preferences: { triggersOptIn: false } }),
+        "routines off until onboarding finishes",
+        "a new user asking why nothing arrived at 09:00 deserves the real reason");
+    assert.strictEqual(routinesLine({}), "routines off until onboarding finishes");
+});
+
+test("the routines line is in the block, beside timezone and currency", () => {
+    const out = renderProfileBlock(profile({ preferences: { triggersOptIn: true, morningHour: 8 } }));
+    assert.match(out, /timezone Asia\/Kolkata · currency INR · routines on — morning 08:00, night 23:00/);
+});
+
 test("a known user with no notes yet gets a usable block", () => {
     const out = renderProfileBlock(profile());
     assert.match(out, /WHO YOU ARE HELPING/);

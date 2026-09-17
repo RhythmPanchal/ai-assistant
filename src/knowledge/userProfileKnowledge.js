@@ -1,4 +1,22 @@
-import { NOTE_SECTIONS } from "../tools/mongo/schema/usersSchema.js";
+import { NOTE_SECTIONS, ROUTINE_HOURS } from "../tools/mongo/schema/usersSchema.js";
+
+const hh = (hour) => `${String(hour).padStart(2, "0")}:00`;
+
+/**
+ * Whether their routines run, and when — the one setting code acts on that the
+ * model otherwise could not see. Without it the agent can answer neither "when
+ * do you message me?" nor "have my routines started?", and the review skill
+ * would be changing times it cannot read back.
+ */
+export function routinesLine(profile) {
+    const prefs = profile?.preferences ?? {};
+    if (prefs.triggersOptIn === true) {
+        const morning = prefs.morningHour ?? ROUTINE_HOURS.morning;
+        const night = prefs.nightHour ?? ROUTINE_HOURS.night;
+        return `routines on — morning ${hh(morning)}, night ${hh(night)}`;
+    }
+    return profile?.onboardedAt ? "routines off" : "routines off until onboarding finishes";
+}
 
 /**
  * Render what the model knows about a user into the WHO YOU ARE HELPING block.
@@ -43,8 +61,9 @@ export function renderProfileBlock(profile = null) {
     const settings = [
         profile.timezone && `timezone ${profile.timezone}`,
         profile.currency && `currency ${profile.currency}`,
+        routinesLine(profile),
     ].filter(Boolean);
-    if (settings.length) lines.push(settings.join(" · "));
+    lines.push(settings.join(" · "));
 
     const noted = [];
     const empty = [];

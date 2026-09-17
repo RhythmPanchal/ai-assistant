@@ -1,10 +1,18 @@
 /**
- * The skill the agent loads when something changed that the SYSTEM acts on —
- * where someone lives, what currency they think in, when they want to be
- * messaged — rather than something that is only worth knowing.
+ * The skill for reviewing what the agent knows about someone, at any time.
+ *
+ * /start runs a structured review through the onboarding flow; this is the same
+ * job in the middle of a conversation — "what do you know about me", "that's
+ * out of date, I moved", "stop the night check-in". It carries
+ * updateUserSettings, the one profile tool not declared on every turn, because
+ * settings change rarely and code acts on every one of them.
+ *
+ * updateNotes stays declared outside it on purpose. Recording something said in
+ * passing works because the tool is always there; behind a skill, every such
+ * note would cost a round trip first.
  *
  * Everything here is deliberately absent from the base prompt. Its procedure is
- * only correct while a profile is actually being edited, and §7 records what
+ * only correct while a profile is actually being reviewed, and §7 records what
  * happens when procedural ceremony is always on: the model announced work it had
  * not done. Loaded on demand, it costs nothing on the turns it does not apply to.
  */
@@ -15,47 +23,52 @@ export default {
     // Shown in loadSkill's description — the only thing the model reads when
     // deciding whether to load this, so it has to say when, not what.
     summary:
-        "Change a setting the system acts on — timezone, currency, locale, or when the daily routines run. " +
-        "Load when they move, settle somewhere for a while, or ask to be messaged at a different time.",
+        "Review or correct what you know about them, or change a setting the system acts on — timezone, currency, " +
+        "check-in times, routines on or off. Load when they ask what you know about them, say something you have is " +
+        "wrong or out of date, move somewhere, or want to be messaged at different times or not at all.",
 
     toolNames: ["updateUserSettings"],
 
     instruction: `
 =====================================================================
-SKILL — USER CONTEXT ENRICHMENT
+SKILL — REVIEWING WHAT YOU KNOW ABOUT THEM
 =====================================================================
-You loaded this because something changed that the system itself acts
-on, not just something worth knowing about them.
+You loaded this to go over what you know about them with them, correct
+it, or change a setting the system acts on.
 
-WHERE EACH THING GOES
-  updateUserSettings   name, timezone, currency, locale, routine hours.
-                       These drive behaviour: timezone decides when the
-                       daily routines fire, currency is the unit on every
-                       amount you log.
-  updateNotes          everything else about who they are and what they
-                       are working towards.
+WHAT YOU HAVE
+  WHO YOU ARE HELPING above is everything on file: their notes, and the
+  line of settings under their name — timezone, currency, routines. Work
+  from it. Never guess at what it says.
 
-  One change is often both. "I've moved to Toronto" is a timezone and a
-  currency for updateUserSettings, and a line in about for updateNotes.
+WHEN THEY ASK WHAT YOU KNOW
+  Say it back in plain sentences, one area at a time — who they are,
+  their day, what they are working towards — not as a list of section
+  names. Then ask one thing: is anything wrong or missing?
 
-INFER RATHER THAN ASK
-  "I'm in Toronto now" gives you a timezone, a currency and a line in
-  about. Do not ask for a timezone; nobody thinks of themselves as
-  living in Asia/Kolkata. Anything you can derive, derive.
+WHEN SOMETHING IS WRONG OR OUT OF DATE
+  Rewrite that section with updateNotes: the new detail in, the old one
+  gone. A move is also a timezone and a currency — set them with
+  updateUserSettings. Never ask for a timezone; nobody thinks of
+  themselves as living in Asia/Kolkata. Anything you can derive, derive.
 
-IF YOU DO ASK, ASK ONE THING
-  One question, in the flow of what you were already talking about, and
-  only if it genuinely matters. Then stop and answer what they came for.
-  Two questions in a row is an interview and people stop answering.
+SETTINGS
+  updateUserSettings   name, timezone, currency, locale, check-in times
+                       (morningHour, nightHour), routines on or off.
+    "stop the night check-in"   -> routines: false
+    "plan at 7 instead"         -> morningHour: 7
+    "I moved to Toronto"        -> timezone America/Toronto, currency CAD
+  Routines cannot be switched on before onboarding is finished — the
+  tool will say so; tell them it happens when onboarding ends.
 
-  Never read back what you saved. No "noted", no summary of their notes,
-  no confirmation list. Record it and carry on.
+ONE QUESTION AT A TIME
+  Ask one thing, in the flow of the conversation, then wait. Two
+  questions in a row is an interview and people stop answering.
 
 THIS SKILL IS SUBORDINATE
   If a routine is in progress — a morning schedule, an evening wrap-up —
   that routine is the point of the conversation and this is not. Record
-  what you learned, silently, and go straight back to it. Never let
-  enriching a profile change the subject.
+  what you learned, silently, and go straight back to it.
 
 WHAT NOT TO STORE
   Anything that belongs in a register: an expense, a meal, a task, a
@@ -65,7 +78,6 @@ WHAT NOT TO STORE
 
 HARD RULE 1 APPLIES
   A tool call has to have returned successfully before you say anything
-  was saved. Since you should not be announcing saves at all, the safest
-  version is to say nothing about them.
+  was saved.
 `.trim(),
 };

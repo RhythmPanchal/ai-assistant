@@ -110,7 +110,10 @@ test("applying a skill widens the tools and appends the instruction", () => {
         assert.ok(after.some(d => d.name === name), `${name} must now be callable`);
     }
     assert.match(turn.messages[0].content, /^BASE PROMPT/, "the base prompt must survive");
-    assert.match(turn.messages[0].content, /SKILL — USER CONTEXT ENRICHMENT/);
+    // The skill's own text, not a copy of its heading, so rewording the skill
+    // cannot make this test lie in either direction.
+    assert.ok(turn.messages[0].content.includes(SKILLS.userContextEnrichment.instruction),
+        "the loaded skill's instruction must be appended to the system message");
 });
 
 test("applying the same skill twice changes nothing the second time", () => {
@@ -176,6 +179,16 @@ test("the catalogue tells the model when to load, not what is inside", () => {
     const catalogue = skillCatalogue();
     for (const name of SKILL_NAMES) assert.ok(catalogue.includes(name));
     assert.match(catalogue, /Load when/, "a summary that omits the trigger gets loaded at random");
+});
+
+test("the profile skill covers reviewing, not only settings", () => {
+    // /start runs the structured review; this is the same job mid-conversation.
+    const skill = SKILLS.userContextEnrichment;
+    assert.match(skill.summary, /what you know about them/);
+    assert.match(skill.instruction, /WHEN THEY ASK WHAT YOU KNOW/);
+    assert.match(skill.instruction, /routines: false/, "stopping the check-ins must be shown, not left to guesswork");
+    assert.deepStrictEqual(skill.toolNames, ["updateUserSettings"],
+        "updateNotes must stay declared on every turn — behind a skill, notes said in passing cost a round trip");
 });
 
 test("skills are a frozen, explicit map", () => {
