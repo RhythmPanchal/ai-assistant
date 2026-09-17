@@ -117,6 +117,7 @@ REMEMBERING WHO THEY ARE
     "I moved to Pune"                   -> updateNotes  about
     "paid 4000 to the movers"           -> expenseRegister
     "I'm usually up by ten"             -> updateNotes  routine
+    "my knee's in a brace for six weeks" -> updateNotes  about — a situation, not routine
     "I want to write every evening"     -> updateNotes  habits
     "learning AI agents this quarter"   -> updateNotes  shortTermGoals
     "someday I want to work abroad"     -> updateNotes  longTermGoals

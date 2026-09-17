@@ -32,6 +32,14 @@ test("every section says what belongs in it", () => {
     }
 });
 
+test("routine holds only what repeats, and a situation is about", () => {
+    // Prod's Routine note was a months-long parking hunt, filed as a routine in
+    // the old fact store. The boundary is spelled out where the model reads it.
+    const holds = Object.fromEntries(NOTE_SECTIONS.map(x => [x.key, x.holds]));
+    assert.match(holds.routine, /Only what repeats — never a situation, a plan or an errand/);
+    assert.match(holds.about, /situations that last for months/);
+});
+
 test("an invented section is refused, with the real ones named", () => {
     const r = validateNoteWrite("ambitions", "Wants to fly.");
     assert.strictEqual(r.ok, false, "free section names are how 'goals' and 'ambitions' end up holding the same thing");

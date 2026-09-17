@@ -12,10 +12,13 @@ export const USERS = "users";
  *
  * `holds` is not just documentation: the updateNotes declaration is built from
  * it, so the model is told what belongs in each section in exactly these words.
+ * That is why about and routine spell out their boundary: a months-long parking
+ * hunt, filed as a routine in the old fact store, was carried into prod's
+ * Routine note as the whole of someone's day.
  */
 export const NOTE_SECTIONS = Object.freeze([
-  { key: "about",          label: "About",      holds: "who they are: work, where they live, background, household, constraints to respect" },
-  { key: "routine",        label: "Routine",    holds: "the shape of a normal day as it actually happens: waking, meals, work hours, sleep" },
+  { key: "about",          label: "About",      holds: "who they are and their circumstances: work, where they live, background, household, health, constraints to respect, and situations that last for months, like a house move or an injury" },
+  { key: "routine",        label: "Routine",    holds: "the shape of a normal day as it actually happens: waking, meals, work hours, exercise, sleep. Only what repeats — never a situation, a plan or an errand" },
   { key: "habits",         label: "Habits",     holds: "practices they want to keep up, and how that is actually going" },
   { key: "shortTermGoals", label: "Short-term", holds: "what they are working towards over the next weeks or months, and why" },
   { key: "longTermGoals",  label: "Long-term",  holds: "where they want their life to go, including directions that pull against each other" },

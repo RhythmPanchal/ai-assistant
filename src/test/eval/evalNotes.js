@@ -121,6 +121,37 @@ const SCENARIOS = [
         ],
     },
     {
+        name: "situation-not-routine",
+        why: "a situation that lasts months is who they are for now, not how their day runs",
+        notes: { routine: "Up at 7, office 9:30 to 6:30, asleep by midnight." },
+        replies: ["we're staying at my in-laws' place in Thane for the next few months while our flat is renovated"],
+        checks: [
+            { why: "about has the stay", fn: s => /thane|in-laws|renovat/i.test(text(s.after, "about")), detail: s => JSON.stringify(s.after ?? {}) },
+            { why: "routine is unchanged", fn: s => unchanged(s, "routine"), detail: s => text(s.after, "routine") },
+        ],
+    },
+    {
+        // Prod's Routine held a situation that belonged in About. Asked to move
+        // such things while rewriting, fallback models never did and once
+        // deleted it — so the rule was dropped, 007 moves prod's, and this
+        // checks only that a rewrite keeps what it does not understand.
+        name: "rewrite-keeps-the-rest",
+        why: "rewriting a section for one change loses nothing else it held",
+        notes: {
+            about: "Accountant in Kochi.",
+            routine: "Up at 6:30, gym at 7, office 9 to 6. Looking for a new school for their son before the next term.",
+        },
+        replies: ["I've moved my gym to the evenings now, around 7pm"],
+        checks: [
+            { why: "routine has the evening gym", fn: s => /evening|7 ?pm|19:00/i.test(text(s.after, "routine")), detail: s => text(s.after, "routine") },
+            {
+                why: "the school search is still in the notes",
+                fn: s => NOTE_SECTIONS.some(({ key }) => /school/i.test(text(s.after, key))),
+                detail: s => JSON.stringify(s.after ?? {}),
+            },
+        ],
+    },
+    {
         name: "event-not-note",
         why: "a meal and a spend are events for their registers, not notes",
         replies: ["had dal chawal for lunch and spent 250 on an auto"],

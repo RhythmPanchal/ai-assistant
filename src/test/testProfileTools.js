@@ -192,6 +192,14 @@ test("updateNotes offers exactly the sections the schema defines", async () => {
         "the model should learn the cap before a write is refused for it");
 });
 
+test("updateNotes says to file each thing in one section, and never asks it to move old notes", () => {
+    const d = new profileTools.UpdateNotesTool().toFunctionDeclaration();
+    assert.match(d.description, /Put each thing in the one section whose description fits it/);
+    // Asked to move misfiled content out of a section it rewrote, fallback
+    // models moved it in none of four eval runs and deleted it in one.
+    assert.doesNotMatch(d.description, /move it there/);
+});
+
 test("updateNotes says a write replaces the section", () => {
     const d = new profileTools.UpdateNotesTool().toFunctionDeclaration();
     assert.match(d.description, /REPLACES/, "a model that thinks it appends wipes the rest of the section");
