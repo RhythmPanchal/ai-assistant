@@ -179,11 +179,21 @@ const LOG = { performedTasks: [done("Prod outage firefight", 300), done("Gym ses
 }
 
 // ------------------------------------------------------------- thresholds --
-ok("75% followed is followed", verdictFor({ plannedMinutes: 100, loggedMinutes: 100, followedPct: 75, unplannedPct: 90 }) === VERDICTS.FOLLOWED);
-ok("74% is partly", verdictFor({ plannedMinutes: 100, loggedMinutes: 100, followedPct: 74, unplannedPct: 0 }) === VERDICTS.PARTLY);
-ok("40% is partly", verdictFor({ plannedMinutes: 100, loggedMinutes: 100, followedPct: 40, unplannedPct: 90 }) === VERDICTS.PARTLY);
-ok("39% with half the work unplanned is different work", verdictFor({ plannedMinutes: 100, loggedMinutes: 100, followedPct: 39, unplannedPct: 50 }) === VERDICTS.DIFFERENT);
-ok("39% with less unplanned fell short", verdictFor({ plannedMinutes: 100, loggedMinutes: 100, followedPct: 39, unplannedPct: 49 }) === VERDICTS.SHORT);
+ok("75% followed is followed", verdictFor({ plannedMinutes: 100, loggedMinutes: 175, followedPct: 75, unplannedMinutes: 100 }) === VERDICTS.FOLLOWED);
+ok("74% is partly", verdictFor({ plannedMinutes: 100, loggedMinutes: 74, followedPct: 74, unplannedMinutes: 0 }) === VERDICTS.PARTLY);
+ok("40% is partly", verdictFor({ plannedMinutes: 100, loggedMinutes: 140, followedPct: 40, unplannedMinutes: 100 }) === VERDICTS.PARTLY);
+ok("39% with other work worth half the plan is different work", verdictFor({ plannedMinutes: 100, loggedMinutes: 89, followedPct: 39, unplannedMinutes: 50 }) === VERDICTS.DIFFERENT);
+ok("39% with less other work than that fell short", verdictFor({ plannedMinutes: 100, loggedMinutes: 88, followedPct: 39, unplannedMinutes: 49 }) === VERDICTS.SHORT);
+{
+    // Half an hour of email is ALL the logged work — 100% unplanned — and
+    // still nowhere near a day spent on something else.
+    const idle = comparePlan({
+        blocks: workBlocksOf({ slots: [slot("s1", "10:00", "13:00", "Q3 deck review"), slot("s2", "14:00", "17:00", "Write API docs")] }),
+        work: workItemsOf({ performedTasks: [done("Replied to emails", 30)] }),
+    });
+    ok("a little unplanned work on a big plan fell short, not different work", idle.verdict === VERDICTS.SHORT,
+        `${idle.verdict}: ${idle.unplannedPct}% of logged work unplanned`);
+}
 
 // ---------------------------------------------------------------- render --
 same("minutes read as hours", [150, 60, 45, 0].map(formatMinutes), ["2h 30m", "1h", "45m", "0m"]);

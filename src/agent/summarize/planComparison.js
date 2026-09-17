@@ -32,9 +32,13 @@ export const OUTCOMES = Object.freeze(["done", "partial", "not done", "unclear"]
 // Most of the plan's minutes were filled by its own work.
 const FOLLOWED_PCT = 75;
 // Below this, the plan did not happen. Whether that was a lost day or a day of
-// other work is what the unplanned share decides.
+// other work depends on how much other work there was.
 const FELL_SHORT_PCT = 40;
-const MOSTLY_UNPLANNED_PCT = 50;
+// Unplanned work amounting to at least half the plan is a day spent on
+// something else. Measured against the plan, not against what was logged: half
+// an hour of email on a six-hour plan is all of the logged work, and still not
+// a day of different work.
+const DIFFERENT_WORK_PCT = 50;
 
 const HH_MM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -118,12 +122,12 @@ export function exactLinks(blocks, work) {
     return links;
 }
 
-export function verdictFor({ plannedMinutes, loggedMinutes, followedPct, unplannedPct }) {
+export function verdictFor({ plannedMinutes, loggedMinutes, followedPct, unplannedMinutes }) {
     if (!plannedMinutes) return VERDICTS.NO_PLAN;
     if (!loggedMinutes) return VERDICTS.NOTHING_LOGGED;
     if (followedPct >= FOLLOWED_PCT) return VERDICTS.FOLLOWED;
     if (followedPct < FELL_SHORT_PCT) {
-        return unplannedPct >= MOSTLY_UNPLANNED_PCT ? VERDICTS.DIFFERENT : VERDICTS.SHORT;
+        return unplannedMinutes * 100 >= plannedMinutes * DIFFERENT_WORK_PCT ? VERDICTS.DIFFERENT : VERDICTS.SHORT;
     }
     return VERDICTS.PARTLY;
 }
@@ -190,7 +194,7 @@ export function comparePlan({ blocks = [], work = [], matches = [] } = {}) {
     const unplannedPct = loggedMinutes ? Math.round(100 * unplannedMinutes / loggedMinutes) : null;
 
     return {
-        verdict: verdictFor({ plannedMinutes, loggedMinutes, followedPct, unplannedPct }),
+        verdict: verdictFor({ plannedMinutes, loggedMinutes, followedPct, unplannedMinutes }),
         plannedMinutes,
         followedMinutes,
         loggedMinutes,
