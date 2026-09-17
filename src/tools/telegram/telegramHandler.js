@@ -6,6 +6,15 @@ import { sendMessage, editMessage, startTyping, answerCallbackQuery } from "./se
 import { buildTurnFooter } from "./turnFooter.js";
 import { getUserProfile } from "../../identity/userManager.js";
 import { dismissCallbackHandler } from "../../connectors/oauth/dismissCallbackHandler.js";
+import { userOnboardingJob, neverOnboarded } from "../../scheduler/jobs/userOnboardingJob.js";
+
+/**
+ * Telegram's /start: what its Start button sends, optionally addressed to the
+ * bot ("/start@RasmalaiBot") and optionally carrying a deep-link payload.
+ */
+export function isStartCommand(text) {
+  return /^\/start(?:@\w+)?(?:\s|$)/i.test(String(text ?? "").trim());
+}
 
 
 // Callback query format: "<code>:<appName>:<userId>"
@@ -87,9 +96,26 @@ export async function handleTelegramMessage(message) {
       displayName: message.from?.first_name ?? null,
     });
 
-    // TODO(onboarding): open the onboarding flow here once it exists. Until
-    // then a new user simply gets a working bot with an empty profile.
     if (isNew) console.log(`[handleTelegramMessage] first contact — allocated userId ${userId}`);
+
+    // /start, or anyone's very first message, opens onboarding. /start is the
+    // whole turn: the job sends the welcome (first time only) and the first
+    // question. A first message that is anything else — "spent 200 on lunch" —
+    // still gets handled: the flow is opened and welcomed without a question,
+    // and the agent turn below answers it and asks the question itself.
+    //
+    // "First message" means first since onboarding existed: an account made
+    // before it, never welcomed, is onboarded on its next message too. A failed
+    // lookup costs the onboarding, never the message.
+    const start = isStartCommand(text);
+    const firstContact = isNew || (!start && neverOnboarded(await getUserProfile(userId).catch(() => null)));
+    if (start || firstContact) {
+      await runWithUserContext(
+        { userId, channel: "telegram", address: chatId },
+        () => userOnboardingJob({ userId, chatId, askQuestion: start })
+      );
+      if (start) return;
+    }
 
     // The trust boundary. This is the only place in a user turn where identity
     // is established from something authenticated, so it is the only place the

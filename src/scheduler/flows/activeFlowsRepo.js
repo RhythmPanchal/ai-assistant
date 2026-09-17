@@ -81,6 +81,20 @@ export async function closeFlow({ userId, flowType, reason, closedBy = "system" 
 }
 
 /**
+ * Push an open flow's expiry forward. Only an open flow — one that already
+ * expired or closed stays closed, so a late message can never revive it.
+ */
+export async function extendFlow(flowId, expiresAt) {
+  const db = await getDB();
+  const now = new Date();
+  const res = await db.collection(ACTIVE_FLOWS).updateOne(
+    { _id: flowId, state: "open" },
+    { $set: { expiresAt, updatedAt: now } }
+  );
+  return res.modifiedCount > 0;
+}
+
+/**
  * Has this routine already opened for the user today, in their own timezone?
  *
  * The only thing standing between a process restart and a second full morning

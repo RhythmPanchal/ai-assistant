@@ -36,6 +36,7 @@ const MAX_TRANSCRIPT_CHARS = 24000;
 const SOURCE_LABELS = {
     goodMorningJob: "morning routine",
     goodNightJob: "night routine",
+    userOnboardingJob: "onboarding",
 };
 
 function clip(text, limit) {

@@ -62,6 +62,14 @@ export const agentConfig = {
                 maxSteps: 20,
             },
 
+            // Once per user, conversational, and every answer is a notes write:
+            // the extraction has to hold across a dozen turns, so the strongest
+            // model leads, spilling into the higher-volume ones.
+            onboarding: {
+                chain: [g(M.GEM_35_F), g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), ...LAST_RESORT],
+                maxSteps: 10,
+            },
+
             // Future weekly/monthly rollups: large inputs, no tools, nobody
             // waiting. Leads on volume rather than nuance.
             summarize: {

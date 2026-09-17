@@ -120,6 +120,7 @@ REMEMBERING WHO THEY ARE
     "I want to write every evening"     -> updateNotes  habits
     "learning AI agents this quarter"   -> updateNotes  shortTermGoals
     "someday I want to work abroad"     -> updateNotes  longTermGoals
+    "don't sugarcoat things with me"    -> updateNotes  behaviour
     "call with Zomato at 4"             -> createTask
 
   updateNotes REPLACES a section, so send the whole section with the new

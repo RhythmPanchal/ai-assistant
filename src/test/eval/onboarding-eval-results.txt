@@ -1,0 +1,159 @@
+ONBOARDING EVAL — whole onboardings through the real job, runAgent and tools,
+graded on the users document
+Run with: node src/test/eval/evalOnboarding.js --show
+
+2026-09-17 · Rasmalai-onboarding-eval · one run per scenario
+
+Every run was on fallback models: the onboarding chain's first model had no
+quota left that day. Turns ran on gemini-3.5-flash-lite, falling to
+gemini-3.1-flash-lite and cohere command-a-plus under per-minute limits. None of
+this is evidence about the chain's first model — re-run when it is available.
+
+The runs below are the history of the design. Each fix moved a rule the models
+were ignoring out of the instruction and into code.
+
+-------------------------------------------------------------------------------
+RUN 1 — instruction only
+-------------------------------------------------------------------------------
+5/6 scenarios fully passed, 44/45 checks
+
+The checks graded the end state, which hid the real failure: in 4 of 6
+onboardings the model read back and closed after seven or eight answers, with
+long-term goals, habits and behaviour never asked. Only college-first-time
+failed a check (behaviour empty — "just be straight with me" arrived after the
+close).
+
+  FIX: completeFlow refuses "done" while any notes section is empty
+       (unfinishedSections), and ONBOARDING STATE says READY / NOT READY TO
+       FINISH. The eval records whether onboarding was still open after each
+       reply, so an early close is visible.
+
+-------------------------------------------------------------------------------
+RUN 2 — the finish gate, with a hint in its refusal
+-------------------------------------------------------------------------------
+5/6 scenarios fully passed, 53/54 checks
+
+The refusal said: 'If they would rather not say, save "Prefers not to say."'.
+Models took it as the way past the gate. In 4 of 6 onboardings they wrote the
+skip into sections they had never asked about — up to four at once — and
+closed. school-first-time closed before "my half-yearly exams are next month"
+arrived, leaving shortTermGoals as "Prefers not to say.".
+
+  FIX: the hint was removed. Declines were read from the person's own words by
+       code (classifyReply) and counted on the flow; the gate refused more
+       skips than declines.
+
+-------------------------------------------------------------------------------
+RUN 3 — declines counted at the close
+-------------------------------------------------------------------------------
+5/7 scenarios fully passed, 64/66 checks (skips-one-topic added)
+
+  FAIL  review-after-move  about kept "Backend developer in Pune" and appended
+                           "Moved to Bengaluru" — two cities, one wrong
+  FAIL  skips-one-topic    two questions flagged; both were one topic ("working
+                           hours, and when do you wake") — a false positive in
+                           the eval's check, since fixed
+
+What the checks missed, read from the transcripts:
+  - skips-one-topic: one "I'd rather not say" was written into four sections.
+    The gate held, but the count let the onboarding close with behaviour still
+    a skip after they said "be gentle" — a "yes" after the close repaired it,
+    and the end-state check passed.
+  - abandon-resume: one reply reached the user as
+    "opaquecall:default_api:loadSkill{skill:userContextEnrichment}" — a tool
+    call written as text. No check looked for it.
+
+  FIX: REVIEW MODE says to rewrite a section with only what is true now.
+
+-------------------------------------------------------------------------------
+RUN 4 — the two failing scenarios re-run
+-------------------------------------------------------------------------------
+review-after-move  10/10 — about now reads "... living in Bengaluru", no Pune
+skips-one-topic     6/6 — and still wrong. Behaviour ended as "Prefers not to
+                    say." although they said "be gentle":
+  - a skip was written into Behaviour in a turn where they answered about times
+  - completeFlow ran in the same step as the note writes and read the notes
+    before they landed; its refusal named Behaviour as a skip they never made
+  - the model then wrote the skip over "Prefers a gentle approach.", which it
+    had just saved
+
+  FIX: createSkipGuard checks the write instead of counting at the close — a
+       skip only in a turn whose message turned something down, one section
+       per decline, never over an answer. runStepCalls starts completeFlow
+       after the step's other calls. completeFlow judges nothing when no
+       onboarding is open. The eval grades the notes as they stood when
+       onboarding closed, and every scenario checks for invented skips and
+       for tool calls leaked as text.
+
+-------------------------------------------------------------------------------
+RUN 5 — the skip guard, completeFlow last, graded at the close
+-------------------------------------------------------------------------------
+6/7 scenarios fully passed, 73/75 checks
+
+  pass  college-first-time 20/20, school-first-time 13/13, everything-at-once
+        9/9, review-after-move 11/11, declines-routines 8/8, abandon-resume 5/5
+  FAIL  skips-one-topic 7/9 — habits and behaviour were "None." when onboarding
+        closed. Neither was ever asked: with "Prefers not to say." guarded, the
+        model filled them with "None." instead. Later turns wrote the real
+        answers, so grading the end state would have passed it.
+
+  FIX: saysNothing — the guard covers any note that says nothing ("None.",
+       "N/A", "Not mentioned.", ...), not just the placeholder string, and
+       "none" / "nothing" as a whole reply may leave a section saying so.
+
+-------------------------------------------------------------------------------
+RUN 6 — skips-one-topic twice, after the filler fix
+-------------------------------------------------------------------------------
+run 1  7/9   run 2  9/9
+
+Both runs did what the design is for. Five times across the two, the model
+tried "Prefers not to say." for habits or behaviour in a turn where they had
+answered something else; each was refused with "Ask about Habits instead", and
+completeFlow — now after the step's writes — refused while behaviour was empty.
+Both onboardings closed on "be gentle", with every section holding the
+person's own answer.
+
+Run 1's two failures were the eval's own:
+  - /gentle/ does not match "Prefers to be pushed gently..."
+  - "What does your work at the pharmacy usually involve, and what is your team
+    like there?" was flagged as two topics; work and team are one
+Both checks fixed.
+
+-------------------------------------------------------------------------------
+RUN 7 — full run, stopped by a session restart after four scenarios
+-------------------------------------------------------------------------------
+college-first-time 20/20, school-first-time 8/13, everything-at-once 9/9,
+review-after-move 11/11 — then the process was stopped. By now both gemini-3.5
+models were out of quota, and turns ran on gemini-3.1-flash-lite.
+
+  FAIL  school-first-time 8/13 — onboarding was closed as SKIPPED halfway
+        through. The model had asked about favourite subjects; "those times
+        are fine" and "I don't eat eggs" did not answer that, so it counted
+        both as unrelated replies — while saving both, to settings and About.
+        On the next reply it saved the exams as a goal and closed onboarding
+        as skipped in the same step. The rest went in as ordinary
+        conversation, onboardedAt stayed null, and routines never started.
+
+  FIX: IF THEY SAY SOMETHING ELSE says anything about themselves is an answer,
+       even when it is not what was asked. createSkipGuard now hears what each
+       call did: a turn that saved a note or a setting cannot close onboarding
+       as skipped.
+
+-------------------------------------------------------------------------------
+RUN 8 — final
+-------------------------------------------------------------------------------
+7/7 scenarios fully passed, 75/75 checks
+
+  college-first-time 20/20   school-first-time 13/13   everything-at-once 9/9
+  review-after-move  11/11   declines-routines  8/8    skips-one-topic    9/9
+  abandon-resume      5/5
+
+Turns ran on gemini-3.1-flash-lite and cohere command-a-plus.
+
+The guards still did work: in skips-one-topic the model tried "Prefers not to
+say." twice in turns where they had answered, and in everything-at-once it
+tried to finish with Behaviour empty. Each was refused, it asked instead, and
+every onboarding closed as done with the person's own answers.
+
+One run per scenario, and never on the chain's first model (gemini-3.5-flash).
+Re-run with --repeat when it has quota.

@@ -133,8 +133,9 @@ export async function resolveUserByChannel(channel, externalId, { address = null
             name: displayName || `user${userId}`,
             timezone: DEFAULT_TIMEZONE,
             status: "active",
-            // Off until onboarding asks. A routine is a message the user did not
-            // request, so it is opt-in rather than opt-out.
+            // Off until onboarding finishes — its completion switches them on,
+            // unless they said no along the way. A routine is a message nobody
+            // asked for, so it never starts before they have been set up.
             preferences: { triggersOptIn: false },
             onboardedAt: null,
             createdAt: now,

@@ -115,7 +115,12 @@ const usersSchema = {
     onboardedAt: {
       bsonType: ["date", "null"],
       description:
-        "When the onboarding flow completed. null means it never finished, so the flow may resume.",
+        "When onboarding first completed. null means it never finished: /start runs the first-time setup, and routines cannot be switched on. Set once, by markOnboarded.",
+    },
+    welcomedAt: {
+      bsonType: ["date", "null"],
+      description:
+        "When the one welcome message was sent. Separate from onboardedAt so an abandoned onboarding resumed later is not welcomed twice.",
     },
     apiKeys: {
       bsonType: ["object", "null"],

@@ -13,7 +13,7 @@ const activeFlowsSchema = {
     flowType: {
       bsonType: "string",
       description: "Kind of flow — selects which agent instruction overlay applies.",
-      enum: ["goodNight", "goodMorning"]
+      enum: ["goodNight", "goodMorning", "onboarding"]
     },
     state: {
       bsonType: "string",
