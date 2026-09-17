@@ -186,6 +186,12 @@ const SCENARIOS = [
         replies: [`${DAY_LOG} I had to wake up at 6 today for an early flight. That's all for today.`],
         checks: [
             { why: "routine is unchanged", fn: s => unchanged(s, "routine"), detail: s => text(s.after, "routine") },
+            // Refused in the routine, a model once put the flight into About.
+            {
+                why: "the early start is in no note at all",
+                fn: s => !NOTE_SECTIONS.some(({ key }) => /flight|\b6 ?am\b|06:00/i.test(text(s.after, key))),
+                detail: s => JSON.stringify(s.after ?? {}),
+            },
         ],
     },
     {

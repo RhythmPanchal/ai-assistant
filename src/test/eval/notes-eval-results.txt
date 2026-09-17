@@ -59,3 +59,52 @@ speaking up about goals, and announcing saves.
   FAIL  night-weekly-nudge     claimed, not used (cohere). Its replies also carried a literal
                                "[[NO_REPLY]]" after real text, which telegramHandler only
                                suppresses when it is the whole reply.
+
+===============================================================================
+2026-09-17 (evening) · WHERE THINGS GO — situations, single days, rewrites
+===============================================================================
+Prod's Routine note held a months-long parking hunt, copied from a fact the
+model had labelled "routine" (migration 007 moves it). Scenarios added:
+situation-not-routine and rewrite-keeps-the-rest, plus a second check on
+night-one-early-start. Both gemini-3.5 models ran out of quota during this
+work; most turns ran on cohere command-a-plus and gemini-3.1-flash-lite.
+
+1. Section descriptions spell out routine vs about, and updateNotes asked the
+   model to move misfiled content out of a section it rewrites.
+   Full run: 6/13 fully passed.
+     pass  situation-not-routine — the stay went to About, Routine untouched
+     FAIL  misfiled-moves — the gym change landed; the school search stayed in
+           Routine
+     FAIL  night-one-early-start — "Today wake-up was 06:00 for a flight."
+           appended to Routine (it passed in the run above)
+     FAIL  merge-not-wipe, habit, night-routine-changed (saves announced),
+           drift-in-conversation, night-weekly-nudge — as before
+   Repeats:  night-one-early-start 2/3 — the failure again wrote "today"
+             misfiled-moves        0/3 — twice left in Routine, once deleted
+
+2. The move rule was dropped — it moved nothing in four runs and once lost the
+   note — and misfiled-moves became rewrite-keeps-the-rest (the change lands,
+   nothing else is lost). A routine note naming one day was refused in code.
+   Repeats:  night-one-early-start 2/3 — refused "Today" in Routine, the model
+             put "...6am wake today" into About instead
+             rewrite-keeps-the-rest 1/2 — cohere deleted the school search with
+             no move rule at all: dropping is the model's own habit
+             situation-not-routine  2/2
+
+3. The one-day refusal covers every section.
+   Full run: 6/13 fully passed.
+     pass  situation-not-routine, rewrite-keeps-the-rest, night-one-early-start
+           (the refusal fired twice in the turn; every note stayed clean),
+           long-term-conflict, event-not-note, small-talk
+     FAIL  fact-about, merge-not-wipe, habit, short-term-goal,
+           night-routine-changed — every note right, every save announced
+     FAIL  drift-in-conversation, night-weekly-nudge — as before
+   Repeats:  night-one-early-start ×2 — one clean (the refusal fired); one
+             wrote "Woke up at 6am for early flight" into About with no day
+             word, which the rule cannot see. Routine stayed unchanged in all
+             three runs.
+
+Where this leaves it: on these models Routine holds only routine, and a single
+day is kept out by code whenever it names the day. A one-off written without a
+day word, and a rewrite that drops a sentence it did not understand, are still
+the model's to get right; previousText keeps one step back.

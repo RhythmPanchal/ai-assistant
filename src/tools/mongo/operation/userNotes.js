@@ -17,6 +17,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SECTION_KEYS = NOTE_SECTIONS.map(s => s.key);
 
+// Words that pin a sentence to one day. Notes are read on every later day, where
+// "today" is simply wrong. The night wrap-up is where it happened: fallback
+// models wrote "Today wake-up was 06:00 for a flight" into the routine in two of
+// four eval runs, and refused there, one put the flight into About instead —
+// so the rule is every section's, not the routine's.
+const ONE_DAY = /\b(today|tonight|yesterday|tomorrow|this (morning|afternoon|evening|week))\b/i;
+
 /**
  * Decide whether a write is acceptable, and normalise it. Pure, so the rules
  * that keep the notes from rotting can be pinned without a database.
@@ -42,6 +49,15 @@ export function validateNoteWrite(section, text) {
             reason:
                 `that is ${clean.length} characters and a section holds at most ${NOTE_SECTION_LIMIT}. ` +
                 `Rewrite it shorter: merge what overlaps and drop what is no longer true.`,
+        };
+    }
+    const oneDay = clean.match(ONE_DAY);
+    if (oneDay) {
+        return {
+            ok: false,
+            reason:
+                `"${oneDay[0]}" is one day, and notes are read on later days. Leave that day out — ` +
+                `only what will still be true next week belongs here; for something that lasts, say since when.`,
         };
     }
     return { ok: true, section, text: clean };

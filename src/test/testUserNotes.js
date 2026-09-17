@@ -92,6 +92,26 @@ test("the cap applies after collapsing, not before", () => {
     assert.strictEqual(r.text, "Backend developer.");
 });
 
+test("a single day is refused in any section — notes are read on later days", () => {
+    // The notes eval, twice in four runs: "Today wake-up was 06:00 for a flight"
+    // into the routine; refused there, once "...6am wake today" into About.
+    for (const [section, text] of [
+        ["routine", "Up around 10:00. Today wake-up was 06:00 for a flight."],
+        ["routine", "Late tonight, usually asleep by 1."],
+        ["about", "Works until 21:00. Early flight required 6am wake today."],
+        ["shortTermGoals", "Interview at Acme tomorrow."],
+        ["habits", "Went to the gym twice this week."],
+    ]) {
+        const r = validateNoteWrite(section, text);
+        assert.strictEqual(r.ok, false, `${section}: ${text}`);
+        assert.match(r.reason, /is one day, and notes are read on later days/);
+    }
+    for (const text of ["Up at 7 these days, office 9 to 6.", "Gym every evening at 7.", "Works from home on Fridays.",
+                        "Clearing the licence exam this year.", "Moved to Bengaluru in August."]) {
+        assert.strictEqual(validateNoteWrite("about", text).ok, true, text);
+    }
+});
+
 test("an empty string is how a section is cleared", () => {
     const r = validateNoteWrite("habits", "   ");
     assert.strictEqual(r.ok, true, "forgetting is a rewrite without the thing, down to nothing");
