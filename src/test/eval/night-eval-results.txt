@@ -155,3 +155,31 @@ COST
 addMeal 429 + addPerformedTask 425 + replaceMeal 423 = ~1,280 tokens on every
 request. The night overlay is ~2.7K (was ~2.4K) with the opener and
 conversation sections, after dropping the embedded diet and task schemas.
+
+WORK LOGGING — 2026-09-17, 2 runs of each new work scenario
+══════════════════════════════════════════════════════════════════════════════
+Asked because the day summary now measures a day's schedule against its task
+log, so the log is only as good as what this routine asks for and saves.
+
+  scenario                     clean   what happened
+  work-without-duration        2/2     asked how long, logged 120 and 30 min
+  work-across-turns            2/2     the second piece of work was not dropped
+  plan-blocks-unmentioned      2/2     asked about the deck review and the gym;
+                                       logged only the fix, under the plan's title
+  signs-off-without-duration   1/2     run 2 logged the deck review at 45 min —
+                                       a duration nobody gave — then asked how long
+  closes-backlog-task          0/2     logged the work, never called
+                                       updateTaskStatus: the task stayed Pending
+                                       and the log entry has no taskId
+
+The backlog gap is structural, not a slip. Nothing in the night prompt lists
+the pending tasks, so the model has to think to fetch them first, and
+updateTaskStatus only resolves an exact title or a substring of one — "fixed
+the payment webhook bug" does not match "Fix payment webhook bug". The runs on
+gemini-3.5-flash did fetch Pending tasks before logging; both backlog runs were
+served by the flash-lite models and did not. Consequence: the morning routine
+has to reconcile the task by title the next day, and the summary cannot link
+the work to its slot by task id, so that match falls to the review pass.
+
+Models: gemini-3.5-flash for the first runs until its daily quota ran out,
+then gemini-3.5-flash-lite and gemini-3.1-flash-lite.
