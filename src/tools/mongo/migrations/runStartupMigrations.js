@@ -5,6 +5,7 @@ import { runTaskHygiene } from "./003-task-hygiene.js";
 import { runBackfillDaySummaries } from "./004-backfill-day-summaries.js";
 import { runFactsIntoNotes } from "./005-facts-into-notes.js";
 import { runOnboardedBackfill } from "./006-onboarded-existing-users.js";
+import { runRefileFactsByKey } from "./007-refile-facts-by-key.js";
 
 /**
  * Run pending data migrations at boot, before anything can read or write the
@@ -42,6 +43,9 @@ const PENDING = [
     { name: "005-facts-into-notes", run: runFactsIntoNotes },
     // After 005, so notes copied from facts count toward "already using it".
     { name: "006-onboarded-existing-users", run: runOnboardedBackfill },
+    // After 005, whose copy it corrects; it only rewrites sections still
+    // exactly as 005 left them.
+    { name: "007-refile-facts-by-key", run: runRefileFactsByKey },
 ];
 
 /**

@@ -61,8 +61,10 @@ export function sectionForFact(fact) {
  * have no fields for them: a temporary fact "may have changed", an inferred one
  * is "unconfirmed". The model will fold those away the next time it rewrites
  * the section, which is the right time for them to go.
+ *
+ * `sectionOf` is the filing rule — 007 files the same facts by key alone.
  */
-export function factsToNotes(facts, now = Date.now()) {
+export function factsToNotes(facts, now = Date.now(), sectionOf = sectionForFact) {
     const live = (facts || [])
         .filter(f => typeof f?.fact === "string" && f.fact.trim())
         .filter(f => !(f.expiresAt && new Date(f.expiresAt).getTime() <= now))
@@ -78,7 +80,7 @@ export function factsToNotes(facts, now = Date.now()) {
         if (fact.confidence === "inferred") marks.push("unconfirmed");
         sentence += marks.length ? ` (${marks.join(", ")}).` : ".";
 
-        (bySection[sectionForFact(fact)] ??= []).push(sentence);
+        (bySection[sectionOf(fact)] ??= []).push(sentence);
     }
 
     return Object.fromEntries(Object.entries(bySection).map(([section, lines]) => [section, lines.join(" ")]));
