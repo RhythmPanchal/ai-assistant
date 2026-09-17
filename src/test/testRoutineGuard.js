@@ -48,6 +48,30 @@ test("hourCycle h23 gives a usable 0-23 hour at every boundary", () => {
     assert.strictEqual(at("2020-01-01T03:30:00Z", "Asia/Kolkata"), 9);
 });
 
+test("routines fire at the user's own hours, and the defaults otherwise", async () => {
+    // Before this, the executor compared against ROUTINE_HOURS alone, so hours
+    // set from chat were stored and never read.
+    const { routineDue, ROUTINE_HOURS } = await import("../scheduler/initCron.js");
+    assert.deepStrictEqual(ROUTINE_HOURS, { morning: 9, night: 23 });
+
+    const defaults = { preferences: {} };
+    assert.strictEqual(routineDue(defaults, 9), "morning");
+    assert.strictEqual(routineDue(defaults, 23), "night");
+    assert.strictEqual(routineDue(defaults, 12), null);
+    assert.strictEqual(routineDue({}, 9), "morning", "a user with no preferences object still gets the defaults");
+    assert.strictEqual(routineDue(null, 23), "night");
+
+    const early = { preferences: { morningHour: 7, nightHour: 21 } };
+    assert.strictEqual(routineDue(early, 7), "morning");
+    assert.strictEqual(routineDue(early, 21), "night");
+    assert.strictEqual(routineDue(early, 9), null, "the default hour must not fire once they chose another");
+    assert.strictEqual(routineDue(early, 23), null);
+
+    assert.strictEqual(routineDue({ preferences: { morningHour: 0 } }, 0), "morning", "midnight is a real hour, not a missing one");
+    assert.strictEqual(routineDue({ preferences: { morningHour: null } }, 9), "morning", "null falls back");
+    assert.strictEqual(routineDue({ preferences: { morningHour: 20, nightHour: 20 } }, 20), "morning", "same hour: morning wins");
+});
+
 test("the morning routine's data is system-side, not inlined in a user message", async () => {
     // It used to be inlined, along with a shouted instruction not to re-fetch
     // it. Being on the user side meant it was written to chatHistory verbatim

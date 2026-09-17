@@ -5,9 +5,27 @@ import executeTriggerJob from "./executeTriggerJob.js";
 import { resolveRoutineTargets } from "../identity/userManager.js";
 import { goodMorningJob } from "./jobs/goodMorningJob.js";
 import { goodNightJob } from "./jobs/goodNightJob.js";
+import { ROUTINE_HOURS } from "../tools/mongo/schema/usersSchema.js";
 
-// Local hour at which each routine fires, in each user's own timezone.
-const ROUTINE_HOURS = { morning: 9, night: 23 };
+// Re-exported for the tests that pin the defaults alongside routineDue.
+export { ROUTINE_HOURS };
+
+/**
+ * Which routine, if either, is due for this user at this local hour.
+ *
+ * Their own hours when they set them, the defaults otherwise. This used to
+ * compare against ROUTINE_HOURS alone, so preferences.morningHour and nightHour
+ * — settable from chat through updateUserSettings — were stored and never read:
+ * someone who asked for a 07:00 plan still got it at 09:00. Morning wins if both
+ * are set to the same hour.
+ */
+export function routineDue(user, hour) {
+	const morning = user?.preferences?.morningHour ?? ROUTINE_HOURS.morning;
+	const night = user?.preferences?.nightHour ?? ROUTINE_HOURS.night;
+	if (hour === morning) return "morning";
+	if (hour === night) return "night";
+	return null;
+}
 
 export default function initCron() {
 	cron.schedule("* * * * *", async () => {
@@ -41,9 +59,8 @@ async function routineExecutor() {
 				.format(new Date())
 		);
 
-		const job =
-			hour === ROUTINE_HOURS.morning ? goodMorningJob :
-			hour === ROUTINE_HOURS.night ? goodNightJob : null;
+		const due = routineDue(user, hour);
+		const job = due === "morning" ? goodMorningJob : due === "night" ? goodNightJob : null;
 		if (!job) continue;
 
 		await job(user).catch(err =>

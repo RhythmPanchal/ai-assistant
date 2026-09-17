@@ -38,6 +38,14 @@ export const NOTE_SECTIONS = Object.freeze([
 export const NOTE_SECTION_LIMIT = 400;
 
 /**
+ * Local hour each routine fires for anyone who has not chosen their own
+ * (preferences.morningHour / nightHour). Here rather than in initCron so the
+ * profile block can show a user their times without importing the scheduler,
+ * which imports the agent, which imports the profile block.
+ */
+export const ROUTINE_HOURS = Object.freeze({ morning: 9, night: 23 });
+
+/**
  * The sections a routine may raise unprompted — the ones about where someone is
  * trying to get to. About, routine and behaviour describe them; there is
  * nothing in them to fall behind on.
@@ -125,7 +133,13 @@ const usersSchema = {
       properties: {
         triggersOptIn: {
           bsonType: "bool",
-          description: "Whether goodMorning / goodNight routines fire for this user.",
+          description:
+            "Whether goodMorning / goodNight routines fire for this user. false at signup; switched on when onboarding finishes, unless they chose otherwise.",
+        },
+        routinesChosenAt: {
+          bsonType: ["date", "null"],
+          description:
+            "When the user last turned routines on or off themselves. Present means an explicit choice, which onboarding's completion must not override.",
         },
         // Until these existed every user got the hardcoded ROUTINE_HOURS from
         // initCron.js — i.e. the original single user's hours.

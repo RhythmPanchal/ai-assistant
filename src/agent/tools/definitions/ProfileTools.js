@@ -67,6 +67,12 @@ export class UpdateUserSettingsTool extends BaseTool {
             status: { type: "string", enum: ["active", "paused"], description: "'paused' stops routines without losing anything." },
             morningHour: { type: "integer", description: "Local hour (0-23) the morning routine should fire." },
             nightHour: { type: "integer", description: "Local hour (0-23) the evening routine should fire." },
+            routines: {
+                type: "boolean",
+                description:
+                    "Whether the morning plan and night check-in run at all. false stops both. " +
+                    "They switch on by themselves when onboarding finishes, so before then only false does anything.",
+            },
         },
         required: [],
     };

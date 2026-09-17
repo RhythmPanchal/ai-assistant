@@ -4,6 +4,7 @@ import { runPurgeAndRenumber } from "./002-purge-and-renumber.js";
 import { runTaskHygiene } from "./003-task-hygiene.js";
 import { runBackfillDaySummaries } from "./004-backfill-day-summaries.js";
 import { runFactsIntoNotes } from "./005-facts-into-notes.js";
+import { runOnboardedBackfill } from "./006-onboarded-existing-users.js";
 
 /**
  * Run pending data migrations at boot, before anything can read or write the
@@ -39,6 +40,8 @@ const PENDING = [
     // it safe: the first turn that renders notes already finds each user's facts
     // in them. After 002, so no purged account's facts are copied anywhere.
     { name: "005-facts-into-notes", run: runFactsIntoNotes },
+    // After 005, so notes copied from facts count toward "already using it".
+    { name: "006-onboarded-existing-users", run: runOnboardedBackfill },
 ];
 
 /**

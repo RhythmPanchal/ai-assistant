@@ -12,7 +12,7 @@
 import "dotenv/config";
 import assert from "node:assert";
 
-const { updateUserSettings, validateSettings, EDITABLE_SETTINGS } = await import("../tools/mongo/operation/userSettings.js");
+const { updateUserSettings, validateSettings, holdRoutinesUntilOnboarded, EDITABLE_SETTINGS } = await import("../tools/mongo/operation/userSettings.js");
 const toolRegistry = (await import("../agent/tools/definitions/index.js")).default;
 const profileTools = await import("../agent/tools/definitions/ProfileTools.js");
 
@@ -65,10 +65,69 @@ test("routine hours must be a real hour of the day", async () => {
     }
 });
 
-test("hours are written under preferences, not the top level", async () => {
-    const src = (await import("node:fs")).readFileSync("src/tools/mongo/operation/userSettings.js", "utf8");
-    assert.match(src, /`preferences\.\$\{field\}`/,
-        "initCron reads preferences.morningHour — a top-level write would never be seen");
+test("hours and routines are written under preferences, not the top level", () => {
+    // initCron reads preferences.morningHour/nightHour/triggersOptIn — a
+    // top-level write would be stored and never seen.
+    const r = settings({ morningHour: 7, nightHour: 22, routines: false });
+    assert.strictEqual(r.update["preferences.morningHour"], 7);
+    assert.strictEqual(r.update["preferences.nightHour"], 22);
+    assert.strictEqual(r.update["preferences.triggersOptIn"], false);
+    for (const top of ["morningHour", "nightHour", "routines"]) {
+        assert.ok(!(top in r.update), `${top} must not be written at the top level`);
+    }
+});
+
+// ── routines ─────────────────────────────────────────────────────────────────
+
+test("routines must be a real boolean", () => {
+    assert.strictEqual(settings({ routines: true }).applied.routines, true);
+    assert.strictEqual(settings({ routines: false }).applied.routines, false);
+    for (const bad of ["true", "yes", 1, 0, "off"]) {
+        const r = settings({ routines: bad });
+        assert.deepStrictEqual(r.applied, {}, `${JSON.stringify(bad)} must be refused, not guessed at`);
+        assert.match(r.rejected[0].reason, /true or false/);
+    }
+});
+
+test("turning routines on or off records that it was a choice", () => {
+    const now = new Date("2026-09-18T10:00:00Z");
+    for (const routines of [true, false]) {
+        const r = validateSettings({ routines }, { now });
+        assert.deepStrictEqual(r.update["preferences.routinesChosenAt"], now,
+            "without the marker, onboarding's completion would switch routines back on for someone who said no");
+    }
+    assert.ok(!("preferences.routinesChosenAt" in settings({ morningHour: 8 }).update),
+        "choosing a time is not choosing whether routines run");
+});
+
+test("routines cannot be switched on before onboarding is done", () => {
+    const result = validateSettings({ routines: true, morningHour: 7 });
+    const held = holdRoutinesUntilOnboarded(result, { onboardedAt: null });
+
+    assert.ok(!("preferences.triggersOptIn" in held.update), "the switch-on must not reach the database");
+    assert.ok(!("preferences.routinesChosenAt" in held.update), "a refused choice is not a recorded one");
+    assert.ok(!("routines" in held.applied));
+    assert.match(held.rejected.at(-1).reason, /when onboarding finishes/);
+    assert.strictEqual(held.update["preferences.morningHour"], 7, "the times set in the same call still land");
+});
+
+test("switching routines off is always allowed", () => {
+    const held = holdRoutinesUntilOnboarded(validateSettings({ routines: false }), { onboardedAt: null });
+    assert.strictEqual(held.update["preferences.triggersOptIn"], false);
+    assert.deepStrictEqual(held.rejected, []);
+});
+
+test("an onboarded user can switch routines back on", () => {
+    const held = holdRoutinesUntilOnboarded(validateSettings({ routines: true }), { onboardedAt: new Date() });
+    assert.strictEqual(held.update["preferences.triggersOptIn"], true);
+    assert.deepStrictEqual(held.rejected, []);
+});
+
+test("the tool offers routines as a boolean and says when it takes effect", () => {
+    const d = new profileTools.UpdateUserSettingsTool().toFunctionDeclaration();
+    assert.strictEqual(d.parameters.properties.routines?.type, "boolean");
+    assert.match(d.parameters.properties.routines.description, /onboarding finishes/);
+    assert.ok(EDITABLE_SETTINGS.includes("routines"));
 });
 
 test("a partial update leaves untouched fields alone", async () => {

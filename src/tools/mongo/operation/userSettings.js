@@ -12,7 +12,16 @@ import { USERS } from "../schema/usersSchema.js";
  * validated rather than trusted.
  */
 
-const EDITABLE = ["name", "timezone", "currency", "locale", "status", "morningHour", "nightHour"];
+const EDITABLE = ["name", "timezone", "currency", "locale", "status", "morningHour", "nightHour", "routines"];
+
+// Where a setting lives on the users document when it is not a top-level field.
+// initCron reads the hours and the opt-in from preferences, so a top-level write
+// would be stored and never read.
+const PATHS = {
+    morningHour: "preferences.morningHour",
+    nightHour: "preferences.nightHour",
+    routines: "preferences.triggersOptIn",
+};
 
 const STATUSES = ["active", "paused"];
 
@@ -90,6 +99,15 @@ function validateField(field, value) {
             }
             return { ok: true, value: status };
         }
+        case "routines": {
+            // Strictly a boolean. "yes", 1 and "true" all arrive from models that
+            // were told the field is boolean; guessing what they meant is how a
+            // routine switches on for someone who asked for it to stop.
+            if (typeof value !== "boolean") {
+                return { ok: false, reason: "routines must be true or false" };
+            }
+            return { ok: true, value };
+        }
         case "morningHour":
         case "nightHour": {
             const hour = Number(value);
@@ -111,7 +129,7 @@ function validateField(field, value) {
  * Returns the Mongo-shaped `update` alongside the caller-facing `applied`,
  * because the two differ: routine hours nest under preferences.
  */
-export function validateSettings(settings = {}) {
+export function validateSettings(settings = {}, { now = new Date() } = {}) {
     const applied = {};
     const rejected = [];
     const update = {};
@@ -125,18 +143,44 @@ export function validateSettings(settings = {}) {
             continue;
         }
 
-        // morningHour and nightHour live under preferences; the rest are
-        // top-level. initCron reads preferences.morningHour, so a top-level
-        // write here would be stored and then never read.
-        const path = field === "morningHour" || field === "nightHour"
-            ? `preferences.${field}`
-            : field;
-
-        update[path] = check.value;
+        update[PATHS[field] ?? field] = check.value;
         applied[field] = check.value;
+
+        // Turning routines on or off is a CHOICE, and it is recorded as one.
+        // Onboarding switches routines on when it finishes; this is what stops
+        // that from overriding someone who already said no.
+        if (field === "routines") update["preferences.routinesChosenAt"] = now;
     }
 
     return { applied, rejected, update };
+}
+
+/**
+ * Routines are messages nobody asked for, so they stay off until onboarding is
+ * done — its completion is what switches them on. Before that, a request to turn
+ * them ON is refused with the reason; everything else in the same call still
+ * applies, so check-in times set during onboarding land. Turning them OFF is
+ * always allowed.
+ *
+ * Pure, so the rule is tested without a database.
+ */
+export function holdRoutinesUntilOnboarded(result, user) {
+    if (result.update["preferences.triggersOptIn"] !== true || user?.onboardedAt) return result;
+
+    const update = { ...result.update };
+    delete update["preferences.triggersOptIn"];
+    delete update["preferences.routinesChosenAt"];
+    const { routines, ...applied } = result.applied;
+
+    return {
+        applied,
+        update,
+        rejected: [...result.rejected, {
+            field: "routines",
+            reason: "routines switch on by themselves when onboarding finishes — there is nothing to turn on yet. " +
+                    "Set morningHour or nightHour if they want different times.",
+        }],
+    };
 }
 
 /**
@@ -151,11 +195,22 @@ export async function updateUserSettings(userId, settings = {}) {
         throw new Error(`[updateUserSettings] userId must be an integer, got ${userId}`);
     }
 
-    const { applied, rejected, update } = validateSettings(settings);
-
-    if (!Object.keys(update).length) return { applied, rejected };
+    let checked = validateSettings(settings);
+    if (!Object.keys(checked.update).length) return { applied: checked.applied, rejected: checked.rejected };
 
     const db = await getDB();
+
+    // Only a request to switch routines ON needs to know whether they are
+    // onboarded, so only that pays for the read.
+    if (checked.update["preferences.triggersOptIn"] === true) {
+        const user = await db.collection(USERS).findOne({ userId }, { projection: { onboardedAt: 1 } });
+        if (!user) throw new Error(`[updateUserSettings] no user with userId ${userId}`);
+        checked = holdRoutinesUntilOnboarded(checked, user);
+    }
+
+    const { applied, rejected, update } = checked;
+    if (!Object.keys(update).length) return { applied, rejected };
+
     const result = await db.collection(USERS).updateOne(
         { userId },
         { $set: { ...update, updatedAt: new Date() } }
