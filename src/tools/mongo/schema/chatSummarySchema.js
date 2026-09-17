@@ -22,11 +22,22 @@ export const CHAT_SUMMARY = "chatSummary";
  * worth asserting again after it lapses. Writing the second kind into the notes
  * is how the prompt ends up insisting someone is still job hunting a year later.
  */
+
+/** A 1-5 score and the evidence it rests on. Both null when the day gave no signal. */
+const RATING = {
+  bsonType: "object",
+  properties: {
+    score: { bsonType: ["int", "null"], minimum: 1, maximum: 5, description: "1 very bad · 2 poor · 3 okay · 4 good · 5 excellent. null when there was no signal — never a default 3." },
+    why: { bsonType: ["string", "null"], description: "One line: what was logged or said that the score rests on." },
+  },
+  required: ["score", "why"],
+};
+
 const chatSummarySchema = {
   title: "chatSummary",
   description:
     "Rolling episodic memory of a user's conversations. One row per period per user. " +
-    "state and openThreads carry forward from the previous row; headline, mentioned and mood belong to that period alone.",
+    "state and openThreads carry forward from the previous row; headline, mentioned, mood, productivity and ratings belong to that period alone.",
   bsonType: "object",
   properties: {
     userId: {
@@ -102,7 +113,74 @@ const chatSummarySchema = {
 
     mood: {
       bsonType: ["string", "null"],
-      description: "A few words at most. Belongs to this day only.",
+      description: "A few words, or one short sentence when it changed through the day — 'anxious in the morning, happy by the evening'. Belongs to this day only.",
+    },
+
+    // How productive the day was, measured against the plan. Everything but
+    // score and why is worked out in code from the day's userSchedule and
+    // taskRegister rows — the model only says which logged work filled which
+    // planned block. So a verdict can be trusted the way a count can, and the
+    // same two rows always give the same numbers. See planComparison.js.
+    productivity: {
+      bsonType: ["object", "null"],
+      description: "The day's schedule against its logged work, plus a 1-5 productivity score. Belongs to this day only.",
+      properties: {
+        score: RATING.properties.score,
+        why: RATING.properties.why,
+        verdict: {
+          bsonType: "string",
+          enum: ["no plan", "nothing logged", "followed the plan", "partly followed", "did different work", "fell short of the plan"],
+        },
+        plannedMinutes: { bsonType: "int", minimum: 0, description: "Minutes of planned blocks, meals and breaks left out." },
+        followedMinutes: { bsonType: "int", minimum: 0, description: "Planned minutes filled by the logged work that belongs to them." },
+        loggedMinutes: { bsonType: "int", minimum: 0, description: "Every minute of work logged for the day." },
+        unplannedMinutes: { bsonType: "int", minimum: 0, description: "Logged minutes that belong to no planned block." },
+        followedPct: { bsonType: ["int", "null"], minimum: 0, maximum: 100, description: "followed / planned. null with no plan." },
+        unplannedPct: { bsonType: ["int", "null"], minimum: 0, maximum: 100, description: "unplanned / logged. null with nothing logged." },
+        blocks: {
+          bsonType: "array",
+          description: "Each planned block and what became of it.",
+          items: {
+            bsonType: "object",
+            properties: {
+              slotId: { bsonType: ["string", "null"] },
+              title: { bsonType: "string" },
+              startTime: { bsonType: "string" },
+              endTime: { bsonType: "string" },
+              status: { bsonType: "string", description: "The slot's status that night — Skipped or Rescheduled means it was dropped during the day." },
+              minutes: { bsonType: "int", minimum: 0 },
+              loggedMinutes: { bsonType: "int", minimum: 0 },
+              outcome: { bsonType: "string", enum: ["done", "partial", "not done", "unclear"] },
+              work: { bsonType: "array", items: { bsonType: "string" }, description: "Titles of the logged work that filled it." },
+            },
+            required: ["title", "minutes", "loggedMinutes", "outcome", "work"],
+          },
+        },
+        unplanned: {
+          bsonType: "array",
+          description: "Logged work that was not on the plan.",
+          items: {
+            bsonType: "object",
+            properties: {
+              title: { bsonType: "string" },
+              minutes: { bsonType: "int", minimum: 0 },
+            },
+            required: ["title", "minutes"],
+          },
+        },
+      },
+      required: ["verdict", "plannedMinutes", "followedMinutes", "loggedMinutes", "unplannedMinutes", "blocks", "unplanned"],
+    },
+
+    ratings: {
+      bsonType: ["object", "null"],
+      description: "How the day went beyond work, each scored 1-5 with its evidence. Belongs to this day only.",
+      properties: {
+        mood: RATING,
+        health: RATING,
+        overall: RATING,
+      },
+      required: ["mood", "health", "overall"],
     },
 
     createdAt: { bsonType: "date" },
