@@ -1,6 +1,7 @@
 /**
  * Hand-run:  node src/test/eval/evalNightRoutine.js
  *            node src/test/eval/evalNightRoutine.js --only meals-across-turns --show
+ *            node src/test/eval/evalNightRoutine.js --only work-across-turns,closes-backlog-task
  *            node src/test/eval/evalNightRoutine.js --repeat 2
  *
  * Plays each scenario in nightScenarios.js through the real night routine —
@@ -81,7 +82,7 @@ if (collision && !collision.evalUser) {
 // prod refuses — above all a second day-register document for one day.
 await ensureIndexes();
 
-const scenarios = only ? NIGHT_SCENARIOS.filter(s => s.name === only) : NIGHT_SCENARIOS;
+const scenarios = only ? NIGHT_SCENARIOS.filter(s => only.split(",").includes(s.name)) : NIGHT_SCENARIOS;
 if (!scenarios.length) {
     console.error(`No scenario "${only}". Known: ${NIGHT_SCENARIOS.map(s => s.name).join(", ")}`);
     process.exit(1);
@@ -144,6 +145,56 @@ async function seed(scenario, logDate) {
             createdAt: new Date(),
         });
     }
+
+    // Pending work on the backlog, in the shape createTask writes. Inserted
+    // before the schedule so a slot can point at a task by title.
+    const taskIds = new Map();
+    for (const t of scenario.seed?.backlog ?? []) {
+        const { insertedId } = await db.collection("taskCalendar").insertOne({
+            userId: EVAL_USER_ID,
+            title: t.title,
+            requiredMinutes: t.requiredMinutes ?? null,
+            importance: t.importance ?? null,
+            priorityScore: null,
+            category: t.category ?? null,
+            deadline: start,
+            status: "Pending",
+            recurring: null,
+            scheduledEventId: null,
+            completedAt: null,
+            notes: null,
+            deferCount: 0,
+            originalDeadline: start,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        });
+        taskIds.set(t.title, String(insertedId));
+    }
+
+    // The day's locked-in plan, as insertSchedule stores it.
+    const slots = scenario.seed?.schedule ?? [];
+    if (slots.length) {
+        await db.collection("userSchedule").insertOne({
+            userId: EVAL_USER_ID,
+            date: start,
+            day: new Date(`${logDate}T12:00:00+05:30`).toLocaleDateString("en-GB", { timeZone: TIME_ZONE, weekday: "long" }),
+            slots: slots.map((s, i) => ({
+                slotId: `slot_${i + 1}`,
+                startTime: s.startTime,
+                endTime: s.endTime,
+                title: s.title,
+                category: s.category ?? null,
+                priority: s.priority ?? null,
+                status: s.status ?? "Planned",
+                notes: null,
+                taskRef: s.task ? taskIds.get(s.task) ?? null : null,
+            })),
+            summary: null,
+            motivationalNote: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        });
+    }
 }
 
 /**
@@ -165,16 +216,17 @@ async function readState(logDate) {
     const day = { userId: EVAL_USER_ID, date: { $gte: start, $lt: end } };
     const otherDays = { userId: EVAL_USER_ID, date: { $not: { $gte: start, $lt: end } } };
 
-    const [diet, tasks, expenses, strays, flow] = await Promise.all([
+    const [diet, tasks, expenses, strays, flow, backlog] = await Promise.all([
         db.collection("dietRegister").find(day).toArray(),
         db.collection("taskRegister").find(day).toArray(),
         db.collection("expenseRegister").find(day).toArray(),
         Promise.all(["dietRegister", "taskRegister", "expenseRegister"].map(c => db.collection(c).countDocuments(otherDays))),
         db.collection("activeFlows").find({ userId: EVAL_USER_ID, flowType: "goodNight" }).sort({ startedAt: -1 }).limit(1).next(),
+        db.collection("taskCalendar").find({ userId: EVAL_USER_ID }).toArray(),
     ]);
 
     return {
-        diet, tasks, expenses, flow,
+        diet, tasks, expenses, flow, backlog,
         meals: diet.flatMap(d => d.meals ?? []),
         performed: tasks.flatMap(t => t.performedTasks ?? []),
         strayRows: strays.reduce((a, b) => a + b, 0),
@@ -296,7 +348,8 @@ if (show) {
         for (const t of r.turns) console.log(`USER:     ${t.user}\nRASMALAI: ${t.agent}`);
         console.log(`[db] meals: ${r.state.meals.map(m => `${m.mealType}(${m.items.map(i => i.name).join("+")})`).join(", ") || "none"}`);
         console.log(`[db] expenses: ${r.state.expenses.map(e => `₹${e.amount} ${e.category}`).join(", ") || "none"}`);
-        console.log(`[db] tasks: ${r.state.performed.map(t => t.title).join(", ") || "none"}`);
+        console.log(`[db] tasks: ${r.state.performed.map(t => `${t.title} (${t.actualDurationMinutes} min${t.taskId ? `, task ${t.taskId}` : ""})`).join(", ") || "none"}`);
+        if (r.state.backlog.length) console.log(`[db] backlog: ${r.state.backlog.map(t => `${t.title} = ${t.status} (${t._id})`).join(", ")}`);
     }
 }
 
