@@ -126,16 +126,10 @@ week's news forever.
     "Planned gym and deck work; did neither, sick from midday."
     "Followed the schedule except the evening block."
 
-▸ mood — THIS DAY. How they felt: a few words, or one short sentence when it
-  changed through the day. Each line of the transcript carries its time, so
-  what they said at 10:00 and what they said at 23:00 can describe different
-  parts of the same day — and they may also tell you at night how the morning
-  was.
-    "bored, nothing much happened"
-    "anxious in the morning, happy by the evening"
-  Only from what they said and how they said it, in whatever language. A busy
-  day is not a stressed day and a light day is not a happy one: never infer
-  mood from the workload. null if the transcript gives no signal.
+▸ mood — THIS DAY. How they felt, only from what they said: a few words, or
+  one short sentence when it changed through the day — "anxious in the
+  morning, happy by the evening". Never read it off how busy the day was.
+  null when they gave no signal; "neutral" is not a mood anyone expressed.
 
 =====================================================================
 WHAT NOT TO SUMMARISE

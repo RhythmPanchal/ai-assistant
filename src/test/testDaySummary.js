@@ -160,8 +160,9 @@ ok("with no schedule locked in, no comparison is handed over", !unplanned.includ
 ok("the instruction writes followThrough from the comparison when there is one",
     /When PLAN VS LOGGED WORK is given, write this line from it/.test(DAY_SUMMARY_INSTRUCTION));
 
-ok("mood may say how the day changed", /one short sentence when it\s+changed through the day/.test(DAY_SUMMARY_INSTRUCTION));
-ok("mood is never read off the workload", /never infer\s+mood from the workload/.test(DAY_SUMMARY_INSTRUCTION));
+ok("mood may say how the day changed", /one short sentence when it changed through the day/.test(DAY_SUMMARY_INSTRUCTION));
+ok("mood is never read off the workload", /Never read it off how busy the day was/.test(DAY_SUMMARY_INSTRUCTION));
+ok("no signal is no mood, not 'neutral'", /"neutral" is not a mood anyone expressed/.test(DAY_SUMMARY_INSTRUCTION));
 
 ok("the instruction forbids retelling the schedule draft",
     /Do NOT retell it/.test(DAY_SUMMARY_INSTRUCTION));
