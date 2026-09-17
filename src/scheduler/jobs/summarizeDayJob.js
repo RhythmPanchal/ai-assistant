@@ -1,12 +1,14 @@
 import { getDB } from "../../tools/mongo/mongoClient.js";
 import { TRIGGER_JOB } from "../../tools/mongo/schema/triggerJobSchema.js";
 import { CHAT_SUMMARY } from "../../tools/mongo/schema/chatSummarySchema.js";
+import { USER_SCHEDULE } from "../../tools/mongo/schema/userScheduleSchema.js";
+import { TASK_REGISTER } from "../../tools/mongo/schema/taskRegisterSchema.js";
 import { createRecord } from "../../tools/mongo/createRecord.js";
-import { summarizeDay } from "../../agent/summarize/summarizeDay.js";
+import { buildDayRecord } from "../../agent/summarize/dayRecord.js";
 import dayTranscriptKnowledge from "../../knowledge/dayTranscriptKnowledge.js";
 import { findDaySummary, hasDaySummary } from "../../tools/mongo/operation/chatSummaries.js";
 import { getUserProfile } from "../../identity/userManager.js";
-import { IST_TIMEZONE, previousDay } from "../../tools/mongo/dateUtils.js";
+import { IST_TIMEZONE, localDayRange, previousDay } from "../../tools/mongo/dateUtils.js";
 
 /**
  * Writes one day into chatSummary, once that day's wrap-up is finished.
@@ -96,7 +98,22 @@ export async function scheduleDaySummary({ userId, logDate, timeZone = IST_TIMEZ
 }
 
 /**
- * Read the day, summarise it, store the row.
+ * The plan and the log the day is measured against. The newest schedule wins
+ * if a day somehow holds two — the same pick updateSchedule makes.
+ */
+async function readPlanAndLog(userId, logDate) {
+    const { start, end } = localDayRange(logDate);
+    const day = { userId, date: { $gte: start, $lt: end } };
+    const db = await getDB();
+    const [schedule, taskLogs] = await Promise.all([
+        db.collection(USER_SCHEDULE).find(day).sort({ _id: -1 }).limit(1).next(),
+        db.collection(TASK_REGISTER).find(day).toArray(),
+    ]);
+    return { schedule, taskLogs };
+}
+
+/**
+ * Read the day, review and summarise it, store the row.
  *
  * Dispatched by executeTriggerJob, which has already bound the user context
  * from the job row — which is what lets createRecord stamp the owner and what
@@ -120,21 +137,26 @@ export async function summarizeDayJob(userId, logDate, timeZone = IST_TIMEZONE) 
         console.warn(`[summarizeDayJob] profile lookup failed, using shared keys: ${e.message}`);
     }
 
-    const [transcript, previous] = await Promise.all([
+    const [transcript, previous, { schedule, taskLogs }] = await Promise.all([
         dayTranscriptKnowledge(userId, logDate, { timeZone }),
         findDaySummary(userId, previousDay(logDate)).catch(() => null),
+        readPlanAndLog(userId, logDate),
     ]);
 
-    const { row, provider, model } = await summarizeDay({
-        userId, logDate, transcript, previous, timeZone, apiKeys,
+    const { row, models } = await buildDayRecord({
+        userId, logDate, transcript, previous, schedule, taskLogs, timeZone, apiKeys,
     });
 
     // Through createRecord rather than the driver, so the row picks up
-    // ValidateSchema and the owner stamp like every other write. The model
-    // supplied only the content fields; userId, period and date were set from
-    // arguments it never saw.
+    // ValidateSchema and the owner stamp like every other write. The models
+    // supplied only content, matches and scores; userId, period, date and every
+    // number in productivity were set in code.
     const { insertedId } = await createRecord(CHAT_SUMMARY, row);
 
-    console.log(`[summarizeDayJob] wrote ${logDate} for ${userId} via ${provider}:${model} — ${row.headline}`);
+    const p = row.productivity;
+    console.log(
+        `[summarizeDayJob] wrote ${logDate} for ${userId} via ${models.summary} (review ${models.review}) — ${row.headline} ` +
+        `· ${p.verdict}, productivity ${p.score ?? "-"}/5`
+    );
     return { skipped: false, logDate, insertedId, row };
 }

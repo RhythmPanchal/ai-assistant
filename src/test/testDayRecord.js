@@ -8,8 +8,9 @@
  * every number comes from code even when the model sends one; an unusable
  * review costs the scores and not the row; a call that fails writes nothing.
  *
- * The usage meter folds each call into the day's llmUsage rollup, so this points
- * at Rasmalai-eval and removes its own rollup rows afterwards.
+ * It also runs summarizeDayJob over seeded rows. That, and the usage meter's
+ * llmUsage rollup, write to the database — so this points at Rasmalai-eval and
+ * removes everything filed under its user before and after.
  */
 import "dotenv/config";
 
@@ -24,6 +25,9 @@ const { VERDICTS } = await import("../agent/summarize/planComparison.js");
 const { CHAT_SUMMARY } = await import("../tools/mongo/schema/chatSummarySchema.js");
 const { default: ValidateSchema } = await import("../tools/mongo/validateSchema.js");
 const { getDB } = await import("../tools/mongo/mongoClient.js");
+const { summarizeDayJob } = await import("../scheduler/jobs/summarizeDayJob.js");
+const { runWithUserContext } = await import("../identity/userContext.js");
+const { localDayRange } = await import("../tools/mongo/dateUtils.js");
 
 const USER = 900070;
 const db = await getDB();
@@ -153,9 +157,50 @@ try {
         try { await day(); } catch (e) { thrown = e.message; }
         ok("a summary that reaches no model throws too", /429/.test(thrown ?? ""), thrown);
     }
+
+    // ------------------------------------------------------------ the job --
+    // The day's rows as the routines leave them, then the job the scheduler runs.
+    {
+        await cleanup();
+        const { start } = localDayRange("2026-09-17");
+        await db.collection("chatHistory").insertOne({
+            conversationId: "test-day-record", userId: USER, source: "telegram",
+            messages: [
+                { role: "user", content: "fixed the outage finally, gym done too", timestamp: new Date("2026-09-17T17:40:00Z") },
+                { role: "assistant", content: "Big day. Rest well.", timestamp: new Date("2026-09-17T17:40:05Z") },
+            ],
+            createdAt: new Date("2026-09-17T17:40:00Z"),
+        });
+        await db.collection("userSchedule").insertOne({ userId: USER, date: start, day: "Thursday", ...SCHEDULE, createdAt: new Date() });
+        await db.collection("taskRegister").insertOne({ userId: USER, date: start, day: "Thursday", ...TASK_LOGS[0], createdAt: new Date() });
+
+        const calls = scriptCalls({ review: REVIEW, summary: SUMMARY });
+        const run = () => runWithUserContext({ userId: USER, channel: "scheduler", reason: "testDayRecord" },
+            () => summarizeDayJob(USER, "2026-09-17", "Asia/Kolkata"));
+        const result = await run();
+
+        ok("the job reads the day's schedule for the review", calls[0]?.input.includes("Q3 deck review"), calls[0]?.input);
+        ok("the job reads the day's task log for the review", calls[0]?.input.includes("w1  Prod outage firefight  (5h)"));
+        ok("the job reads the day's chat for both calls", calls.length === 2 && calls.every(c => c.input.includes("fixed the outage finally")));
+
+        const stored = await db.collection("chatSummary").findOne({ userId: USER, period: "day" });
+        ok("one row is stored", Boolean(stored) && String(stored._id) === String(result.insertedId));
+        ok("it carries the measured productivity", stored?.productivity?.verdict === VERDICTS.DIFFERENT && stored.productivity.plannedMinutes === 240,
+            JSON.stringify(stored?.productivity));
+        ok("it carries the ratings", stored?.ratings?.overall?.score === 3);
+        ok("the numbers are stored as integers", Number.isInteger(stored?.productivity?.followedPct));
+
+        const again = await run();
+        ok("a second run for the same day is skipped without a model call", again.skipped === true && calls.length === 2);
+    }
 } finally {
     ProviderManager.prototype.chatWithFallback = realChat;
-    await db.collection("llmUsage").deleteMany({ userId: USER });
+    await cleanup();
+}
+
+async function cleanup() {
+    await Promise.all(["llmUsage", "chatSummary", "chatHistory", "userSchedule", "taskRegister"]
+        .map(c => db.collection(c).deleteMany({ userId: USER })));
 }
 
 if (failures.length) {
