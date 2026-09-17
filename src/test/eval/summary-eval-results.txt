@@ -77,3 +77,90 @@ membership") is carried forward rather than pruned, despite the "still true in
 a month = fact, not state" test. Self-limiting in practice: the same prompt
 would not have written it into `state` on the day it happened, so a real chain
 of rows does not contain the bait. The cap of 6 bounds it either way.
+
+
+══════════════════════════════════════════════════════════════════════════════
+DAY REVIEW — 2026-09-17
+══════════════════════════════════════════════════════════════════════════════
+Command   : node src/test/eval/evalSummaries.js --repeat 3
+Execution : LIVE — the job's real composition (dayRecord.js): the review call,
+            the plan comparison in code, then the summary call. Two requests
+            per run. Nothing written but the usage meter's rollup, in
+            Rasmalai-eval, removed at the end.
+
+The summary job now also reviews the day. The review says which logged work
+filled which planned block and scores productivity, mood, health and overall
+1-5 (null without evidence); code does every minute, percentage and verdict.
+Six scenarios were added for it, and three of the original seven gained score
+checks (health on the hospital day and the overload day; nothing to score on
+the empty day).
+
+FIRST FULL RUN — 33/39 runs clean · 146/153 checks
+  no-feelings   0/3  health scored 3 in every run — "meals and groceries
+                     mentioned, no health issues noted" — the filler score the
+                     prompt forbids; one summary also wrote mood "neutral"
+  state-change  1/3  mentioned took the meal ("hospital khichdi for dinner")
+  quiet-day     2/3  mentioned took the meal ("ate at a thali place")
+
+  The meal leak looked like a regression rather than noise, so main's
+  unchanged prompt ran the same two scenarios: no leak in 6 runs (its one
+  miss was an openThreads wording check). The new mood rule had doubled the
+  mood section of the summary prompt.
+
+FIXES
+  79a45c4  logged meals and spending are not a health signal, and a "why" that
+           only says something was not mentioned means the score is null
+  e3846d7  the mood rule cut back to four lines, "neutral" named as no mood
+
+AFTER THE FIXES — 38/39 runs clean · 152/153 checks · 78 requests
+  scenario              runs  checks   note
+  state-change           3    6/6      meal leak gone
+  state-resolves         3    4/4
+  quiet-day              3    2/2      meal leak gone
+  empty-day              3    3/3      all four scores null
+  routine-only           3    2/3 (1)  run 3's summary fell to command-a, which
+                                       put "ordered food" in mentioned
+  overload               3    4/4      health 2: sore throat, "exhausted"
+  recall-only            3    3/3
+  followed-the-plan      3    5/5      4 blocks matched despite the wording
+  did-different-work     3    7/7      17% of plan; productivity 4; mood
+                                       "tense in the morning, relieved by the
+                                       evening"
+  cheerful-but-idle      3    3/3      fell short; productivity 1, mood 5
+  boring-day             3    4/4      "bored and uninspired", mood 2
+  no-feelings            3    4/4      mood and health null
+  said-but-not-logged    3    3/3      nothing logged, blocks still done, and
+                                       followThrough does not say nothing was done
+
+Models: gemini-3.1-flash-lite served 72 of the 78 calls; 6 fell to
+cohere:command-a-03-2025 on Gemini's per-minute cap. The one failure was one
+of those.
+
+WHAT THE NEW SCENARIOS PIN
+  followed-the-plan    Titles in the log are the person's words, not the plan's
+                       ("went through ankit's deck comments" is "Q3 deck -
+                       address Ankit's comments"). Matching on meaning is the
+                       review's whole job; a missed match reads as a failed day.
+  did-different-work   An outage replaced the plan: the verdict says different
+                       work, the score still says productive, and the mood
+                       keeps both halves of a day that turned.
+  cheerful-but-idle    A happy day must not lift productivity, and half an
+                       hour of email on a six-hour plan is not a day of
+                       different work.
+  boring-day           Boredom is a mood, and meetings with nothing done are
+                       not a productive day.
+  no-feelings          Nothing said about feelings or the body means null —
+                       the failure the first run found.
+  said-but-not-logged  No wrap-up that night: nothing logged, but the chat says
+                       the work happened. "Nothing logged" must not become
+                       "did nothing" in followThrough.
+
+COST
+  The review's input is ~1.3-1.6K tokens (its instruction plus the plan, the log
+  and the day); the summary's is unchanged apart from ~150 tokens of comparison
+  when a schedule was locked in. The job now spends roughly twice what the
+  summary alone did.
+
+KNOWN RESIDUAL
+  The fallback model (command-a) is weaker on the mentioned rule: the one miss
+  after the fixes was a meal in mentioned from a summary it served.
