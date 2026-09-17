@@ -12,9 +12,9 @@
  * not the one being built.
  *
  * `seed` is today's context before the routine opens — what the user said
- * during the day, and what was already logged. Seeds are written straight to
- * the collections, never through the code under test, so a broken write path
- * cannot make its own starting data look right.
+ * during the day, what was already logged, the backlog and the day's schedule.
+ * Seeds are written straight to the collections, never through the code under
+ * test, so a broken write path cannot make its own starting data look right.
  */
 
 const meal = (mealType, ...items) => ({ mealType, items });
@@ -44,6 +44,16 @@ const asksAboutMoney = (text) => String(text ?? "")
 // saved dinner twice and logged a deck review the user never reported doing.
 const tasksExactly = (n, why) => ({ why, fn: s => s.performed.length === n, detail: s => `${s.performed.length}: ${taskTitles(s) || "none"}` });
 const noExpenses = (why) => ({ why, fn: s => s.expenses.length === 0, detail: s => JSON.stringify(amounts(s)) });
+
+const taskMinutes = (s) => s.performed.map(t => `${t.title}=${t.actualDurationMinutes}`).join(" | ") || "none";
+const minutesOf = (s, pattern) => s.performed.filter(t => pattern.test(t.title)).map(t => t.actualDurationMinutes);
+
+// A question sentence about something, judged the same way as asksAboutMoney.
+const asks = (pattern) => (text) => String(text ?? "")
+    .split(/(?<=[.!?])\s+|\n+/)
+    .some(sentence => sentence.includes("?") && pattern.test(sentence));
+const everyReply = (s) => [s.opener, ...s.turns.map(t => t.agent)];
+const HOW_LONG = /how long|how much time|how many (hours|minutes)|\bhours?\b|\bminutes?\b|\bmins?\b|duration|\btook\b/i;
 
 export const NIGHT_SCENARIOS = [
     {
@@ -175,6 +185,96 @@ export const NIGHT_SCENARIOS = [
             { why: "filed as Medical", fn: s => s.expenses.some(e => e.amount === 800 && e.category === "Medical"), detail: s => JSON.stringify(s.expenses.map(e => [e.amount, e.category])) },
             tasksExactly(0, "a doctor's visit is not logged as work"),
             { why: "₹800 saved exactly once", fn: s => amounts(s).filter(a => a === 800).length === 1, detail: s => JSON.stringify(amounts(s)) },
+        ],
+    },
+
+    // ------------------------------------------------------------------ work --
+    // The day summary compares the day's schedule with its task log, so the
+    // log is only as good as what this routine asks for and saves. These pin
+    // the four ways work reaches it: named without a duration, reported across
+    // turns, finishing a backlog task, and planned but never mentioned.
+
+    {
+        name: "work-without-duration",
+        why: "work named without how long it took — ask, then log each piece once with the minutes given",
+        seed: {},
+        replies: [
+            "finished the api bugfix and reviewed ankit's PR",
+            "bugfix took about 2 hours, the PR review half an hour",
+            "dinner was dal rice, no spends today. gn",
+        ],
+        checks: [
+            { why: "the first reply asks how long the work took", fn: s => asks(HOW_LONG)(s.turns[0]?.agent), detail: s => s.turns[0]?.agent },
+            tasksExactly(2, "the bugfix and the PR review, each once"),
+            { why: "the bugfix is logged at 120 minutes", fn: s => minutesOf(s, /bug/i).includes(120), detail: taskMinutes },
+            { why: "the PR review is logged at 30 minutes", fn: s => minutesOf(s, /\bPR\b|review/i).includes(30), detail: taskMinutes },
+        ],
+    },
+
+    {
+        name: "signs-off-without-duration",
+        why: "work named in the goodnight with no duration — nothing guessed, and one question before sleeping",
+        seed: {},
+        replies: [
+            "had maggi for dinner, no spends. finished the deck review with ankit. gn",
+        ],
+        checks: [
+            { why: "no work logged with a duration nobody gave", fn: s => s.performed.length === 0, detail: taskMinutes },
+            { why: "asks how long the deck review took", fn: s => asks(HOW_LONG)(s.turns.at(-1)?.agent), detail: s => s.turns.at(-1)?.agent },
+        ],
+    },
+
+    {
+        name: "work-across-turns",
+        why: "a second piece of work in a later message — must not be dropped because work already shows as logged",
+        seed: {},
+        replies: [
+            "did the deck review with ankit, 2 hours",
+            "also sat in interviews for an hour after lunch",
+            "food and spends, nothing to log today. gn",
+        ],
+        checks: [
+            tasksExactly(2, "the deck review and the interviews, each once"),
+            { why: "the interviews are logged at 60 minutes", fn: s => minutesOf(s, /interview/i).includes(60), detail: taskMinutes },
+        ],
+    },
+
+    {
+        name: "closes-backlog-task",
+        why: "work that finishes a pending task closes it, and the log entry carries its id",
+        seed: {
+            backlog: [{ title: "Fix payment webhook bug", category: "Work", importance: "High", requiredMinutes: 180 }],
+        },
+        replies: [
+            "fixed the payment webhook bug today, took 3 hours",
+            "no food to log and no spends. that's all, gn",
+        ],
+        checks: [
+            tasksExactly(1, "the fix is logged once"),
+            { why: "the backlog task is Completed", fn: s => s.backlog.some(t => /webhook/i.test(t.title) && t.status === "Completed"), detail: s => s.backlog.map(t => `${t.title}=${t.status}`).join(", ") },
+            { why: "the log entry carries that task's id", fn: s => s.performed.some(p => s.backlog.some(t => String(t._id) === p.taskId)), detail: s => s.performed.map(p => p.taskId ?? "null").join(", ") || "none" },
+        ],
+    },
+
+    {
+        name: "plan-blocks-unmentioned",
+        why: "three work blocks were planned and one is reported — ask what happened to the others, log only what was done",
+        seed: {
+            schedule: [
+                { startTime: "10:00", endTime: "12:00", title: "Q3 deck review", category: "Work", priority: "High" },
+                { startTime: "13:00", endTime: "14:00", title: "Lunch", category: "Routine" },
+                { startTime: "14:00", endTime: "16:00", title: "Fix payment webhook bug", category: "Work", priority: "High" },
+                { startTime: "18:00", endTime: "19:00", title: "Gym", category: "Health" },
+            ],
+        },
+        replies: [
+            "fixed the payment webhook bug, took 2 hours",
+            "lunch was rajma chawal, dinner roti sabzi. no spends today",
+            "that's all, gn",
+        ],
+        checks: [
+            tasksExactly(1, "only the webhook fix — the deck review and the gym were planned, never reported"),
+            { why: "asks what happened to the deck review or the gym", fn: s => everyReply(s).some(asks(/deck|gym/i)), detail: s => s.turns.map(t => t.agent).join(" || ") },
         ],
     },
 ];
