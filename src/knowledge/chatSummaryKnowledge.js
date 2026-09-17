@@ -48,6 +48,62 @@ function bullets(items, cap) {
     return (items ?? []).slice(0, cap).map(i => `    - ${i}`);
 }
 
+const scoreOf = (rating) => Number.isInteger(rating?.score) ? `${rating.score}/5` : null;
+
+const hours = (minutes) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+};
+
+/**
+ * The newest day's productivity in one line: the model's score and evidence,
+ * then what the rows measured. Null when a row has neither — a day with no plan
+ * and no logged work has nothing worth a line.
+ */
+function productivityLine(p) {
+    if (!p) return null;
+
+    let measured = null;
+    if (p.plannedMinutes && !p.loggedMinutes) {
+        measured = `no work logged against ${hours(p.plannedMinutes)} planned`;
+    } else if (p.plannedMinutes) {
+        const unplanned = p.unplannedMinutes ? `, ${p.unplannedPct}% of logged work unplanned` : "";
+        measured = `${p.verdict}: ${p.followedPct}% of the plan${unplanned}`;
+    } else if (p.loggedMinutes) {
+        measured = `no plan, ${hours(p.loggedMinutes)} of work logged`;
+    }
+
+    const score = scoreOf(p);
+    if (!score && !measured) return null;
+    const judged = score ? `${score}${p.why ? ` — ${p.why}` : ""}` : null;
+    return `  Productivity: ${[judged, measured && `(${measured})`].filter(Boolean).join(" ")}`;
+}
+
+/** The newest day's other scores, when there are any. */
+function ratingsLine(ratings) {
+    const parts = ["mood", "health", "overall"]
+        .map(k => scoreOf(ratings?.[k]) && `${k} ${scoreOf(ratings[k])}`)
+        .filter(Boolean);
+    return parts.length ? `  Scores: ${parts.join(" · ")}` : null;
+}
+
+/**
+ * The trend for an older day, appended to its headline: how much of the plan
+ * happened and how the day went. Enough to see a week of drift at a glance,
+ * without the detail that is only worth reading for yesterday.
+ */
+function trendTag(row) {
+    const parts = [];
+    const p = row.productivity;
+    // Nothing logged is not 0% of the plan done: a night with no wrap-up logs
+    // nothing, and reading that as a failed day would confront the wrong thing.
+    if (p?.plannedMinutes) parts.push(p.loggedMinutes ? `plan ${p.followedPct}%` : "nothing logged");
+    const overall = scoreOf(row.ratings?.overall);
+    if (overall) parts.push(`overall ${overall}`);
+    return parts.length ? `  [${parts.join(" · ")}]` : "";
+}
+
 /**
  * Pure render, split out so the block's shape can be tested without a database
  * — the same split userProfileKnowledge uses.
@@ -82,7 +138,11 @@ export function renderRecentBlock(rows = [], { today, timeZone = IST_TIMEZONE } 
     if (mentioned.length) out.push("", `  Also came up: ${mentioned.join(" · ")}`);
 
     if (latest.followThrough) out.push(`  Plan vs actual: ${latest.followThrough}`);
+    const productivity = productivityLine(latest.productivity);
+    if (productivity) out.push(productivity);
     if (latest.mood) out.push(`  Mood: ${latest.mood}`);
+    const scores = ratingsLine(latest.ratings);
+    if (scores) out.push(scores);
 
     if (older.length) {
         out.push("", "EARLIER — one line each, for continuity");
@@ -90,7 +150,7 @@ export function renderRecentBlock(rows = [], { today, timeZone = IST_TIMEZONE } 
             const day = new Date(row.date).toLocaleDateString("en-GB", {
                 timeZone, weekday: "short", day: "2-digit", month: "short",
             });
-            out.push(`  ${day.padEnd(13)}${row.headline}`);
+            out.push(`  ${day.padEnd(13)}${row.headline}${trendTag(row)}`);
         }
     }
 

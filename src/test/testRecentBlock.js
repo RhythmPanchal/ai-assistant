@@ -96,6 +96,55 @@ ok("mentioned is capped", !flooded.includes("mentioned-5"));
 const stale = renderRecentBlock([{ date: d("2026-08-31"), headline: "h", state: [], openThreads: [], mentioned: [] }], { today: TODAY });
 ok("a gap is labelled honestly", stale.includes("4 days ago") && !stale.includes("yesterday"), stale.split("\n").find(l => l.startsWith("LATEST")));
 
+// ------------------------------------------------- productivity and scores --
+// Counted in code from the day's schedule and task log, and scored by the review.
+const measured = (over) => ({
+    score: null, why: null, verdict: "no plan", plannedMinutes: 0, followedMinutes: 0, loggedMinutes: 0,
+    unplannedMinutes: 0, followedPct: null, unplannedPct: null, blocks: [], unplanned: [], ...over,
+});
+const REVIEWED = [
+    {
+        date: d("2026-09-03"),
+        headline: "Prod outage took the day; the gym still happened.",
+        state: [], openThreads: [], mentioned: [],
+        followThrough: "Planned the deck review and the gym; the outage replaced the deck review.",
+        mood: "anxious in the morning, relieved by the evening",
+        productivity: measured({ score: 4, why: "five hours fixing the outage", verdict: "did different work", plannedMinutes: 240, followedMinutes: 60, loggedMinutes: 360, unplannedMinutes: 300, followedPct: 25, unplannedPct: 83 }),
+        ratings: { mood: { score: 3, why: "stressed, then relieved" }, health: { score: null, why: null }, overall: { score: 3, why: "hard day, ended well" } },
+    },
+    {
+        date: d("2026-09-02"), headline: "Normal day at work.", state: [], openThreads: [], mentioned: [],
+        productivity: measured({ score: 3, why: "steady", verdict: "partly followed", plannedMinutes: 300, followedMinutes: 180, loggedMinutes: 200, unplannedMinutes: 20, followedPct: 60, unplannedPct: 10 }),
+        ratings: { mood: { score: 4, why: "a" }, health: { score: 4, why: "b" }, overall: { score: 4, why: "c" } },
+    },
+    {
+        date: d("2026-09-01"), headline: "Never wrapped up.", state: [], openThreads: [], mentioned: [],
+        productivity: measured({ verdict: "nothing logged", plannedMinutes: 240, followedPct: 0 }),
+        ratings: { mood: { score: null, why: null }, health: { score: null, why: null }, overall: { score: null, why: null } },
+    },
+    { date: d("2026-08-31"), headline: "From before days were reviewed.", state: [], openThreads: [], mentioned: [] },
+];
+const reviewed = renderRecentBlock(REVIEWED, { today: TODAY });
+
+ok("yesterday's productivity shows its score, its evidence and what was measured",
+    reviewed.includes("Productivity: 4/5 — five hours fixing the outage (did different work: 25% of the plan, 83% of logged work unplanned)"), reviewed);
+ok("yesterday's other scores show, and one with no signal is left out",
+    reviewed.includes("Scores: mood 3/5 · overall 3/5") && !/health \d/.test(reviewed), reviewed);
+ok("an older day carries its trend after the headline", reviewed.includes("Normal day at work.  [plan 60% · overall 4/5]"), reviewed);
+ok("a day with nothing logged is not called 0% of the plan", reviewed.includes("Never wrapped up.  [nothing logged]"), reviewed);
+ok("a day from before reviews renders as it always did", /From before days were reviewed\.$/m.test(reviewed));
+ok("a row with no review adds no productivity or scores line", !block.includes("Productivity:") && !block.includes("Scores:"));
+
+const lines = (productivity) => renderRecentBlock([{ date: d("2026-09-03"), headline: "h", state: [], openThreads: [], mentioned: [], productivity }], { today: TODAY });
+ok("with no plan, the work logged is still stated",
+    lines(measured({ loggedMinutes: 90, unplannedMinutes: 90, unplannedPct: 100 })).includes("Productivity: (no plan, 1h 30m of work logged)"));
+ok("a plan with nothing logged says so rather than 0%",
+    lines(measured({ verdict: "nothing logged", plannedMinutes: 240, followedPct: 0 })).includes("Productivity: (no work logged against 4h planned)"));
+ok("no plan, no work and no score is no line", !lines(measured({})).includes("Productivity:"));
+ok("a plan followed with nothing unplanned does not mention unplanned work",
+    lines(measured({ verdict: "followed the plan", plannedMinutes: 120, followedMinutes: 120, loggedMinutes: 120, followedPct: 100, unplannedPct: 0 }))
+        .includes("Productivity: (followed the plan: 100% of the plan)"));
+
 // ------------------------------------------------------- prompt placement --
 ok("recent sits between the profile and the clock",
     SECTION_ORDER.indexOf("recent") === SECTION_ORDER.indexOf("profile") + 1 &&
