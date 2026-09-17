@@ -280,6 +280,8 @@ same("anything that is not a score is null", [null, undefined, "high", "", {}, N
 
     ok("the instruction demands the bare object", /Start your reply with \{ and end\s+it with \}/.test(DAY_REVIEW_INSTRUCTION));
     ok("the instruction forbids a default score", /Never fill in a 3/.test(DAY_REVIEW_INSTRUCTION));
+    ok("the instruction treats 'not mentioned' as no evidence", /not mentioned, not reported or\s+not noted, that is no evidence/.test(DAY_REVIEW_INSTRUCTION));
+    ok("the instruction does not read logged meals as health", /Meals and spending being logged say\s+nothing about their health/.test(DAY_REVIEW_INSTRUCTION));
     ok("the instruction keeps mood away from the workload", /never infer mood from the workload/.test(DAY_REVIEW_INSTRUCTION));
     ok("the instruction keeps the maths in code", /do not calculate anything/.test(DAY_REVIEW_INSTRUCTION));
 }

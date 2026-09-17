@@ -69,7 +69,9 @@ THE SCORES
 
 Every score needs a "why": one short line naming what it rests on — what was
 logged, or what they said. When the day gives no evidence for a score, return
-{ "score": null, "why": null }. Never fill in a 3 for "don't know".
+{ "score": null, "why": null }. Never fill in a 3 for "don't know". If the
+only "why" you can write is that something was not mentioned, not reported or
+not noted, that is no evidence: the score is null.
 
 ▸ productivity — how much meaningful work got done.
   Judge the work itself, from LOGGED and from what they said about it.
@@ -84,9 +86,9 @@ logged, or what they said. When the day gives no evidence for a score, return
   are moods. If it changed through the day, score the day as a whole and say
   how it moved in "why".
 
-▸ health — how their body did: illness, pain, tiredness, sleep, exercise and
-  eating, as far as they mention them. A workout they did counts. Silence is
-  null.
+▸ health — how their body did, as they describe it: illness, pain, tiredness,
+  energy, sleep, and exercise they did. Meals and spending being logged say
+  nothing about their health. Silence about their body is null.
 
 ▸ overall — the day as they would judge it looking back. It rests on the other
   three and on anything they said about the day itself.
