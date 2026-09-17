@@ -4,7 +4,14 @@
  * Guards the day review: the plan-vs-logged arithmetic and the parsing of what
  * the review pass returns. No network, no DB — every sum here is done over rows
  * passed in, which is the point of keeping the model out of the maths.
+ *
+ * For what a real model returns, see eval/evalSummaries.js.
  */
+// Loaded only because importing the review pass constructs the Mongo client at
+// module load, which needs MONGO_DB_URI. Nothing here connects.
+import "dotenv/config";
+import { coerceScore, coerceReview, buildReviewMessages } from "../agent/summarize/reviewDay.js";
+import { DAY_REVIEW_INSTRUCTION } from "../agent/summarize/reviewPrompt.js";
 import {
     workBlocksOf, workItemsOf, exactLinks, comparePlan, verdictFor, formatMinutes,
     describeComparison, VERDICTS, OUTCOMES,
@@ -195,6 +202,75 @@ same("minutes read as hours", [150, 60, 45, 0].map(formatMinutes), ["2h 30m", "1
     ok("no plan says so", describeComparison(comparePlan({ blocks: [], work: [] })).includes("No schedule was locked in"));
     ok("nothing logged says so", describeComparison(comparePlan({ blocks: workBlocksOf(DAY), work: [] })).includes("No work was logged"));
     ok("no productivity renders nothing", describeComparison(null) === "");
+}
+
+// ------------------------------------------------------------ the review --
+same("scores in the forms models send", [4, "4", "4/5", " 2 ", 3.5, 1, 5].map(coerceScore), [4, 4, 4, 2, 4, 1, 5]);
+same("anything outside 1-5 is refused, not clamped", [0, 6, 8, "8/10", -1].map(coerceScore), [null, null, null, null, null]);
+same("anything that is not a score is null", [null, undefined, "high", "", {}, NaN].map(coerceScore), [null, null, null, null, null, null]);
+
+{
+    const review = coerceReview({
+        matches: [
+            { block: " b1 ", work: ["w2", 7, null, " w3 "], outcome: "done" },
+            { block: "b2", work: "w1", outcome: "banana" },
+            { work: ["w1"], outcome: "done" },
+            "b3",
+        ],
+        productivity: { score: "4", why: "  five hours on the outage  " },
+        mood: { score: 3, why: "x".repeat(500) },
+        health: { score: null, why: "no information about health" },
+        overall: { score: 11, why: "great" },
+    });
+    same("a match keeps its trimmed ids and only string work ids", review.matches[0], { block: "b1", work: ["w2", "w3"], outcome: "done" });
+    ok("an outcome outside the list is dropped", review.matches[1].outcome === null && review.matches[1].work.length === 0);
+    ok("a match with no block, or that is not an object, is dropped", review.matches.length === 2);
+    same("a score and its why are kept", review.productivity, { score: 4, why: "five hours on the outage" });
+    ok("a long why is cut to one line's worth", review.ratings.mood.why.length === 200 && review.ratings.mood.why.endsWith("…"));
+    same("a why with no score is dropped", review.ratings.health, { score: null, why: null });
+    same("a why under a refused score is dropped with it", review.ratings.overall, { score: null, why: null });
+
+    const empty = coerceReview(null);
+    same("an unusable reply is no matches and no scores", empty, {
+        matches: [],
+        productivity: { score: null, why: null },
+        ratings: { mood: { score: null, why: null }, health: { score: null, why: null }, overall: { score: null, why: null } },
+    });
+}
+
+{
+    const blocks = workBlocksOf({
+        slots: [
+            ...DAY.slots,
+            slot("slot_4", "20:00", "21:00", "Read notes", "Learning", { status: "Skipped" }),
+            slot("slot_5", "13:00", "14:00", "Lunch", "Routine"),
+        ],
+    });
+    const work = workItemsOf({ performedTasks: [...LOG.performedTasks, done("Walk", 20, { status: "Skipped" }), done("Slides", 40, { status: "Partial" })] });
+    const messages = buildReviewMessages({ logDate: "2026-09-17", transcript: "[21:40] user: long day", blocks, work });
+    const input = messages[1].content;
+
+    ok("the instruction is the system message", messages[0].role === "system" && messages[0].content === DAY_REVIEW_INSTRUCTION);
+    ok("the day and its weekday lead", input.startsWith("THE DAY: 2026-09-17 (Thursday)"), input.split("\n")[0]);
+    ok("each block is listed with its id, times and minutes", input.includes("b1  10:00-13:00  Q3 deck review  (3h, Work)"), input);
+    ok("furniture is not offered to match", !/Lunch/.test(input));
+    ok("a block dropped during the day is marked", input.includes("dropped during the day (Skipped)"));
+    ok("a block and a log entry sharing a backlog task say so, both ways",
+        input.includes("same backlog task as w3") && input.includes("same backlog task as b2"), input);
+    ok("each logged entry is listed with its id and minutes", input.includes("w1  Prod outage firefight  (5h)"), input);
+    ok("work logged as skipped says so instead of a duration", input.includes("Walk  (logged as skipped)"));
+    ok("partial work says so", input.includes("Slides  (40m, partly done)"));
+    ok("the transcript is carried", input.includes("[21:40] user: long day"));
+    ok("it asks for the object last", input.trim().endsWith("Return the JSON object for 2026-09-17 now."));
+
+    const bare = buildReviewMessages({ logDate: "2026-09-17", transcript: "", blocks: [], work: [] })[1].content;
+    ok("no schedule says so", bare.includes("There was no schedule for this day."));
+    ok("no log says so", bare.includes("Nothing was logged."));
+
+    ok("the instruction demands the bare object", /Start your reply with \{ and end\s+it with \}/.test(DAY_REVIEW_INSTRUCTION));
+    ok("the instruction forbids a default score", /Never fill in a 3/.test(DAY_REVIEW_INSTRUCTION));
+    ok("the instruction keeps mood away from the workload", /never infer mood from the workload/.test(DAY_REVIEW_INSTRUCTION));
+    ok("the instruction keeps the maths in code", /do not calculate anything/.test(DAY_REVIEW_INSTRUCTION));
 }
 
 // ---------------------------------------------------------------- stored --
