@@ -151,6 +151,9 @@ ok("the comparison comes before the transcript",
 ok("the instruction writes followThrough from the comparison when there is one",
     /When PLAN VS LOGGED WORK is given, write this line from it/.test(DAY_SUMMARY_INSTRUCTION));
 
+ok("mood may say how the day changed", /one short sentence when it\s+changed through the day/.test(DAY_SUMMARY_INSTRUCTION));
+ok("mood is never read off the workload", /never infer\s+mood from the workload/.test(DAY_SUMMARY_INSTRUCTION));
+
 ok("the instruction forbids retelling the schedule draft",
     /Do NOT retell it/.test(DAY_SUMMARY_INSTRUCTION));
 ok("the instruction demands a bare JSON object",
