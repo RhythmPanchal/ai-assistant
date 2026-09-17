@@ -105,7 +105,9 @@ export function coerceRow(parsed, { userId, logDate }) {
  * The two messages sent. Exported so a dry run can print them without spending a request.
  *
  * @param {object} [productivity] the day's plan comparison, when the review has
- *        run — followThrough is then written from it instead of from the chat
+ *        run. Handed over only when a schedule was locked in: with none, the
+ *        chat is still the only record of a plan that was proposed and ignored,
+ *        and a block saying "no schedule" would tell followThrough otherwise.
  */
 export function buildMessages({ logDate, transcript, previous = null, timeZone = IST_TIMEZONE, productivity = null }) {
     const weekday = new Date(`${logDate}T12:00:00+05:30`)
@@ -126,7 +128,7 @@ export function buildMessages({ logDate, transcript, previous = null, timeZone =
                     state: previous.state,
                     openThreads: previous.openThreads,
                 },
-                plan: productivity ? describeComparison(productivity) : null,
+                plan: productivity?.plannedMinutes ? describeComparison(productivity) : null,
             }),
         },
     ];

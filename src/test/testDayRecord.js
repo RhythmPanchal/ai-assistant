@@ -137,10 +137,11 @@ try {
 
     // ------------------------------------------------------------ no schedule --
     {
-        scriptCalls({ review: { ...REVIEW, matches: [] }, summary: SUMMARY });
+        const calls = scriptCalls({ review: { ...REVIEW, matches: [] }, summary: SUMMARY });
         const { row } = await day({ schedule: null });
         ok("a day with no schedule is 'no plan'", row.productivity.verdict === VERDICTS.NO_PLAN);
         ok("and all its work is unplanned", row.productivity.unplannedMinutes === 360);
+        ok("and the summary reads the plan from the chat, not from a comparison", !calls[1].input.includes("PLAN VS LOGGED WORK"));
     }
 
     // --------------------------------------------------------- a call that fails --

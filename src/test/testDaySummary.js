@@ -148,6 +148,15 @@ const measured = buildMessages({
 ok("the comparison is handed over", measured.includes("PLAN VS LOGGED WORK") && measured.includes("Verdict: did different work"), measured);
 ok("the comparison comes before the transcript",
     measured.indexOf("PLAN VS LOGGED WORK") < measured.indexOf("TRANSCRIPT"));
+// With no schedule locked in, the chat is the only record of a plan that was
+// proposed and ignored — a "no schedule" block would argue with it.
+const unplanned = buildMessages({
+    logDate: "2026-09-03",
+    transcript: "[09:00] rasmalai (morning routine): Here's today…\n[23:50] user: did nothing from the plan",
+    previous: null,
+    productivity: comparePlan({ blocks: [], work: workItemsOf({ performedTasks: [{ title: "Prod issue", actualDurationMinutes: 300, status: "Completed" }] }) }),
+})[1].content;
+ok("with no schedule locked in, no comparison is handed over", !unplanned.includes("PLAN VS LOGGED WORK"), unplanned);
 ok("the instruction writes followThrough from the comparison when there is one",
     /When PLAN VS LOGGED WORK is given, write this line from it/.test(DAY_SUMMARY_INSTRUCTION));
 
