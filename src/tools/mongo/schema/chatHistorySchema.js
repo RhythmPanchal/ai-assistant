@@ -49,6 +49,13 @@ const chatHistorySchema = {
             bsonType: ["object", "array", "string", "null"],
             description: "Result returned by the tool"
           },
+          // Wall time of this one call. The turn's toolMs is every tool in the
+          // step together, so it can say a turn was slow but never which call
+          // made it slow. Absent on rows written before this field existed.
+          durationMs: {
+            bsonType: ["int", "long", "null"],
+            description: "How long this tool call took, in ms"
+          },
           timestamp: {
             bsonType: "date",
             description: "Exact time this message was created"
@@ -217,11 +224,12 @@ export class ConversationBuilder {
     return this;
   }
 
-  addToolResult(toolName, result) {
+  addToolResult(toolName, result, { durationMs = null } = {}) {
     this.messages.push({
       role: "tool",
       toolName,
       result,
+      ...(Number.isFinite(durationMs) ? { durationMs } : {}),
       timestamp: new Date(),
     });
     return this;

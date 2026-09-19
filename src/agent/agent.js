@@ -457,14 +457,22 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
                     console.warn(`[runAgent] step ${steps}: ${tc.name} refused — ${refused}`);
                     return { ...tc, result: new ToolResult(false, `Not saved: ${refused}`) };
                 }
+                // Timed around the call itself. toolMs on the turn is the whole
+                // step minus the model, so it cannot say WHICH tool was slow —
+                // the first question asked of a turn that took too long.
+                const startedAt = Date.now();
                 try {
                     const result = await withTimeout(
                         toolRegistry.execute(tc.name, tc.args), toolTimeoutMs, tc.name
                     );
                     skipGuard?.record(tc, result);
-                    return { ...tc, result };
+                    return { ...tc, result, durationMs: Date.now() - startedAt };
                 } catch (err) {
-                    return { ...tc, result: { success: false, message: err.message } };
+                    return {
+                        ...tc,
+                        result: { success: false, message: err.message },
+                        durationMs: Date.now() - startedAt,
+                    };
                 }
             });
 
@@ -473,7 +481,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
 
             for (const r of results) {
                 console.log(`  -> ${r.name}:`, r.result?.message ?? r.result);
-                conversation.addToolResult(r.name, r.result);
+                conversation.addToolResult(r.name, r.result, { durationMs: r.durationMs });
                 // Whole ToolResult, not just .data — otherwise a failure's
                 // message never reaches the model and it cannot self-correct.
                 //
