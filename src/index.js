@@ -57,9 +57,6 @@ app.get('/', (req, res) => {
 
 app.use(oauthRouter);
 
-// Dev console: list users, talk as any one of them, read their history.
-// Every route is behind ADMIN_API_TOKEN and answers 503 while it is unset —
-// see the header of adminRestAPI.js for why that has to fail closed.
 app.use(adminRouter);
 
 app.listen(PORT, () => {
