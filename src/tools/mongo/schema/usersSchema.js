@@ -163,6 +163,13 @@ const usersSchema = {
           maximum: 23,
           description: "Local hour the night routine fires. Falls back to ROUTINE_HOURS when null.",
         },
+        dayStartHour: {
+          bsonType: ["int", "null"],
+          minimum: 0,
+          maximum: 23,
+          description:
+            "Local hour this person's day rolls over, deciding which turns count as one conversation. NOT when a routine fires — a wrap-up answered at 00:42 belongs to the day before. Falls back to DAY_START_HOUR (04:00) when null.",
+        },
       },
     },
     notes: {

@@ -68,6 +68,13 @@ export class UpdateUserSettingsTool extends BaseTool {
             status: { type: "string", enum: ["active", "paused"], description: "'paused' stops routines without losing anything." },
             morningHour: { type: "integer", description: "Local hour (0-23) the morning routine should fire." },
             nightHour: { type: "integer", description: "Local hour (0-23) the evening routine should fire." },
+            dayStartHour: {
+                type: "integer",
+                description:
+                    "Local hour (0-23) their day rolls over — everything said between one and the next is one day's conversation. " +
+                    "Not when they wake and not when a routine fires: it should land where they are never talking. Default 4. " +
+                    "Set it only if they say when their day ends, e.g. 'I'm up till 3 most nights' -> 4 is already right; a 5am shift start -> 3.",
+            },
             routines: {
                 type: "boolean",
                 description:

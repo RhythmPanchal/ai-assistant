@@ -229,13 +229,43 @@ Resolve "today", "tomorrow", "tonight", "next week" against this.
 }
 
 /**
+ * Said when the replayed conversation is NOT from today.
+ *
+ * chatHistoryKnowledge carries older turns into an empty day so the agent does
+ * not open cold, and nothing in the message array marks them old — they arrive
+ * in the position that says "this was just said". The warning cannot ride in
+ * the array either: a system message mid-history is not portable across
+ * providers. So it is stated here.
+ */
+function earlierBlock(carriedFrom) {
+  return `
+=====================================================================
+THE CONVERSATION BELOW IS OLD — from ${carriedFrom}, not today
+=====================================================================
+Nothing has been said today yet. What follows is the tail of an earlier
+conversation, replayed so you are not starting cold.
+
+Read it as background only:
+  • Do not answer anything asked in it. It was answered, or it was dropped.
+  • Do not act on it, and do not treat what it describes as happening now —
+    a plan made in it is not today's plan, and a feeling in it is not how
+    they feel now.
+  • Do not judge today by it. Whether they logged, followed a schedule or
+    replied at all in it says nothing about today.
+  • If you refer back to it, say when it was.
+
+Today starts with the message at the very end.
+`.trim();
+}
+
+/**
  * Section order matters. Two effects drive it:
  *  - the live date sits immediately BEFORE the date-format rule, so the rule
  *    and the value it applies to are read together;
  *  - the routine overlay goes LAST, where recency gives it the most weight —
  *    which is what we want, since its whole job is to override the defaults.
  */
-const ORDER = ["identity", "profile", "recent", "now", "hardRules", "defaults", "output"];
+const ORDER = ["identity", "profile", "recent", "now", "hardRules", "defaults", "output", "earlier"];
 
 const SECTIONS = {
   identity: () => IDENTITY,
@@ -249,6 +279,9 @@ const SECTIONS = {
   hardRules: () => HARD_RULES,
   defaults: () => DEFAULTS,
   output: () => OUTPUT,
+  // Last: it describes the messages replayed AFTER this instruction, not the
+  // assistant's own behaviour. Empty on any turn with a history of its own.
+  earlier: (ctx) => (ctx.carriedFrom ? earlierBlock(ctx.carriedFrom) : ""),
 };
 
 /**
@@ -262,16 +295,19 @@ const SECTIONS = {
  *                                     there is nothing summarised yet, and the
  *                                     section drops out rather than leaving a
  *                                     gap.
+ * @param {string}   [options.carriedFrom] the day(s) the replayed history came
+ *                                     from when it is NOT the current day.
+ *                                     Null on an ordinary turn.
  * @param {string[]} [options.order]   section order; exposed so the eval can
  *                                     compare arrangements rather than us
  *                                     guessing at one.
  */
 export function buildSystemInstruction(overlays = [], options = {}) {
-  const { profile = null, recent = null, order = ORDER } = options;
+  const { profile = null, recent = null, carriedFrom = null, order = ORDER } = options;
   // filter(Boolean) so an empty section leaves no blank gap between the two
   // around it — the block is absent for any user whose first day is not yet
   // summarised, which is every user on day one.
-  let out = order.map((k) => SECTIONS[k]({ profile, recent })).filter(Boolean).join("\n\n");
+  let out = order.map((k) => SECTIONS[k]({ profile, recent, carriedFrom })).filter(Boolean).join("\n\n");
 
   if (overlays.length) {
     out += `

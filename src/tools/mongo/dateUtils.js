@@ -143,13 +143,53 @@ function zoneOffset(timeZone, at) {
 }
 
 /**
- * A Date at `hour`:00 wall-clock in `timeZone`, `dayOffset` days from now.
+ * A Date at `hour`:00 wall-clock in `timeZone`, `dayOffset` days from `from`.
  *
  * Flow cutoffs are stated in the user's own day ("close it at 6pm, the day is
  * over"), so they cannot be computed as a fixed number of hours from now.
+ *
+ * `from` defaults to now, which is every caller but personalDayRange — that one
+ * needs the boundaries around an arbitrary instant, not around the clock.
  */
-export function atLocalHour(hour, timeZone = IST_TIMEZONE, dayOffset = 0) {
-  const at = new Date(Date.now() + dayOffset * 86400000);
+export function atLocalHour(hour, timeZone = IST_TIMEZONE, dayOffset = 0, from = Date.now()) {
+  const base = from instanceof Date ? from.getTime() : from;
+  const at = new Date(base + dayOffset * 86400000);
   const ymd = at.toLocaleDateString("en-CA", { timeZone });
   return new Date(`${ymd}T${String(hour).padStart(2, "0")}:00:00${zoneOffset(timeZone, at)}`);
+}
+
+/**
+ * The local hour, 0-23, that an instant falls on in `timeZone`. Via
+ * formatToParts because format() gives "04", "4" or "4 AM" by locale.
+ */
+export function localHourOf(instant, timeZone = IST_TIMEZONE) {
+  const at = instant instanceof Date ? instant : new Date(instant);
+  const part = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hourCycle: "h23" })
+    .formatToParts(at)
+    .find((p) => p.type === "hour")?.value;
+  return Number(part);
+}
+
+/**
+ * The hour a person's day rolls over, when they have not said.
+ *
+ * Not midnight, which cuts a wrap-up answered at 00:42 away from the opener it
+ * is answering. Not the hour they wake either: the boundary has to fall where
+ * nobody is talking, or an early start carries yesterday into a new day.
+ * Per-user via preferences.dayStartHour.
+ */
+export const DAY_START_HOUR = 4;
+
+/**
+ * The half-open instant range [start, end) of the personal day `at` falls in —
+ * one `hour`:00 to the next, so a stretch of being awake is one day however
+ * late it runs. `hour = 0` reproduces localDayRange exactly.
+ */
+export function personalDayRange(at = new Date(), { hour = DAY_START_HOUR, timeZone = IST_TIMEZONE } = {}) {
+  const from = at instanceof Date ? at : new Date(at);
+  const dayOffset = localHourOf(from, timeZone) >= hour ? 0 : -1;
+  return {
+    start: atLocalHour(hour, timeZone, dayOffset, from),
+    end: atLocalHour(hour, timeZone, dayOffset + 1, from),
+  };
 }

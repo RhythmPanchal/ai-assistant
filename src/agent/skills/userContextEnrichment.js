@@ -54,7 +54,8 @@ WHEN SOMETHING IS WRONG OR OUT OF DATE
 
 SETTINGS
   updateUserSettings   name, timezone, currency, locale, check-in times
-                       (morningHour, nightHour), routines on or off.
+                       (morningHour, nightHour), when their day rolls over
+                       (dayStartHour), routines on or off.
     "stop the night check-in"   -> routines: false
     "plan at 7 instead"         -> morningHour: 7
     "I moved to Toronto"        -> timezone America/Toronto, currency CAD

@@ -298,10 +298,8 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
     const meter = startTurn(userId, source);
 
     try {
-        const chatHistory = await chatHistoryKnowledge(userId);
-
-        // Fetched before the overlays because flowStateBlock needs the zone to
-        // resolve LOG DATE — the user's calendar day, not the host's.
+        // Fetched first because the history window and flowStateBlock both
+        // need the zone — the user's wall clock, not the host's.
         let userProfile = null;
         try {
             userProfile = await getUserProfile(userId);
@@ -309,6 +307,12 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
             console.warn("[runAgent] user profile lookup failed, using internal keys:", e.message);
         }
         const timeZone = userProfile?.timezone || IST_TIMEZONE;
+
+        // Their day, which ends at dayStartHour and not at midnight.
+        const { history: chatHistory, carriedFrom } = await chatHistoryKnowledge(userId, {
+            timeZone,
+            dayStartHour: userProfile?.preferences?.dayStartHour,
+        });
 
         // Active flow overlays. Lazy expiry inside getOpenFlowsForUser. keeps stale flows from leaking.
         const openFlows = await getOpenFlowsForUser(userId);
@@ -357,6 +361,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         const systemInstruction = buildSystemInstruction(overlays, {
             profile: profileBlock,
             recent: recentBlock,
+            carriedFrom,
         });
 
         const messages = [

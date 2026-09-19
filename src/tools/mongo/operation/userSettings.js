@@ -12,7 +12,7 @@ import { USERS } from "../schema/usersSchema.js";
  * validated rather than trusted.
  */
 
-const EDITABLE = ["name", "timezone", "currency", "locale", "status", "morningHour", "nightHour", "routines"];
+const EDITABLE = ["name", "timezone", "currency", "locale", "status", "morningHour", "nightHour", "dayStartHour", "routines"];
 
 // Where a setting lives on the users document when it is not a top-level field.
 // initCron reads the hours and the opt-in from preferences, so a top-level write
@@ -20,6 +20,7 @@ const EDITABLE = ["name", "timezone", "currency", "locale", "status", "morningHo
 const PATHS = {
     morningHour: "preferences.morningHour",
     nightHour: "preferences.nightHour",
+    dayStartHour: "preferences.dayStartHour",
     routines: "preferences.triggersOptIn",
 };
 
@@ -109,7 +110,8 @@ function validateField(field, value) {
             return { ok: true, value };
         }
         case "morningHour":
-        case "nightHour": {
+        case "nightHour":
+        case "dayStartHour": {
             const hour = Number(value);
             if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
                 return { ok: false, reason: `${field} must be a whole hour from 0 to 23 in the user's own time` };
