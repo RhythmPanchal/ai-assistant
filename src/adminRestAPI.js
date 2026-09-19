@@ -6,15 +6,20 @@ import { USER_IDENTITY } from "./tools/mongo/schema/userIdentitySchema.js";
 import { CHAT_HISTORY } from "./tools/mongo/schema/chatHistorySchema.js";
 import { runWithUserContext } from "./identity/userContext.js";
 import { runAgent } from "./agent/agent.js";
-import { IST_TIMEZONE } from "./tools/mongo/dateUtils.js";
+import {
+    IST_TIMEZONE,
+    DAY_START_HOUR,
+    personalDayOf,
+    personalDayRangeOf,
+} from "./tools/mongo/dateUtils.js";
+import { updateUserSettings, EDITABLE_SETTINGS } from "./tools/mongo/operation/userSettings.js";
+import { NOTE_SECTIONS } from "./tools/mongo/schema/usersSchema.js";
 
 const router = Router();
 
 const ADMIN_CHANNEL = "app";
 
 const ADMIN_SOURCE = "app";
-
-const DAY_BRACKET_MS = 86400000;
 
 function unauthorized(res, message) {
     return res.status(401).json({ error: message });
@@ -38,14 +43,21 @@ function requireAdmin(req, res, next) {
 
 const LOOPBACK_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
+function allowedOrigins() {
+    return String(process.env.ADMIN_UI_ORIGIN || "")
+        .split(",")
+        .map(origin => origin.trim().replace(/\/+$/, ""))
+        .filter(Boolean);
+}
+
 function adminCors(req, res, next) {
     const origin = req.get("origin");
-    const allowed = origin && (LOOPBACK_ORIGIN.test(origin) || origin === process.env.ADMIN_UI_ORIGIN);
+    const allowed = origin && (LOOPBACK_ORIGIN.test(origin) || allowedOrigins().includes(origin));
 
     if (allowed) {
         res.set("Access-Control-Allow-Origin", origin);
         res.set("Access-Control-Allow-Headers", "content-type, x-admin-token");
-        res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS");
         res.set("Access-Control-Max-Age", "600");
     }
     res.set("Vary", "Origin");
@@ -150,19 +162,128 @@ router.post("/admin/chat", async (req, res) => {
     }
 });
 
+function dayScope(user) {
+    return {
+        timeZone: user?.timezone || IST_TIMEZONE,
+        dayStartHour: Number.isInteger(user?.preferences?.dayStartHour)
+            ? user.preferences.dayStartHour
+            : DAY_START_HOUR,
+    };
+}
+
+async function findUser(userId) {
+    const db = await getDB();
+    return db.collection(USERS).findOne({ userId });
+}
+
+router.get("/admin/users/:userId", async (req, res) => {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId)) return res.status(400).json({ error: "userId must be an integer." });
+
+    try {
+        const db = await getDB();
+        const user = await findUser(userId);
+        if (!user) return res.status(404).json({ error: `No user with userId ${userId}.` });
+
+        const identities = await db.collection(USER_IDENTITY).find({ userId }).toArray();
+        const { timeZone, dayStartHour } = dayScope(user);
+
+        res.json({
+            userId: user.userId,
+            name: user.name ?? `user${user.userId}`,
+            settings: {
+                timezone: timeZone,
+                locale: user.locale ?? null,
+                currency: user.currency ?? null,
+                status: user.status ?? "active",
+                morningHour: user.preferences?.morningHour ?? null,
+                nightHour: user.preferences?.nightHour ?? null,
+                dayStartHour,
+                routines: user.preferences?.triggersOptIn === true,
+            },
+            editableSettings: EDITABLE_SETTINGS,
+            onboardedAt: user.onboardedAt ?? null,
+            welcomedAt: user.welcomedAt ?? null,
+            routinesChosenAt: user.preferences?.routinesChosenAt ?? null,
+            enabledSkills: user.enabledSkills ?? [],
+            notes: NOTE_SECTIONS.map(({ key, label, holds }) => ({
+                key,
+                label,
+                holds,
+                text: user.notes?.[key]?.text ?? null,
+                updatedAt: user.notes?.[key]?.updatedAt ?? null,
+            })),
+            lastNudgedAt: user.notes?.lastNudgedAt ?? null,
+            identities: identities.map(identity => ({
+                channel: identity.channel,
+                externalId: identity.externalId,
+                address: identity.address ?? null,
+                displayName: identity.displayName ?? null,
+                isPrimary: identity.isPrimary === true,
+            })),
+            createdAt: user.createdAt ?? null,
+            updatedAt: user.updatedAt ?? null,
+        });
+    } catch (err) {
+        console.error("[admin] /admin/users/:userId failed:", err);
+        res.status(500).json({ error: String(err.message || err) });
+    }
+});
+
+router.patch("/admin/users/:userId/settings", async (req, res) => {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId)) return res.status(400).json({ error: "userId must be an integer." });
+
+    const settings = req.body?.settings;
+    if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+        return res.status(400).json({ error: "settings must be an object." });
+    }
+
+    const unknown = Object.keys(settings).filter(field => !EDITABLE_SETTINGS.includes(field));
+    if (unknown.length) {
+        return res.status(400).json({
+            error: `Not editable: ${unknown.join(", ")}. Editable: ${EDITABLE_SETTINGS.join(", ")}.`,
+        });
+    }
+
+    try {
+        const user = await findUser(userId);
+        if (!user) return res.status(404).json({ error: `No user with userId ${userId}.` });
+
+        const { applied, rejected } = await runWithUserContext(
+            { userId, channel: ADMIN_CHANNEL, address: null },
+            () => updateUserSettings(userId, settings)
+        );
+
+        res.json({ userId, applied, rejected });
+    } catch (err) {
+        console.error("[admin] /admin/users/:userId/settings failed:", err);
+        res.status(500).json({ error: String(err.message || err) });
+    }
+});
+
 router.get("/admin/users/:userId/days", async (req, res) => {
     const userId = Number(req.params.userId);
     if (!Number.isInteger(userId)) return res.status(400).json({ error: "userId must be an integer." });
 
     try {
         const db = await getDB();
-        const timeZone = (await db.collection(USERS).findOne({ userId }))?.timezone || IST_TIMEZONE;
+        const user = await findUser(userId);
+        if (!user) return res.status(404).json({ error: `No user with userId ${userId}.` });
+
+        const { timeZone, dayStartHour } = dayScope(user);
 
         const days = await db.collection(CHAT_HISTORY).aggregate([
             { $match: { userId } },
             {
                 $group: {
-                    _id: { $dateToString: { date: "$createdAt", format: "%Y-%m-%d", timezone: timeZone } },
+                    _id: {
+                        $dateToString: {
+                            date: { $subtract: ["$createdAt", dayStartHour * 3600000] },
+                            format: "%Y-%m-%d",
+                            timezone: timeZone,
+                        },
+                    },
                     turns: { $sum: 1 },
                     firstAt: { $min: "$createdAt" },
                     lastAt: { $max: "$createdAt" },
@@ -174,6 +295,8 @@ router.get("/admin/users/:userId/days", async (req, res) => {
         res.json({
             userId,
             timezone: timeZone,
+            dayStartHour,
+            today: personalDayOf(new Date(), { hour: dayStartHour, timeZone }),
             days: days.map(d => ({ date: d._id, turns: d.turns, firstAt: d.firstAt, lastAt: d.lastAt })),
         });
     } catch (err) {
@@ -193,34 +316,26 @@ router.get("/admin/users/:userId/history", async (req, res) => {
 
     try {
         const db = await getDB();
-        const timeZone = (await db.collection(USERS).findOne({ userId }))?.timezone || IST_TIMEZONE;
+        const user = await findUser(userId);
+        if (!user) return res.status(404).json({ error: `No user with userId ${userId}.` });
 
-        const anchor = new Date(`${date}T00:00:00Z`).getTime();
+        const { timeZone, dayStartHour } = dayScope(user);
+        const range = personalDayRangeOf(date, { hour: dayStartHour, timeZone });
+        if (!range) return res.status(400).json({ error: "date must be a real calendar date." });
 
-        const turns = await db.collection(CHAT_HISTORY).aggregate([
-            {
-                $match: {
-                    userId,
-                    createdAt: {
-                        $gte: new Date(anchor - DAY_BRACKET_MS),
-                        $lt: new Date(anchor + 2 * DAY_BRACKET_MS),
-                    },
-                },
-            },
-            {
-                $addFields: {
-                    localDate: { $dateToString: { date: "$createdAt", format: "%Y-%m-%d", timezone: timeZone } },
-                },
-            },
-            { $match: { localDate: date } },
-            { $sort: { createdAt: 1 } },
-            { $project: { llmConversationMetadata: 0 } },
-        ]).toArray();
+        const turns = await db.collection(CHAT_HISTORY)
+            .find({ userId, createdAt: { $gte: range.start, $lt: range.end } })
+            .project({ llmConversationMetadata: 0 })
+            .sort({ createdAt: 1 })
+            .toArray();
 
         res.json({
             userId,
             date,
             timezone: timeZone,
+            dayStartHour,
+            startsAt: range.start,
+            endsAt: range.end,
             turns: turns.map(turn => ({
                 conversationId: turn.conversationId,
                 source: turn.source ?? null,

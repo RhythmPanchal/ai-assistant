@@ -68,9 +68,37 @@ ok("a non-numeric userId in the path is refused", res.status === 400, `got ${res
 res = await call("/admin/users/1/history?date=yesterday", { headers: auth });
 ok("history demands a real YYYY-MM-DD", res.status === 400, `got ${res.status}`);
 
+
+res = await call("/admin/users/1/settings", {
+    method: "PATCH",
+    headers: auth,
+    body: JSON.stringify({ settings: { nickname: "x" } }),
+});
+ok("a settings field that is not editable is refused by name", res.status === 400, `got ${res.status}`);
+
+res = await call("/admin/users/1/settings", { method: "PATCH", headers: auth, body: JSON.stringify({}) });
+ok("a settings patch with no settings object is refused", res.status === 400, `got ${res.status}`);
+
+res = await call("/admin/users/nope/settings", { method: "PATCH", headers: auth, body: JSON.stringify({ settings: {} }) });
+ok("a non-numeric userId on the settings route is refused", res.status === 400, `got ${res.status}`);
+
+res = await call("/admin/users/nope", { headers: auth });
+ok("a non-numeric userId on the detail route is refused", res.status === 400, `got ${res.status}`);
 res = await call("/admin/health", { headers: { ...auth, origin: "http://localhost:5173" } });
 ok("the local console origin is allowed",
     res.headers.get("access-control-allow-origin") === "http://localhost:5173",
+    String(res.headers.get("access-control-allow-origin")));
+
+process.env.ADMIN_UI_ORIGIN = "https://rasmalai-ui.pages.dev, https://console.example.com/";
+
+res = await call("/admin/health", { headers: { ...auth, origin: "https://rasmalai-ui.pages.dev" } });
+ok("a hosted origin named in ADMIN_UI_ORIGIN is allowed",
+    res.headers.get("access-control-allow-origin") === "https://rasmalai-ui.pages.dev",
+    String(res.headers.get("access-control-allow-origin")));
+
+res = await call("/admin/health", { headers: { ...auth, origin: "https://console.example.com" } });
+ok("a second origin in the list is allowed too, trailing slash and spaces aside",
+    res.headers.get("access-control-allow-origin") === "https://console.example.com",
     String(res.headers.get("access-control-allow-origin")));
 
 res = await call("/admin/health", { headers: { ...auth, origin: "https://evil.example.com" } });
@@ -87,6 +115,10 @@ ok("an outside preflight is refused", res.status === 403, `got ${res.status}`);
 
 res = await call("/admin/chat", { method: "OPTIONS", headers: { origin: "http://localhost:5173" } });
 ok("the console's preflight passes without a token", res.status === 204, `got ${res.status}`);
+
+ok("PATCH is offered, or the settings route is unreachable from a browser",
+    (res.headers.get("access-control-allow-methods") || "").includes("PATCH"),
+    String(res.headers.get("access-control-allow-methods")));
 
 server.close();
 
