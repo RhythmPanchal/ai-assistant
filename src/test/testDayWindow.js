@@ -13,7 +13,7 @@
  */
 import assert from "node:assert";
 
-const { personalDayRange, localHourOf, localDayRange, DAY_START_HOUR, IST_TIMEZONE } =
+const { personalDayRange, personalDayRangeOf, personalDayOf, localHourOf, localDayRange, DAY_START_HOUR, IST_TIMEZONE } =
     await import("../tools/mongo/dateUtils.js");
 const { buildSystemInstruction } = await import("../agent/instruction.js");
 
@@ -132,6 +132,56 @@ test("a routine overlay still lands after it, and neither is lost", () => {
     const out = buildSystemInstruction(["OVERLAY BODY"], { carriedFrom: "2026-09-18" });
     assert.match(out, /IS OLD/);
     assert.match(out, /OVERLAY BODY/);
+});
+
+/*
+ * Reading a day BACK. The console lists days and then asks for one by label,
+ * so the label -> range mapping has to be the exact inverse of the range ->
+ * label one. Get it wrong and a day opens showing the neighbouring day's
+ * conversation, which reads as data loss rather than as an off-by-one.
+ */
+
+test("a day label maps back to the range it labels", () => {
+    const range = personalDayRangeOf("2026-09-19", { hour: 6, timeZone: IST });
+    assert.equal(range.start.toISOString(), ist("2026-09-19T06:00").toISOString());
+    assert.equal(range.end.toISOString(), ist("2026-09-20T06:00").toISOString());
+});
+
+test("the label of a range is the day it STARTS on", () => {
+    // 02:00 on the 20th, for someone whose day starts at 06:00, is still the
+    // 19th — the night they are still awake in.
+    assert.equal(personalDayOf(ist("2026-09-20T02:00"), { hour: 6, timeZone: IST }), "2026-09-19");
+    assert.equal(personalDayOf(ist("2026-09-20T06:00"), { hour: 6, timeZone: IST }), "2026-09-20");
+    assert.equal(personalDayOf(ist("2026-09-19T23:59"), { hour: 6, timeZone: IST }), "2026-09-19");
+});
+
+test("label and range are inverses at every hour of a day", () => {
+    for (const hour of [0, 4, 6, 9, 23]) {
+        for (const at of [ist("2026-09-19T00:30"), ist("2026-09-19T12:00"), ist("2026-09-19T23:30")]) {
+            const label = personalDayOf(at, { hour, timeZone: IST });
+            const range = personalDayRangeOf(label, { hour, timeZone: IST });
+            assert.ok(
+                at >= range.start && at < range.end,
+                `hour ${hour}: ${at.toISOString()} not inside the range of its own label ${label}`,
+            );
+        }
+    }
+});
+
+test("hour 0 is the calendar day", () => {
+    const range = personalDayRangeOf("2026-09-19", { hour: 0, timeZone: IST });
+    const calendar = localDayRange("2026-09-19");
+    assert.equal(range.start.toISOString(), calendar.start.toISOString());
+    assert.equal(range.end.toISOString(), calendar.end.toISOString());
+});
+
+test("a day is 24 hours long in a zone without DST", () => {
+    const range = personalDayRangeOf("2026-09-19", { hour: 6, timeZone: IST });
+    assert.equal(range.end - range.start, 86400000);
+});
+
+test("a garbage label is refused rather than guessed at", () => {
+    assert.equal(personalDayRangeOf("not-a-date", { hour: 6, timeZone: IST }), null);
 });
 
 let pass = 0;

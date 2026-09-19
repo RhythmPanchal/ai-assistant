@@ -193,3 +193,36 @@ export function personalDayRange(at = new Date(), { hour = DAY_START_HOUR, timeZ
     end: atLocalHour(hour, timeZone, dayOffset + 1, from),
   };
 }
+
+/**
+ * The inverse of personalDayRange: the instant range of the personal day
+ * LABELLED `date`, rather than the one some instant falls in.
+ *
+ * A personal day is labelled by the calendar date it STARTS on, so the day
+ * "2026-09-19" for someone starting at 06:00 runs 2026-09-19T06:00 to
+ * 2026-09-20T06:00 local. Reading a day back needs that mapping, and deriving
+ * it at each call site is how the two boundaries drift apart.
+ *
+ * The anchor exists because atLocalHour builds its result from the local date
+ * of the instant it is given, so it needs an instant already inside the right
+ * day. Noon UTC is that instant for every zone from -12 to +12; only the +13
+ * and +14 zones read as the next day there, and stepping back 14 hours fixes
+ * those without disturbing the rest.
+ *
+ * @param {string} date "YYYY-MM-DD"
+ */
+export function personalDayRangeOf(date, { hour = DAY_START_HOUR, timeZone = IST_TIMEZONE } = {}) {
+  let anchor = new Date(`${date}T12:00:00Z`);
+  if (isNaN(anchor.getTime())) return null;
+  if (localDateOf(anchor, timeZone) !== date) anchor = new Date(anchor.getTime() - 14 * 3600000);
+
+  return {
+    start: atLocalHour(hour, timeZone, 0, anchor),
+    end: atLocalHour(hour, timeZone, 1, anchor),
+  };
+}
+
+/** The label of the personal day `at` falls in — what personalDayRangeOf takes back. */
+export function personalDayOf(at = new Date(), { hour = DAY_START_HOUR, timeZone = IST_TIMEZONE } = {}) {
+  return localDateOf(personalDayRange(at, { hour, timeZone }).start, timeZone);
+}
