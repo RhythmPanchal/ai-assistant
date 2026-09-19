@@ -325,7 +325,6 @@ router.get("/admin/users/:userId/history", async (req, res) => {
 
         const turns = await db.collection(CHAT_HISTORY)
             .find({ userId, createdAt: { $gte: range.start, $lt: range.end } })
-            .project({ llmConversationMetadata: 0 })
             .sort({ createdAt: 1 })
             .toArray();
 
@@ -340,12 +339,14 @@ router.get("/admin/users/:userId/history", async (req, res) => {
                 conversationId: turn.conversationId,
                 source: turn.source ?? null,
                 createdAt: turn.createdAt,
+                metrics: turn.llmConversationMetadata ?? null,
                 messages: (turn.messages ?? []).map(msg => ({
                     role: msg.role,
                     content: msg.content ?? null,
                     toolName: msg.toolName ?? null,
                     functionCalls: msg.functionCalls ?? null,
                     result: msg.result ?? null,
+                    durationMs: msg.durationMs ?? null,
                     timestamp: msg.timestamp ?? null,
                 })),
             })),
