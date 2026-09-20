@@ -12,7 +12,7 @@ import { USERS } from "../schema/usersSchema.js";
  * validated rather than trusted.
  */
 
-const EDITABLE = ["name", "timezone", "currency", "locale", "status", "morningHour", "nightHour", "dayStartHour", "routines"];
+const EDITABLE = ["name", "timezone", "currency", "locale", "status", "morningHour", "nightHour", "dayStartHour", "routines", "llmTrace"];
 
 // Where a setting lives on the users document when it is not a top-level field.
 // initCron reads the hours and the opt-in from preferences, so a top-level write
@@ -22,6 +22,10 @@ const PATHS = {
     nightHour: "preferences.nightHour",
     dayStartHour: "preferences.dayStartHour",
     routines: "preferences.triggersOptIn",
+    // Debug-only, and absent from the updateUserSettings declaration on
+    // purpose: an operator turns tracing on from the console, the model has no
+    // reason to and no way to.
+    llmTrace: "preferences.llmTrace",
 };
 
 const STATUSES = ["active", "paused"];
@@ -99,6 +103,12 @@ function validateField(field, value) {
                 return { ok: false, reason: `status must be one of ${STATUSES.join(", ")}` };
             }
             return { ok: true, value: status };
+        }
+        case "llmTrace": {
+            if (typeof value !== "boolean") {
+                return { ok: false, reason: "llmTrace must be true or false" };
+            }
+            return { ok: true, value };
         }
         case "routines": {
             // Strictly a boolean. "yes", 1 and "true" all arrive from models that

@@ -7,6 +7,7 @@ import { CONNECTION, CONNECTION_INDEXES } from "./schema/connectionSchema.js";
 import { COUNTERS, COUNTERS_INDEXES } from "./schema/countersSchema.js";
 import { DIET_REGISTER, DIET_REGISTER_INDEXES } from "./schema/dietRegisterSchema.js";
 import { EXPENSE_REGISTER, EXPENSE_REGISTER_INDEXES } from "./schema/expenseRegisterSchema.js";
+import { LLM_TRACE, LLM_TRACE_INDEXES } from "./schema/llmTraceSchema.js";
 import { OAUTH_CONNECTOR, OAUTH_CONNECTOR_INDEXES } from "./schema/oauthConnectorSchema.js";
 import { TASK_CALENDAR, TASK_CALENDAR_INDEXES } from "./schema/taskCalendarSchema.js";
 import { TASK_REGISTER, TASK_REGISTER_INDEXES } from "./schema/taskRegisterSchema.js";
@@ -46,6 +47,7 @@ const INDEX_REGISTRY = [
     [COUNTERS, COUNTERS_INDEXES],
     [DIET_REGISTER, DIET_REGISTER_INDEXES],
     [EXPENSE_REGISTER, EXPENSE_REGISTER_INDEXES],
+    [LLM_TRACE, LLM_TRACE_INDEXES],
     [OAUTH_CONNECTOR, OAUTH_CONNECTOR_INDEXES],
     [TASK_CALENDAR, TASK_CALENDAR_INDEXES],
     [TASK_REGISTER, TASK_REGISTER_INDEXES],

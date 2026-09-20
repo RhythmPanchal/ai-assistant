@@ -7,6 +7,7 @@ import { startTurn } from "./llm/usageMeter.js";
 import { agentConfig } from "../config/agent.config.js";
 import { getUserProfile } from "../identity/userManager.js";
 import { createRecord } from "../tools/mongo/createRecord.js";
+import { TraceBuilder, saveTrace, tracingEnabled } from "../tools/mongo/operation/llmTrace.js";
 import { CHAT_HISTORY, ConversationBuilder } from "../tools/mongo/schema/chatHistorySchema.js";
 import { buildSystemInstruction, NO_REPLY } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
@@ -377,6 +378,13 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         const conversation = new ConversationBuilder(userId, source);
         conversation.addUserMessage(userInstruction);
 
+        // Off unless this user is being debugged. Null rather than a no-op
+        // object so every call site reads `trace?.` and the cost of not
+        // tracing is one property check.
+        const trace = tracingEnabled(userProfile)
+            ? new TraceBuilder({ conversationId: conversation.conversationId, userId, source })
+            : null;
+
         const task = resolveTask({ source, openFlows: activeFlows, override: taskOverride });
         const maxSteps = resolveMaxSteps(task);
         meter.setTask(task);
@@ -403,6 +411,10 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
             steps++;
             meter.recordStep();
 
+            // Opened before the request so every attempt this step makes,
+            // including the ones that fail, is filed under it.
+            trace?.startStep(steps, toolDeclarations);
+
             let response;
             try {
                 response = await providerManager.chatWithFallback(messages, toolDeclarations, {
@@ -411,7 +423,10 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
                     onAttempt: (provider, model) => meter.recordCall(`${provider}:${model}`),
                     // Fires on failures too, so a fallback cascade is priced
                     // rather than silently dropped.
-                    onResult: (info) => meter.recordResult(info),
+                    onResult: (info) => {
+                        meter.recordResult(info);
+                        trace?.addAttempt(info);
+                    },
                 });
             } catch (err) {
                 meter.recordError(err);
@@ -542,6 +557,15 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         const metrics = meter.summary("ok");
         conversation.setMetrics(metrics);
         await createRecord(CHAT_HISTORY, conversation.build());
+
+        if (trace) {
+            // Read back from messages[0] rather than kept from the start: a
+            // skill loaded mid-turn appends to the system message, so the text
+            // the model was actually working from is only final now.
+            trace.setSystemInstruction(messages[0]?.content ?? null);
+            trace.task = task;
+            await saveTrace(trace);
+        }
 
         await meter.finish("ok");
         return { text: LLMresponse, metrics };

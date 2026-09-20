@@ -126,6 +126,11 @@ export class ProviderManager {
                     onResult?.({
                         provider: name, model, ok: true,
                         usage: res.usage, latencyMs: Date.now() - startedAt,
+                        // The response itself, for a caller recording what came
+                        // back. Passed rather than returned-and-inspected so the
+                        // meter and the tracer see the same thing at the same
+                        // point, failures included.
+                        response: res,
                     });
                     return res;
                 } catch (err) {
@@ -133,6 +138,7 @@ export class ProviderManager {
                     onResult?.({
                         provider: name, model, ok: false, usage: null,
                         latencyMs: Date.now() - startedAt, errorKind: kind,
+                        errorMessage: err.message, response: null,
                     });
 
                     // Daily buckets are per model per day. Sleeping cannot bring
