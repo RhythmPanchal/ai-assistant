@@ -13,6 +13,7 @@ import {
     personalDayRangeOf,
 } from "./tools/mongo/dateUtils.js";
 import { updateUserSettings, EDITABLE_SETTINGS } from "./tools/mongo/operation/userSettings.js";
+import { getTrace } from "./tools/mongo/operation/llmTrace.js";
 import { NOTE_SECTIONS } from "./tools/mongo/schema/usersSchema.js";
 
 const router = Router();
@@ -200,6 +201,7 @@ router.get("/admin/users/:userId", async (req, res) => {
                 nightHour: user.preferences?.nightHour ?? null,
                 dayStartHour,
                 routines: user.preferences?.triggersOptIn === true,
+                llmTrace: user.preferences?.llmTrace === true,
             },
             editableSettings: EDITABLE_SETTINGS,
             onboardedAt: user.onboardedAt ?? null,
@@ -301,6 +303,39 @@ router.get("/admin/users/:userId/days", async (req, res) => {
         });
     } catch (err) {
         console.error("[admin] /admin/users/:userId/days failed:", err);
+        res.status(500).json({ error: String(err.message || err) });
+    }
+});
+
+router.get("/admin/users/:userId/trace", async (req, res) => {
+    const userId = Number(req.params.userId);
+    const conversationId = String(req.query.conversationId || "");
+
+    if (!Number.isInteger(userId)) return res.status(400).json({ error: "userId must be an integer." });
+    if (!conversationId) return res.status(400).json({ error: "conversationId is required." });
+
+    try {
+        const trace = await getTrace(conversationId);
+        if (!trace) {
+            return res.status(404).json({
+                error: "No trace for that turn. Tracing is off for this user, or the turn predates it.",
+            });
+        }
+        if (trace.userId !== userId) {
+            return res.status(404).json({ error: "No trace for that turn." });
+        }
+
+        res.json({
+            conversationId: trace.conversationId,
+            userId: trace.userId,
+            task: trace.task ?? null,
+            source: trace.source ?? null,
+            systemInstruction: trace.systemInstruction ?? null,
+            steps: trace.steps ?? [],
+            createdAt: trace.createdAt,
+        });
+    } catch (err) {
+        console.error("[admin] /admin/users/:userId/trace failed:", err);
         res.status(500).json({ error: String(err.message || err) });
     }
 });
