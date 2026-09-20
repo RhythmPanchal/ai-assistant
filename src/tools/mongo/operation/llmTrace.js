@@ -20,6 +20,76 @@ const MAX_RAW_CHARS = 20000;
 /** A system instruction runs 8-40 KB. Past that something has gone wrong; keep the head. */
 const MAX_SYSTEM_CHARS = 120000;
 
+/** Per message in a captured request. Long enough for a real reply, short of a runaway one. */
+const MAX_MESSAGE_CHARS = 8000;
+
+/**
+ * Noise dropped on the way in rather than on the way out, because it is noise
+ * in storage too: the SDK's echo of the HTTP response headers was 35% of every
+ * captured response, and a thoughtSignature is 128 bytes of opaque base64 that
+ * exists only so a call can be replayed to Gemini. Neither says anything about
+ * why a model answered the way it did.
+ */
+function slimResponse(raw) {
+    if (!raw || typeof raw !== "object") return raw ?? null;
+
+    const { sdkHttpResponse, ...rest } = raw;
+
+    if (Array.isArray(rest.candidates)) {
+        rest.candidates = rest.candidates.map((candidate) => {
+            const parts = candidate?.content?.parts;
+            if (!Array.isArray(parts)) return candidate;
+            return {
+                ...candidate,
+                content: {
+                    ...candidate.content,
+                    parts: parts.map(({ thoughtSignature, ...part }) => part),
+                },
+            };
+        });
+    }
+
+    return rest;
+}
+
+/**
+ * One message as it went into a request. Kept structurally rather than as a
+ * blob so the console can fold the injected history away from the turn's own
+ * exchange — the two look identical in a flat dump and mean quite different
+ * things.
+ */
+function slimMessage(message) {
+    const content = clipObject(message?.content ?? null, MAX_MESSAGE_CHARS);
+
+    return {
+        role: message?.role ?? "unknown",
+        content,
+        toolName: message?.toolName ?? null,
+        toolCalls: Array.isArray(message?.toolCalls)
+            ? message.toolCalls.map((call) => ({ name: call.name, args: call.args ?? {} }))
+            : null,
+    };
+}
+
+/**
+ * Like clip, but keeps an object as an object when it fits. A JSON blob that
+ * arrives at the console already flattened to a string cannot be rendered as
+ * anything but a wall of text, which is the thing this view exists to avoid.
+ */
+function clipObject(value, limit) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string") return clip(value, limit);
+
+    let text;
+    try {
+        text = JSON.stringify(value);
+    } catch {
+        return "[unserialisable]";
+    }
+
+    return text.length <= limit ? value : `${text.slice(0, limit)}… [clipped ${text.length - limit} chars]`;
+}
+
 function clip(value, limit) {
     if (value === null || value === undefined) return null;
 
@@ -56,6 +126,10 @@ export class TraceBuilder {
         this.task = task;
         this.source = source;
         this.systemInstruction = null;
+        // How many of step 1's messages are replayed context rather than this
+        // turn's own exchange. The console folds them away behind one line.
+        this.historyCount = 0;
+        this.sentCount = 0;
         this.steps = [];
     }
 
@@ -65,9 +139,25 @@ export class TraceBuilder {
         return this;
     }
 
-    /** Open a step. Every attempt recorded after this belongs to it. */
-    startStep(step, toolsOffered = []) {
-        this.steps.push({ step, toolsOffered: toolsOffered.map(t => t.name ?? String(t)), attempts: [] });
+    /**
+     * Open a step, recording what this request adds to the last one.
+     *
+     * Only the DELTA: the array grows by a few messages per step while the
+     * first 20-odd stay identical, so storing it whole each time would be the
+     * same prompt written out as many times as the turn has steps. Step 1's
+     * delta is the whole request bar the system message, which is held once on
+     * the turn.
+     */
+    startStep(step, toolsOffered = [], messages = []) {
+        const sent = messages.slice(Math.max(this.sentCount, 1));
+        this.sentCount = messages.length;
+
+        this.steps.push({
+            step,
+            toolsOffered: toolsOffered.map(t => t.name ?? String(t)),
+            request: sent.map(slimMessage),
+            attempts: [],
+        });
         return this;
     }
 
@@ -89,7 +179,7 @@ export class TraceBuilder {
             finishReason: response?.rawResponse?.candidates?.[0]?.finishReason
                 ?? response?.rawResponse?.choices?.[0]?.finish_reason
                 ?? null,
-            rawResponse: clip(response?.rawResponse ?? null, MAX_RAW_CHARS),
+            rawResponse: clipObject(slimResponse(response?.rawResponse ?? null), MAX_RAW_CHARS),
         });
         return this;
     }
@@ -101,6 +191,7 @@ export class TraceBuilder {
             task: this.task,
             source: this.source,
             systemInstruction: this.systemInstruction,
+            historyCount: this.historyCount,
             steps: this.steps,
             createdAt: new Date(),
         };

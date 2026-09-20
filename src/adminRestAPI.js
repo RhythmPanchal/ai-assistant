@@ -331,6 +331,7 @@ router.get("/admin/users/:userId/trace", async (req, res) => {
             task: trace.task ?? null,
             source: trace.source ?? null,
             systemInstruction: trace.systemInstruction ?? null,
+            historyCount: trace.historyCount ?? 0,
             steps: trace.steps ?? [],
             createdAt: trace.createdAt,
         });

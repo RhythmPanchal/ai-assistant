@@ -9,12 +9,17 @@ export const LLM_TRACE = "llmTrace";
  * turn costs today, so putting it there would make every traced user's every
  * turn pay to read traces it does not use.
  *
- * It is also why nothing here is the request itself. Within one turn the
- * system instruction and the tool declarations are byte-identical at every
- * step — only the tail grows, and that tail is already in chatHistory as the
- * user message, the function calls and the tool results. So this stores the
- * parts that cannot be reconstructed, and a reader rebuilds the rest by
- * joining on conversationId. ~20 KB a turn rather than ~1 MB.
+ * It is also why the request is stored once rather than once per step. Within
+ * a turn the system instruction and the tool declarations are byte-identical
+ * at every step and only the tail grows, so the system message is held once on
+ * the turn and each step keeps only the messages it added. Writing the whole
+ * array every step measured ~1 MB on an 18-call turn; this is ~20 KB.
+ *
+ * The replayed history is the part that genuinely could not be recovered: it
+ * comes from up to 50 EARLIER chatHistory documents, and those move on. A
+ * turn's own messages could have been rejoined from chatHistory, but they
+ * arrive here anyway as part of step 1's delta, which costs little and means
+ * one read answers what was sent.
  *
  * Written only for users with preferences.llmTrace on, and pruned by TTL.
  */
@@ -39,12 +44,40 @@ const llmTraceSchema = {
      */
     systemInstruction: { bsonType: ["string", "null"] },
 
+    /**
+     * How many of step 1's messages are replayed context from earlier turns
+     * rather than this turn's own exchange. Nothing in the array itself says
+     * so, and a reader who cannot tell them apart concludes the user said
+     * something a previous day said.
+     */
+    historyCount: { bsonType: ["int", "long", "null"] },
+
     steps: {
       bsonType: "array",
       items: {
         bsonType: "object",
         properties: {
           step: { bsonType: ["int", "long"] },
+          /**
+           * What THIS request added to the one before it — the messages
+           * appended since the last step, never the whole array. The array
+           * grows by a couple of messages per step while its first twenty stay
+           * identical, so storing it whole would write the same prompt once per
+           * step. Step 1 carries everything but the system message, which is
+           * held once above.
+           */
+          request: {
+            bsonType: "array",
+            items: {
+              bsonType: "object",
+              properties: {
+                role: { bsonType: "string" },
+                content: { bsonType: ["string", "object", "array", "null"] },
+                toolName: { bsonType: ["string", "null"] },
+                toolCalls: { bsonType: ["array", "null"] },
+              },
+            },
+          },
           // Names only. The schemas are in code and identical every turn, so
           // storing them would be 24 KB of the same bytes per step. What
           // changes, and is worth knowing, is WHICH tools the model could see

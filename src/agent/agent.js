@@ -384,6 +384,10 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         const trace = tracingEnabled(userProfile)
             ? new TraceBuilder({ conversationId: conversation.conversationId, userId, source })
             : null;
+        // Where the replayed context ends and this turn begins. The two are
+        // indistinguishable in the assembled array, and conflating them is how
+        // a reader concludes the user said something a previous day said.
+        if (trace) trace.historyCount = chatHistory.length;
 
         const task = resolveTask({ source, openFlows: activeFlows, override: taskOverride });
         const maxSteps = resolveMaxSteps(task);
@@ -413,7 +417,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
 
             // Opened before the request so every attempt this step makes,
             // including the ones that fail, is filed under it.
-            trace?.startStep(steps, toolDeclarations);
+            trace?.startStep(steps, toolDeclarations, messages);
 
             let response;
             try {
