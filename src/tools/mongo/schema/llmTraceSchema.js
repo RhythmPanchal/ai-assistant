@@ -15,7 +15,8 @@ export const LLM_TRACE = "llmTrace";
  * the turn and each step keeps only the messages it added. Writing the whole
  * array every step measured ~1 MB on an 18-call turn; this is ~20 KB.
  *
- * The replayed history is the part that genuinely could not be recovered: it
+ * The replayed history is likewise the part that genuinely could not be
+ * recovered: it
  * comes from up to 50 EARLIER chatHistory documents, and those move on. A
  * turn's own messages could have been rejoined from chatHistory, but they
  * arrive here anyway as part of step 1's delta, which costs little and means
@@ -36,13 +37,65 @@ const llmTraceSchema = {
     source: { bsonType: ["string", "null"] },
 
     /**
-     * The system message as built for THIS turn: persona, hard rules, the
-     * profile block, RECENTLY, any flow overlay, and any skill appended
-     * mid-turn. Rebuilt every turn and never stored anywhere else, which makes
-     * it the one input that cannot be recovered after the fact — and the first
-     * thing worth reading when a reply is wrong about the person.
+     * The parts of the system message that VARY, kept apart rather than as the
+     * assembled blob.
+     *
+     * The persona, hard rules and output contract are identical every turn for
+     * every user and live in instruction.js, so storing them was 6 KB a turn
+     * of a constant — and it buried the overlay, which is the part that
+     * differs per flow and the first thing worth reading when a routine
+     * behaves unlike itself. baseChars keeps the assembled length as a sanity
+     * check that nothing was dropped.
      */
-    systemInstruction: { bsonType: ["string", "null"] },
+    prompt: {
+      bsonType: ["object", "null"],
+      properties: {
+        // One entry per overlay, next to what produced it: a flow's own
+        // procedure and live data, the weekly goal nudge, the night notes
+        // upkeep. Joined into the prompt these are one undifferentiated block.
+        overlays: {
+          bsonType: "array",
+          items: {
+            bsonType: "object",
+            properties: {
+              kind: { bsonType: "string", description: "flow | nudge | notesUpkeep" },
+              flowType: { bsonType: ["string", "null"] },
+              text: { bsonType: ["string", "null"] },
+            },
+          },
+        },
+        profile: { bsonType: ["string", "null"], description: "WHO YOU ARE HELPING, as rendered." },
+        recent: { bsonType: ["string", "null"], description: "RECENTLY, as rendered." },
+        carriedFrom: { bsonType: ["string", "null"], description: "Day the replayed history came from, when not today's." },
+        baseChars: { bsonType: ["int", "long", "null"] },
+      },
+    },
+
+    // Skills loaded during the turn, which widen both the tools and the system
+    // message. Read at the end, because a skill can be loaded at any step.
+    skills: { bsonType: ["array", "null"], items: { bsonType: "string" } },
+
+    /**
+     * The tool declarations as the model received them — names, descriptions
+     * and parameter schemas, the half of the request that decides what it can
+     * do at all.
+     *
+     * One entry per CHANGE, not per step. They are ~24 KB for 23 tools and
+     * byte-identical until a skill loads and widens the set, so a per-step copy
+     * would write the same 24 KB once per step. `fromStep` says where each set
+     * took effect; a step's declarations are the last entry at or before it.
+     */
+    toolSets: {
+      bsonType: ["array", "null"],
+      items: {
+        bsonType: "object",
+        properties: {
+          fromStep: { bsonType: ["int", "long"] },
+          names: { bsonType: "array", items: { bsonType: "string" } },
+          declarations: { bsonType: ["array", "string", "null"] },
+        },
+      },
+    },
 
     /**
      * How many of step 1's messages are replayed context from earlier turns
@@ -78,10 +131,8 @@ const llmTraceSchema = {
               },
             },
           },
-          // Names only. The schemas are in code and identical every turn, so
-          // storing them would be 24 KB of the same bytes per step. What
-          // changes, and is worth knowing, is WHICH tools the model could see
-          // — a skill loaded mid-turn widens this.
+          // Names, for reading a step at a glance. The full declarations for
+          // this step are the last toolSets entry with fromStep <= step.
           toolsOffered: { bsonType: "array", items: { bsonType: "string" } },
           // Every request this step made, failures first, in order. A step
           // with four entries means three models refused before one answered.

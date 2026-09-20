@@ -23,6 +23,9 @@ const MAX_SYSTEM_CHARS = 120000;
 /** Per message in a captured request. Long enough for a real reply, short of a runaway one. */
 const MAX_MESSAGE_CHARS = 8000;
 
+/** The whole declaration list is ~24 KB for 23 tools. Twice that is already wrong. */
+const MAX_TOOLS_CHARS = 200000;
+
 /**
  * Noise dropped on the way in rather than on the way out, because it is noise
  * in storage too: the SDK's echo of the HTTP response headers was 35% of every
@@ -125,17 +128,42 @@ export class TraceBuilder {
         this.userId = userId;
         this.task = task;
         this.source = source;
-        this.systemInstruction = null;
+        this.prompt = null;
+        this.skills = [];
         // How many of step 1's messages are replayed context rather than this
         // turn's own exchange. The console folds them away behind one line.
         this.historyCount = 0;
         this.sentCount = 0;
+        // The tool declarations as the model actually received them, recorded
+        // when they first apply and again only when they change. They are ~24
+        // KB and identical at every step until a skill widens them, so one
+        // entry per step would be the same 24 KB written out per step.
+        this.toolSets = [];
         this.steps = [];
     }
 
-    /** Called once the system message is final for this turn. */
-    setSystemInstruction(text) {
-        this.systemInstruction = clip(text, MAX_SYSTEM_CHARS);
+    /**
+     * The parts of the system message that change, kept apart.
+     *
+     * The persona, hard rules and output contract are the same every turn for
+     * everyone and are in the source, so storing them is 6 KB a turn of a
+     * constant. What varies is the overlay a flow contributes, the profile
+     * block and RECENTLY — and those are what a reply is usually wrong
+     * because of. `baseChars` is kept as a sanity check that the assembled
+     * prompt was the size it should have been.
+     */
+    setPrompt({ overlays = [], profile = null, recent = null, carriedFrom = null, baseChars = null } = {}) {
+        this.prompt = {
+            overlays: overlays.map(o => ({
+                kind: o.kind ?? "flow",
+                flowType: o.flowType ?? null,
+                text: clip(o.text, MAX_SYSTEM_CHARS),
+            })),
+            profile: clip(profile, MAX_SYSTEM_CHARS),
+            recent: clip(recent, MAX_SYSTEM_CHARS),
+            carriedFrom,
+            baseChars,
+        };
         return this;
     }
 
@@ -152,9 +180,24 @@ export class TraceBuilder {
         const sent = messages.slice(Math.max(this.sentCount, 1));
         this.sentCount = messages.length;
 
+        const names = toolsOffered.map(t => t.name ?? String(t));
+
+        // Recorded on the first step, and afterwards only when the set changes
+        // — which is exactly when a skill has loaded and widened it. Compared
+        // by name: a declaration's schema cannot change without a deploy, and
+        // between deploys the names are what moves.
+        const last = this.toolSets[this.toolSets.length - 1];
+        if (!last || last.names.join("\u0000") !== names.join("\u0000")) {
+            this.toolSets.push({
+                fromStep: step,
+                names,
+                declarations: clipObject(toolsOffered, MAX_TOOLS_CHARS),
+            });
+        }
+
         this.steps.push({
             step,
-            toolsOffered: toolsOffered.map(t => t.name ?? String(t)),
+            toolsOffered: names,
             request: sent.map(slimMessage),
             attempts: [],
         });
@@ -190,7 +233,9 @@ export class TraceBuilder {
             userId: this.userId,
             task: this.task,
             source: this.source,
-            systemInstruction: this.systemInstruction,
+            prompt: this.prompt,
+            skills: this.skills,
+            toolSets: this.toolSets,
             historyCount: this.historyCount,
             steps: this.steps,
             createdAt: new Date(),

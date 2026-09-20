@@ -349,7 +349,20 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         // Notes come first. A routine's own procedure and live data stay last,
         // where recency gives them the most weight: raising a goal or tidying
         // the notes is something a routine may do on the way, never its point.
-        const overlays = [nudge, notesUpkeep(openFlows), ...routineOverlays].filter(Boolean);
+        const upkeep = notesUpkeep(openFlows);
+        const overlays = [nudge, upkeep, ...routineOverlays].filter(Boolean);
+
+        // The same overlays, each kept next to what produced it. Joined into
+        // the system message they are one undifferentiated block, and which
+        // flow contributed which instruction is the first thing worth knowing
+        // when a routine behaves unlike itself.
+        const labelledOverlays = [
+            nudge && { kind: "nudge", flowType: null, text: nudge },
+            upkeep && { kind: "notesUpkeep", flowType: null, text: upkeep },
+            ...routineOverlays.map((text, i) =>
+                text ? { kind: "flow", flowType: activeFlows[i]?.flowType ?? null, text } : null
+            ),
+        ].filter(Boolean);
 
         // 3. Persona + live IST time + overlays. Rebuilt every turn.
         // The profile is rendered here rather than cached: facts change between
@@ -387,7 +400,16 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         // Where the replayed context ends and this turn begins. The two are
         // indistinguishable in the assembled array, and conflating them is how
         // a reader concludes the user said something a previous day said.
-        if (trace) trace.historyCount = chatHistory.length;
+        if (trace) {
+            trace.historyCount = chatHistory.length;
+            trace.setPrompt({
+                overlays: labelledOverlays,
+                profile: profileBlock,
+                recent: recentBlock,
+                carriedFrom,
+                baseChars: systemInstruction.length,
+            });
+        }
 
         const task = resolveTask({ source, openFlows: activeFlows, override: taskOverride });
         const maxSteps = resolveMaxSteps(task);
@@ -563,10 +585,10 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         await createRecord(CHAT_HISTORY, conversation.build());
 
         if (trace) {
-            // Read back from messages[0] rather than kept from the start: a
-            // skill loaded mid-turn appends to the system message, so the text
-            // the model was actually working from is only final now.
-            trace.setSystemInstruction(messages[0]?.content ?? null);
+            // Skills are read back at the end because a skill loaded mid-turn
+            // appends to the system message, so which ones applied is only
+            // settled now.
+            trace.skills = [...loadedSkills];
             trace.task = task;
             await saveTrace(trace);
         }
