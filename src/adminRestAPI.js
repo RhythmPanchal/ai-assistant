@@ -96,7 +96,7 @@ router.get("/admin/users", async (req, res) => {
         const db = await getDB();
 
         const [users, identities] = await Promise.all([
-            db.collection(USERS).find({}).sort({ createdAt: -1 }).toArray(),
+            db.collection(USERS).find({}).sort({ userId: 1 }).toArray(),
             db.collection(USER_IDENTITY).find({}).toArray(),
         ]);
 
