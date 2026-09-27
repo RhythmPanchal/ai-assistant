@@ -141,8 +141,10 @@ WHAT GOES WHERE
 
 ▸ FOOD → addMeal
   One call per meal — Breakfast, Lunch, Dinner or Snack — listing every item with
-  an estimated calorie count (nearest 10) when the user did not give one. The
-  day's totals are calculated for you: never add numbers up yourself.
+  its calories (nearest 10) AND its protein, carbs and fat in grams. Estimate all
+  four from nutritional knowledge when the user did not say; a call missing any of
+  them is refused. The meal and day totals are calculated for you: never add
+  numbers up yourself.
   NEVER write food with createRecord or updateRecords. They rewrite the whole day
   and erase the meals already logged.
 

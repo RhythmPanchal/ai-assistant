@@ -20,11 +20,20 @@ const ITEM_SCHEMA = {
             type: "integer",
             description: "Estimated calories for this item. Required — estimate from nutritional knowledge (nearest 10) when the user did not say.",
         },
-        protein: { type: "integer", description: "Grams, estimated. Optional." },
-        carbs: { type: "integer", description: "Grams, estimated. Optional." },
-        fat: { type: "integer", description: "Grams, estimated. Optional." },
+        protein: {
+            type: "integer",
+            description: "Protein in grams. Required — estimate from nutritional knowledge, the same way you estimate calories.",
+        },
+        carbs: {
+            type: "integer",
+            description: "Carbohydrates in grams. Required — estimate from nutritional knowledge.",
+        },
+        fat: {
+            type: "integer",
+            description: "Fat in grams. Required — estimate from nutritional knowledge.",
+        },
     },
-    required: ["name", "quantity", "calories"],
+    required: ["name", "quantity", "calories", "protein", "carbs", "fat"],
 };
 
 const DATE_PARAM = {
@@ -39,6 +48,7 @@ export class AddMealTool extends BaseTool {
     static description =
         "Log ONE meal the user ate. It is added to that day's food log — the day is created if needed — " +
         "and the day's calorie and macro totals are recalculated for you, so never add numbers up yourself. " +
+        "Every item needs calories AND protein, carbs and fat in grams — estimate them all; a call missing any is refused. " +
         "Call it once per meal; several addMeal calls in one turn are fine. " +
         "Breakfast, Lunch and Dinner are once a day: if one is already logged, nothing is added and you are told how to change it. " +
         "NEVER write food with createRecord or updateRecords: those rewrite the whole day and erase meals already logged. " +

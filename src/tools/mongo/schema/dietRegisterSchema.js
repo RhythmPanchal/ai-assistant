@@ -49,7 +49,13 @@ const dietRegisterSchema = {
           mealCalories: {
             bsonType: "int",
             minimum: 0
-          }
+          },
+          // Summed by buildMeal, same as mealCalories. Deliberately NOT in
+          // `required`: this validator runs on every update, and a meal written
+          // before these existed would make any later change to that day fail.
+          mealProtein: { bsonType: "int", minimum: 0 },
+          mealCarbs: { bsonType: "int", minimum: 0 },
+          mealFat: { bsonType: "int", minimum: 0 }
         },
         required: ["mealType", "items", "mealCalories"]
       }

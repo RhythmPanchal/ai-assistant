@@ -36,6 +36,28 @@ test("every saved row is listed with the _id a correction needs", () => {
     }
 });
 
+// Macros are required on every item now, so the block has to show them: without
+// them in view, a model rebuilding a meal through replaceMeal re-estimates from
+// scratch. Meals written before mealProtein existed must show calories alone —
+// a rendered "0g P" would read as "ate no protein".
+const MACRO_DIET = [{
+    _id: "66f2a1aaaaaaaaaaaaaaaaaa",
+    meals: [{ mealType: "Lunch", items: [{ name: "dal chawal" }], mealCalories: 450, mealProtein: 18, mealCarbs: 70, mealFat: 9 }],
+    dailyTotals: { caloriesConsumed: 450, protein: 18, carbs: 70, fat: 9 },
+}];
+
+test("a meal's macros are shown, and so is the day's", () => {
+    const b = renderLoggedSoFar({ logDate: "d", diet: MACRO_DIET });
+    assert.match(b, /dal chawal \(450 kcal, 18g P, 70g C, 9g F\)/);
+    assert.match(b, /Day total\s+450 kcal · 18g P · 70g C · 9g F/);
+});
+
+test("a meal saved before macros existed shows calories only, never a false 0g", () => {
+    const b = renderLoggedSoFar({ logDate: "d", diet: DIET });
+    assert.match(b, /dal chawal \(450 kcal\)/);
+    assert.doesNotMatch(b, /0g P/, "absent is not zero");
+});
+
 test("the expense total is added up here, not left to the model", () => {
     assert.match(renderLoggedSoFar({ logDate: "d", expenses: EXPENSES }), /Total ₹80/);
 });

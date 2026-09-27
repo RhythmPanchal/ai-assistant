@@ -45,6 +45,19 @@ export function normaliseNothingToLog(list) {
 const rupees = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
 /**
+ * A meal's stored numbers. Macros are shown because they are now required on
+ * every item: without them in front of it, a model rebuilding this meal through
+ * replaceMeal has nothing to carry over and re-estimates from scratch. Meals
+ * saved before mealProtein existed show calories alone rather than a false 0.
+ */
+const macrosOf = (m) => [
+    `${m.mealCalories} kcal`,
+    m.mealProtein == null ? null : `${m.mealProtein}g P`,
+    m.mealCarbs == null ? null : `${m.mealCarbs}g C`,
+    m.mealFat == null ? null : `${m.mealFat}g F`,
+].filter(Boolean).join(", ");
+
+/**
  * Pure render, so the block's rules — above all what counts as still open — are
  * tested without a database.
  */
@@ -65,10 +78,20 @@ export function renderLoggedSoFar({ logDate, diet = [], tasks = [], expenses = [
     if (meals.length) {
         out.push(`FOOD  (dietRegister _id ${diet.map(d => String(d._id)).join(", ")})`);
         for (const m of meals) {
-            out.push(`  ${m.mealType.padEnd(10)} ${m.items.map(i => i.name).join(", ")} (${m.mealCalories} kcal)`);
+            out.push(`  ${m.mealType.padEnd(10)} ${m.items.map(i => i.name).join(", ")} (${macrosOf(m)})`);
         }
-        const total = diet.reduce((n, d) => n + (d.dailyTotals?.caloriesConsumed ?? 0), 0);
-        out.push(`  ${"Day total".padEnd(10)} ${total} kcal`);
+        // `?? 0` only where a number is genuinely stored. A day written before the
+        // macro fields existed has none, and "0g P" would read as "ate no protein".
+        const sum = (f) => diet.some(d => d.dailyTotals?.[f] != null)
+            ? diet.reduce((n, d) => n + (d.dailyTotals?.[f] ?? 0), 0)
+            : null;
+        const dayTotals = [
+            `${sum("caloriesConsumed") ?? 0} kcal`,
+            sum("protein") == null ? null : `${sum("protein")}g P`,
+            sum("carbs") == null ? null : `${sum("carbs")}g C`,
+            sum("fat") == null ? null : `${sum("fat")}g F`,
+        ].filter(Boolean).join(" · ");
+        out.push(`  ${"Day total".padEnd(10)} ${dayTotals}`);
     } else {
         out.push("FOOD  nothing logged yet");
     }

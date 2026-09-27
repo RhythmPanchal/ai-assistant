@@ -55,39 +55,81 @@ test("a timestamp is read as its day", () => {
 });
 
 // ------------------------------------------------------------- pure: items --
-test("calories are rounded to integers, strings accepted", () => {
-    const [i] = normalizeMealItems([{ name: " poha ", quantity: "1 plate", calories: "322.6", protein: 8.4 }]);
-    assert.deepStrictEqual(i, { name: "poha", quantity: "1 plate", calories: 323, protein: 8 });
+// A complete item. Every field is mandatory now, so the helper carries them and
+// a test that wants a gap removes one explicitly.
+const whole = (over = {}) => ({ name: "poha", quantity: "1 plate", calories: 300, protein: 8, carbs: 45, fat: 9, ...over });
+
+test("numbers are rounded to integers, strings accepted", () => {
+    const [i] = normalizeMealItems([whole({ name: " poha ", calories: "322.6", protein: 8.4 })]);
+    assert.deepStrictEqual(i, { name: "poha", quantity: "1 plate", calories: 323, protein: 8, carbs: 45, fat: 9 });
 });
 
 test("a missing calorie estimate is sent back, never stored as zero", () => {
-    assert.throws(() => normalizeMealItems([{ name: "poha", quantity: "1" }]), /Estimate them/);
+    const { calories, ...noCalories } = whole();
+    assert.throws(() => normalizeMealItems([noCalories]), /Estimate them/);
+});
+
+// The whole point of the change: for three months these were declared optional,
+// skipped in silence, and 20 of 37 prod days stored 0g of everything.
+test("a missing macro is refused the same way a missing calorie count is", () => {
+    for (const macro of ["protein", "carbs", "fat"]) {
+        const item = whole();
+        delete item[macro];
+        assert.throws(() => normalizeMealItems([item]), new RegExp(`needs ${macro}`), macro);
+    }
+});
+
+test("zero is a real answer and is kept — only absence is refused", () => {
+    const [i] = normalizeMealItems([whole({ fat: 0 })]);
+    assert.strictEqual(i.fat, 0);
+});
+
+test("every gap across every item is reported in ONE error", () => {
+    const a = whole({ name: "roti" }); delete a.carbs; delete a.fat;
+    const b = whole({ name: "dal" }); delete b.fat;
+    assert.throws(() => normalizeMealItems([a, b]), (e) => {
+        assert.match(e.message, /"roti" needs carbs, fat/);
+        assert.match(e.message, /"dal" needs fat/);
+        return true;
+    }, "a throw per item costs a round trip each");
 });
 
 test("an empty meal is refused", () => {
     assert.throws(() => normalizeMealItems([]), /at least one/);
 });
 
-test("mealCalories is the sum of the items, computed here", () => {
-    const m = buildMeal("Lunch", [{ name: "dal", quantity: "1", calories: 300 }, { name: "rice", quantity: "1", calories: 150 }]);
+test("the meal's totals are the sum of its items, computed here", () => {
+    const m = buildMeal("Lunch", [
+        whole({ name: "dal", calories: 300, protein: 18, carbs: 40, fat: 6 }),
+        whole({ name: "rice", calories: 150, protein: 3, carbs: 33, fat: 1 }),
+    ]);
     assert.strictEqual(m.mealCalories, 450);
+    assert.strictEqual(m.mealProtein, 21);
+    assert.strictEqual(m.mealCarbs, 73);
+    assert.strictEqual(m.mealFat, 7);
 });
 
 test("an unknown meal type is refused", () => {
-    assert.throws(() => buildMeal("Brunch", [{ name: "x", quantity: "1", calories: 1 }]), /mealType/);
+    assert.throws(() => buildMeal("Brunch", [whole()]), /mealType/);
 });
 
 // -------------------------------------------------------------- database --
 let db;
 const day = async () => (await db.collection("dietRegister").find({ userId: USER }).toArray());
-const food = (name, calories, extra = {}) => ({ name, quantity: "1 serving", calories, ...extra });
+const food = (name, calories, extra = {}) => ({ name, quantity: "1 serving", calories, protein: 5, carbs: 20, fat: 4, ...extra });
 const cleanup = () => Promise.all(["dietRegister", "activeFlows"].map(c => db.collection(c).deleteMany({ userId: USER })));
 
 test("the first meal creates the day", async () => {
     await addMeal(USER, { mealType: "Breakfast", items: [food("poha", 320, { protein: 8 })] });
     const docs = await day();
     assert.strictEqual(docs.length, 1);
-    assert.deepStrictEqual(docs[0].dailyTotals, { caloriesConsumed: 320, protein: 8, carbs: 0, fat: 0 });
+    // carbs and fat come from the helper — they are no longer allowed to be absent.
+    assert.deepStrictEqual(docs[0].dailyTotals, { caloriesConsumed: 320, protein: 8, carbs: 20, fat: 4 });
+    assert.deepStrictEqual(
+        docs[0].meals.map(m => [m.mealCalories, m.mealProtein, m.mealCarbs, m.mealFat]),
+        [[320, 8, 20, 4]],
+        "the per-meal totals are stored beside the items"
+    );
 });
 
 test("a later meal is APPENDED — breakfast survives lunch", async () => {

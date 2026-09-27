@@ -37,6 +37,11 @@ const DUPLICATE_KEY = 11000;
  * Totals from whatever meals the document holds AFTER the change, computed by
  * Mongo in the same update — never carried over from a previous total, and
  * never supplied by the model.
+ *
+ * Macros sum the ITEMS, not the mealProtein/mealCarbs/mealFat that buildMeal now
+ * writes. A meal saved before those fields existed has none, so summing them
+ * would zero a day that is currently correct — 2026-09-16 on prod carries real
+ * macros on its items and no per-meal totals. Summing items is right for both.
  */
 const sumItems = (field) => ({
     $sum: { $map: { input: "$meals", as: "m", in: { $sum: `$$m.items.${field}` } } },
@@ -68,7 +73,8 @@ export function normalizeMealItems(items) {
         throw new Error("items must list at least one thing eaten, each with a name, a quantity and estimated calories.");
     }
 
-    return items.map((raw, i) => {
+    const missing = [];
+    const normalized = items.map((raw, i) => {
         const name = typeof raw?.name === "string" ? raw.name.trim() : "";
         if (!name) throw new Error(`items[${i}] has no name.`);
 
@@ -82,12 +88,28 @@ export function normalizeMealItems(items) {
             quantity: typeof raw.quantity === "string" && raw.quantity.trim() ? raw.quantity.trim() : "not specified",
             calories,
         };
+        const absent = [];
         for (const macro of MACROS) {
             const value = toInt(raw[macro]);
-            if (value !== null) item[macro] = value;
+            if (value === null) absent.push(macro);
+            else item[macro] = value;
         }
+        if (absent.length) missing.push(`"${name}" needs ${absent.join(", ")}`);
         return item;
     });
+
+    // Every item at once, not the first offender: a per-item throw costs a
+    // whole round trip each, and the model omits macros for the entire meal or
+    // for none of it.
+    if (missing.length) {
+        throw new Error(
+            `Missing macros — ${missing.join("; ")}. Estimate the grams from nutritional ` +
+            `knowledge the same way you estimate calories, and call again with protein, ` +
+            `carbs and fat on every item.`
+        );
+    }
+
+    return normalized;
 }
 
 export function buildMeal(mealType, items) {
@@ -95,7 +117,15 @@ export function buildMeal(mealType, items) {
         throw new Error(`mealType must be one of ${MEAL_TYPES.join(", ")}. Got: ${mealType}`);
     }
     const clean = normalizeMealItems(items);
-    return { mealType, items: clean, mealCalories: clean.reduce((n, x) => n + x.calories, 0) };
+    const total = (field) => clean.reduce((n, x) => n + (x[field] ?? 0), 0);
+    return {
+        mealType,
+        items: clean,
+        mealCalories: total("calories"),
+        mealProtein: total("protein"),
+        mealCarbs: total("carbs"),
+        mealFat: total("fat"),
+    };
 }
 
 function dayFields(date, timeZone) {
@@ -118,8 +148,10 @@ export function describeDay(doc) {
     const meals = (doc?.meals ?? []).map(m =>
         `${m.mealType}: ${m.items.map(i => i.name).join(", ")} (${m.mealCalories} kcal)`
     );
+    const t = doc?.dailyTotals ?? {};
     return meals.length
-        ? `${meals.join(" · ")}. Day total: ${doc.dailyTotals?.caloriesConsumed ?? 0} kcal.`
+        ? `${meals.join(" · ")}. Day total: ${t.caloriesConsumed ?? 0} kcal, ` +
+          `${t.protein ?? 0}g protein, ${t.carbs ?? 0}g carbs, ${t.fat ?? 0}g fat.`
         : "No meals logged for this day.";
 }
 
