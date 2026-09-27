@@ -154,8 +154,37 @@ test("runAgent claims once per turn, for the bound user", () => {
 });
 
 test("the notes blocks sit before the routine's own overlay, not after it", () => {
-    assert.match(agentSrc, /\[nudge, notesUpkeep\(openFlows\), \.\.\.routineOverlays\]/,
+    // Asserted as an ORDERING, not as an exact expression. This used to match
+    // /\[nudge, notesUpkeep\(openFlows\), \.\.\.routineOverlays\]/ and broke the day
+    // notesUpkeep(openFlows) was hoisted into an `upkeep` variable — the order
+    // was still right, so the guard failed while the property it guards held.
+    // It sat at position 13 of 43 in `npm test`, and && short-circuits, so 30
+    // suites silently stopped running behind it.
+    const composed = agentSrc.match(/const overlays = \[([^\]]*)\]/);
+    assert.ok(composed, "runAgent no longer composes an `overlays` array — re-read the ordering rule");
+
+    const parts = composed[1].split(",").map(x => x.trim()).filter(Boolean);
+    const flows = parts.findIndex(x => x.startsWith("...routineOverlays"));
+
+    assert.ok(flows >= 0, "the flow overlays are no longer spread into `overlays`");
+    assert.strictEqual(flows, parts.length - 1,
         "the routine's procedure and data stay last, where recency weighs most");
+    assert.ok(flows >= 1,
+        "the notes blocks must be composed before the flow overlays, not after");
+});
+
+test("the labelled copy is in the same order as the prompt", () => {
+    // The per-block trace is what says which flow contributed which instruction
+    // when a routine misbehaves. It is built separately from `overlays`, so the
+    // two can drift — and a trace that disagrees with the prompt is worse than
+    // no trace. These are string literals rather than variable names, so this
+    // survives a rename.
+    const labelled = agentSrc.match(/const labelledOverlays = \[([\s\S]*?)\]\.filter/);
+    assert.ok(labelled, "runAgent no longer builds labelledOverlays");
+
+    const kinds = [...labelled[1].matchAll(/kind: "([^"]+)"/g)].map(m => m[1]);
+    assert.deepStrictEqual(kinds, ["nudge", "notesUpkeep", "flow"],
+        "the trace must list the notes blocks before the flow's own overlay");
 });
 
 let pass = 0;
