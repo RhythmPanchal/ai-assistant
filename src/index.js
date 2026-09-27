@@ -7,6 +7,7 @@ import { handleTelegramMessage, handleCallbackQuery } from "./tools/telegram/tel
 import initCron from "./scheduler/initCron.js";
 import oauthRouter from "./oauthRestAPI.js";
 import adminRouter from "./adminRestAPI.js";
+import userRouter from "./userRestAPI.js";
 import runStartupMigrations, { migrationStatus } from "./tools/mongo/migrations/runStartupMigrations.js";
 import { runAsSystem } from "./identity/userContext.js";
 
@@ -58,6 +59,7 @@ app.get('/', (req, res) => {
 app.use(oauthRouter);
 
 app.use(adminRouter);
+app.use(userRouter);
 
 app.listen(PORT, () => {
   initService(); 

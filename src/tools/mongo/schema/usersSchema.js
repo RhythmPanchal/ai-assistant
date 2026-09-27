@@ -163,6 +163,12 @@ const usersSchema = {
           maximum: 23,
           description: "Local hour the night routine fires. Falls back to ROUTINE_HOURS when null.",
         },
+        sessionEpoch: {
+          bsonType: ["int", "null"],
+          minimum: 0,
+          description:
+            "Bumped to invalidate every web session at once. Dashboard tokens are signed, not stored, so this integer is the only kill switch — a token carrying an older epoch is refused.",
+        },
         dayStartHour: {
           bsonType: ["int", "null"],
           minimum: 0,

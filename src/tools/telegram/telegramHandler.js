@@ -13,6 +13,7 @@ import {
 } from "./reminderMessage.js";
 import { recordReminderResponse } from "../../scheduler/reminderResponse.js";
 import { userOnboardingJob, neverOnboarded } from "../../scheduler/jobs/userOnboardingJob.js";
+import { createLoginLink } from "../../userRestAPI.js";
 
 /**
  * Telegram's /start: what its Start button sends, optionally addressed to the
@@ -20,6 +21,11 @@ import { userOnboardingJob, neverOnboarded } from "../../scheduler/jobs/userOnbo
  */
 export function isStartCommand(text) {
   return /^\/start(?:@\w+)?(?:\s|$)/i.test(String(text ?? "").trim());
+}
+
+/** /login or /dashboard — either asks for a link into the web dashboard. */
+export function isLoginCommand(text) {
+  return /^\/(login|dashboard)(?:@\w+)?(?:\s|$)/i.test(String(text ?? "").trim());
 }
 
 
@@ -162,6 +168,18 @@ export async function handleTelegramMessage(message) {
     // "First message" means first since onboarding existed: an account made
     // before it, never welcomed, is onboarded on its next message too. A failed
     // lookup costs the onboarding, never the message.
+    if (isLoginCommand(text)) {
+      const link = createLoginLink(userId);
+      await sendMessage(chatId, [
+        "*Your dashboard link*",
+        "",
+        `[Open Rasmalai](${link.url})`,
+        "",
+        `The link expires in ${link.minutes} minutes. Don't forward it — it signs in as you.`,
+      ].join("\n"));
+      return;
+    }
+
     const start = isStartCommand(text);
     const firstContact = isNew || (!start && neverOnboarded(await getUserProfile(userId).catch(() => null)));
     if (start || firstContact) {
