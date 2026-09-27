@@ -349,7 +349,6 @@ router.get("/api/me/overview", requireUser, async (req, res) => {
                         category: task.category ?? null,
                         actualFrom: task.actualFrom ?? null,
                         actualTo: task.actualTo ?? null,
-                        planned: Boolean(task.taskId),
                     })),
                 },
                 diet: {
@@ -482,7 +481,6 @@ router.get("/api/me/tasks", requireUser, async (req, res) => {
                     category: task.category ?? null,
                     actualFrom: task.actualFrom ?? null,
                     actualTo: task.actualTo ?? null,
-                    planned: Boolean(task.taskId),
                 })),
             })),
         });
