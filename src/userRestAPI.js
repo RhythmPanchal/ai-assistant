@@ -186,6 +186,14 @@ function daysBetween(from, to) {
     return Math.round((b - a) / 86400000) + 1;
 }
 
+const MEAL_ORDER = ["Breakfast", "Lunch", "Dinner", "Snack"];
+
+function byMealOrder(a, b) {
+    const ai = MEAL_ORDER.indexOf(a?.mealType);
+    const bi = MEAL_ORDER.indexOf(b?.mealType);
+    return (ai === -1 ? MEAL_ORDER.length : ai) - (bi === -1 ? MEAL_ORDER.length : bi);
+}
+
 function readRange(req, res) {
     const from = String(req.query.from || "");
     const to = String(req.query.to || "");
@@ -434,7 +442,7 @@ router.get("/api/me/diet", requireUser, async (req, res) => {
                 totals: doc.dailyTotals ?? null,
                 waterIntakeMl: doc.waterIntakeMl ?? null,
                 adherenceScore: doc.adherenceScore ?? null,
-                meals: (doc.meals ?? []).map(meal => ({
+                meals: [...(doc.meals ?? [])].sort(byMealOrder).map(meal => ({
                     mealType: meal.mealType ?? null,
                     items: (meal.items ?? []).map(item => ({
                         name: item.name,
