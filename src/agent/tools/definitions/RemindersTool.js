@@ -1,6 +1,7 @@
 import { BaseTool, ToolResult } from "../BaseTool.js";
 import { createOneTimeReminder, createMultiTimeReminder } from "../../../scheduler/createReminders.js";
 import { cancelReminder } from "../../../scheduler/cancelReminder.js";
+import { recordReminderResponse } from "../../../scheduler/reminderResponse.js";
 
 export class CreateOneTimeReminderTool extends BaseTool {
     static name = "createOneTimeReminder";
@@ -115,6 +116,64 @@ export class CancelReminderTool extends BaseTool {
         return new ToolResult(
             true,
             `Cancelled "${result.title}" — ${when}. It will not fire again.`,
+            result
+        );
+    }
+}
+
+/**
+ * Record what happened to a reminder the user answered in conversation.
+ *
+ * The buttons on a delivered reminder are the fast path, and most of the time
+ * nobody taps them. The night routine then asks, and the answer arrives as
+ * prose — "yeah took it", "never got round to it". This writes that to the same
+ * `reminderResponse` field the buttons write, which is what makes the answer
+ * stick: the UNANSWERED block is re-read from the database at the top of every
+ * turn, so without this the model would see the same reminder still open on its
+ * next turn and ask again. That is the failure the night blocks exist to stop.
+ *
+ * It can set only those two fields, on a reminder belonging to the caller. It
+ * cannot cancel, reschedule or delete anything.
+ */
+export class AnswerReminderTool extends BaseTool {
+    static name = "answerReminder";
+    static description =
+        "Record whether a reminder that fired today actually happened, when the user tells you in conversation. " +
+        "Use the _id shown in the UNANSWERED REMINDERS block — call this once per reminder they answer. " +
+        "'completed' means they did it. 'missed' means the moment has passed and it will not happen. " +
+        "If they do not say what happened, do not call this and do not guess. " +
+        "This only records the outcome — it does not cancel the reminder or stop it firing again, and logging the work itself is still addPerformedTask.";
+
+    static parameters = {
+        type: "object",
+        properties: {
+            id: {
+                type: "string",
+                description: "The 24-character hex _id from the UNANSWERED REMINDERS block. NEVER fabricate.",
+            },
+            outcome: {
+                type: "string",
+                description: "'completed' if they did it, 'missed' if it did not happen and now cannot.",
+                enum: ["completed", "missed"],
+            },
+        },
+        required: ["id", "outcome"],
+    };
+
+    async execute({ id, userId, outcome }) {
+        // recordReminderResponse speaks the buttons' vocabulary.
+        const verdict = outcome === "completed" ? "done" : "missed";
+        const result = await recordReminderResponse(userId, id, verdict);
+
+        if (!result.success) return new ToolResult(false, result.message, result);
+
+        // Name the reminder back, not just the verdict — the model picked the
+        // _id out of a list, and quoting what was actually recorded is how a
+        // wrong pick becomes visible in the reply instead of days later.
+        const what = result.text || result.title;
+        return new ToolResult(
+            true,
+            `Recorded "${what}" as ${result.status}.`,
             result
         );
     }

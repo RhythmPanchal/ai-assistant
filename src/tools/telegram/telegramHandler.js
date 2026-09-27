@@ -6,6 +6,12 @@ import { sendMessage, editMessage, startTyping, answerCallbackQuery } from "./se
 import { buildTurnFooter } from "./turnFooter.js";
 import { getUserProfile } from "../../identity/userManager.js";
 import { dismissCallbackHandler } from "../../connectors/oauth/dismissCallbackHandler.js";
+import {
+  parseReminderCallback,
+  formatAnsweredReminder,
+  REMINDER_CALLBACK_CODE as REMINDER_CODE,
+} from "./reminderMessage.js";
+import { recordReminderResponse } from "../../scheduler/reminderResponse.js";
 import { userOnboardingJob, neverOnboarded } from "../../scheduler/jobs/userOnboardingJob.js";
 
 /**
@@ -17,8 +23,10 @@ export function isStartCommand(text) {
 }
 
 
-// Callback query format: "<code>:<appName>:<userId>"
-// codes: ["dismiss"]
+// Callback query format is per code, not one shape:
+//   dismiss:<appName>:<userId>   the OAuth "do not ask again" button
+//   rem:<done|missed>:<jobId>    a reminder's Done / Missed buttons
+// codes: ["dismiss", "rem"]
 export async function handleCallbackQuery(callbackQuery) {
   const { id: callbackQueryId, data, message } = callbackQuery;
   const chatId = message?.chat?.id;
@@ -44,6 +52,53 @@ export async function handleCallbackQuery(callbackQuery) {
   }
 
   const { userId } = await resolveUserByChannel("telegram", externalId, { address: chatId });
+
+  // Reminders. Parsed strictly — an unrecognised shape falls through to the
+  // unknown-code warning rather than being acted on half-understood.
+  if (code === REMINDER_CODE) {
+    const parsed = parseReminderCallback(data);
+    if (!parsed) {
+      console.warn(`[handleCallbackQuery] malformed reminder callback: ${data}`);
+      await answerCallbackQuery(callbackQueryId, "Something went wrong.");
+      return;
+    }
+
+    try {
+      // userId comes from from.id above. The jobId in `data` is attacker-
+      // supplied, so recordReminderResponse puts userId in the update FILTER —
+      // a forged id matches nothing instead of writing to another user's row.
+      const result = await runWithUserContext(
+        { userId, channel: "telegram", address: chatId },
+        () => recordReminderResponse(userId, parsed.jobId, parsed.verdict)
+      );
+
+      if (!result.success) {
+        await answerCallbackQuery(callbackQueryId, result.message);
+        return;
+      }
+
+      await answerCallbackQuery(
+        callbackQueryId,
+        result.status === "completed" ? "Marked done." : "Marked missed."
+      );
+
+      // Rewrite the message so the outcome is part of the transcript and the
+      // buttons cannot be tapped again. Scrolling back next week should say
+      // what happened, not show a live-looking pair of buttons.
+      if (chatId && messageId) {
+        await editMessage(
+          chatId,
+          messageId,
+          formatAnsweredReminder(result.text, parsed.verdict),
+          { reply_markup: { inline_keyboard: [] } }
+        );
+      }
+    } catch (err) {
+      console.error("[handleCallbackQuery] reminder response failed:", err);
+      await answerCallbackQuery(callbackQueryId, "Something went wrong.");
+    }
+    return;
+  }
 
   if (code === "dismiss") {
     try {

@@ -1,5 +1,6 @@
 import { atLocalHour, localDateOf, IST_TIMEZONE } from "../../tools/mongo/dateUtils.js";
 import nightLogKnowledge from "../../knowledge/nightLogKnowledge.js";
+import unattendedRemindersKnowledge from "../../knowledge/unattendedRemindersKnowledge.js";
 
 /**
  * The live half of the overlay: what is actually saved for LOG DATE, re-read
@@ -21,7 +22,16 @@ export function buildNightTriggerPrompt() {
 export async function buildNightContext(userId, { timeZone = IST_TIMEZONE, flow } = {}) {
   const logDate = localDateOf(flow?.startedAt, timeZone);
   if (!logDate) throw new Error("the night routine has no start time, so its LOG DATE is unknown");
-  return nightLogKnowledge(userId, logDate, { nothingToLog: flow?.scratchpad?.nothingToLog });
+
+  // Both read the same LOG DATE, and both are rebuilt every turn — the second
+  // one is what stops the same unanswered reminder being asked about twice,
+  // since answerReminder's write drops it out of this block on the next turn.
+  const [logged, reminders] = await Promise.all([
+    nightLogKnowledge(userId, logDate, { nothingToLog: flow?.scratchpad?.nothingToLog }),
+    unattendedRemindersKnowledge(userId, logDate, { timeZone }),
+  ]);
+
+  return [logged, reminders].filter(Boolean).join("\n\n");
 }
 
 export const goodNightFlow = {
@@ -228,6 +238,30 @@ When STILL OPEN is empty, or they sign off: finish with a short recap of what is
 logged for tonight, in one or two lines, and a goodnight. If they have signed off,
 do not end on a question — they are going to sleep. A mistake in the recap is
 theirs to point out, and a correction is one call because every _id is on hand.
+
+-------------------------------------
+🔔 REMINDERS THAT WENT UNANSWERED
+-------------------------------------
+When the UNANSWERED REMINDERS block is present, those reminders fired today and
+the user never said whether they happened. Raise them as part of the wrap-up.
+
+  • Ask ONCE, and fold them into a question you were already asking. Two
+    reminders is one question, not two — "did the medicine and the call to Masi
+    happen?" — never a list with a line each.
+  • They did it            -> answerReminder(id, "completed"). If it is work
+                              that belongs in the day's record, log it with
+                              addPerformedTask as well; answerReminder only
+                              records the reminder's outcome.
+  • It did not happen      -> answerReminder(id, "missed"). No lecture. A missed
+                              reminder is information, not a failing.
+  • They do not say        -> leave it alone. Never guess an outcome, and never
+                              ask a second time.
+
+Do not ask about a reminder that is NOT in that block — it was either answered
+with the buttons or never fired, and asking reads as not paying attention.
+
+An unanswered reminder does NOT hold the flow open. It is not part of STILL OPEN
+and it never blocks closing as "done".
 
 -------------------------------------
 🚪 OFF-TOPIC HANDLING

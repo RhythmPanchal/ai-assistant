@@ -91,6 +91,38 @@ const triggerJobSchema = {
       description: "Timestamp when job execution failed."
     },
 
+    reminderResponse: {
+      bsonType: ["object", "null"],
+      description:
+        "How the user answered the LAST firing of this reminder, from the " +
+        "Done / Missed buttons. Null until they tap one. Only reminders carry " +
+        "it; no other actionType shows buttons.",
+      properties: {
+        status: {
+          bsonType: "string",
+          description: "completed = they did it. missed = the window passed " +
+            "and it cannot be done now. Not answering is neither, and is what " +
+            "the night routine asks about.",
+          enum: ["completed", "missed"]
+        },
+        respondedAt: {
+          bsonType: "date",
+          description: "When the button was tapped."
+        },
+        forExecutionAt: {
+          bsonType: "date",
+          description:
+            "WHICH firing this answers — the job's lastExecutedAt when the " +
+            "button was tapped. A recurring reminder fires every day against " +
+            "one row, so without this yesterday's 'Done' would make tonight's " +
+            "firing look answered and the night routine would never ask. " +
+            "One answer is kept, not a history: a tap after the next firing is " +
+            "attributed to that newer one."
+        }
+      },
+      additionalProperties: false
+    },
+
     createdAt: {bsonType: "date"},
     updatedAt: {bsonType: "date"}
   },

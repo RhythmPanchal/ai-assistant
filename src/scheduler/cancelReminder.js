@@ -15,8 +15,15 @@ import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
  * sendMessage is here alongside sendToUser because rows written before the
  * identity split still carry it with a baked-in chatId, and those are exactly
  * the old reminders most likely to need cancelling.
+ *
+ * All three generations are listed, and every one still exists in the database:
+ * "sendMessage" (baked-in chatId), "sendToUser" (address resolved at fire time)
+ * and "sendReminder" (the same, plus Done / Missed buttons). Adding an action
+ * type for reminders without adding it here would make every reminder written
+ * from then on impossible to cancel — the agent would report success on a row
+ * this set refused.
  */
-const CANCELLABLE_ACTION_TYPES = new Set(["sendToUser", "sendMessage"]);
+const CANCELLABLE_ACTION_TYPES = new Set(["sendReminder", "sendToUser", "sendMessage"]);
 
 /** Exported so the boundary can be tested without standing up a database. */
 export function isCancellableAction(actionType) {

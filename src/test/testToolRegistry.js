@@ -43,9 +43,17 @@ import toolRegistry from "../agent/tools/definitions/index.js";
 // because until now there was no way to stop a reminder at all: the two
 // "[object Object]" rows firing nightly from 2026-08-18 had to be removed by
 // hand against the production database.
+// answerReminder writes ONE field on ONE triggerJob row — reminderResponse,
+// holding "completed" or "missed" and when it was recorded — and only on a row
+// whose userId matches the caller's context. It cannot cancel a reminder, change
+// when it fires, or reach any other collection or field. It exists because the
+// Done / Missed buttons on a delivered reminder are usually ignored, so the
+// night routine asks instead and the answer arrives as prose; the same field has
+// to be writable from conversation or the UNANSWERED block would still show the
+// reminder open on the next turn and the model would ask again.
 const INTENTIONAL_ADDITIONS = new Set([
     "updateFlowScratchpad", "deleteRecord", "updateNotes", "loadSkill",
-    "updateTaskStatus", "deferTask", "cancelReminder",
+    "updateTaskStatus", "deferTask", "cancelReminder", "answerReminder",
     // Edits a locked-in userSchedule by slotId for the caller's own day. Cannot
     // create a schedule or reach any other collection.
     "updateSchedule",

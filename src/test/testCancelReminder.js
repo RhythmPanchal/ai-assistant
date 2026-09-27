@@ -32,7 +32,10 @@ test("routines in the same collection are not cancellable", async () => {
 test("both reminder action types are cancellable", async () => {
     const { isCancellableAction } = await import("../scheduler/cancelReminder.js");
 
-    assert.strictEqual(isCancellableAction("sendToUser"), true, "what new reminders use");
+    // What new reminders use. Missing here, every reminder written after the
+    // buttons landed would be impossible to cancel.
+    assert.strictEqual(isCancellableAction("sendReminder"), true, "what new reminders use");
+    assert.strictEqual(isCancellableAction("sendToUser"), true, "reminders before the buttons");
     // Pre-identity-split rows with a baked-in chatId — the old reminders most
     // likely to be the ones someone wants stopped.
     assert.strictEqual(isCancellableAction("sendMessage"), true);

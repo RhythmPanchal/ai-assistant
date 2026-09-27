@@ -79,7 +79,7 @@ test("reminders no longer bake in the original user's chat id", () => {
     const src = read("src/scheduler/createReminders.js");
     assert.doesNotMatch(src, /chatId\s*:\s*1136575387/,
         "every user's reminders would be delivered to the original user");
-    assert.match(src, /actionType:\s*"sendToUser"/,
+    assert.match(src, /actionType:\s*"sendReminder"/,
         "new reminders must resolve the address at fire time, not at creation");
 });
 

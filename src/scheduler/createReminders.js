@@ -33,6 +33,14 @@ function assertFuture(fireAt, raw) {
  * is fixed in RemindersTool.js; this rejects the shape outright so no future
  * wording can put an unreadable reminder in the database. Throwing beats
  * coercing: the error goes back to the model, which retries with a string.
+ *
+ * It no longer prefixes anything. `"[*REMINDER*]" + message` stored the label
+ * IN the row, so presentation was fixed at create time — and those asterisks
+ * rendered as stray bold, giving "[REMINDER]Take medicine…" with the label
+ * welded to the first word. A reminder written in March is delivered in June by
+ * whatever client the user is on by then, so how it looks belongs to the
+ * channel: see reminderMessage.js, which also strips the old prefix from rows
+ * that still carry it.
  */
 function reminderBody(message) {
   if (typeof message !== "string" || message.trim() === "") {
@@ -41,7 +49,7 @@ function reminderBody(message) {
       `Pass the reminder sentence itself, e.g. "Call Masi" — not an object and not an empty value.`
     );
   }
-  return "[*REMINDER*]" + message;
+  return message.trim();
 }
 
 /**
@@ -81,7 +89,7 @@ export async function createOneTimeReminder(title, userId, nextExecutionAt, mess
     recurring: false,
     cronPattern: null,
     timeZone: "Asia/Kolkata",
-    actionType: "sendToUser",
+    actionType: "sendReminder",
     payload : {
         userId,
         text,
@@ -93,6 +101,7 @@ export async function createOneTimeReminder(title, userId, nextExecutionAt, mess
     nextExecutionAt: fireAt,
     expiryDate: null,
     failedAt: null,
+    reminderResponse: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -122,7 +131,7 @@ export async function createMultiTimeReminder(title, userId, cron, nextExecution
     recurring: true,
     cronPattern: cron,
     timeZone: "Asia/Kolkata",
-    actionType: "sendToUser",
+    actionType: "sendReminder",
     payload : {
         userId,
         text,
@@ -134,6 +143,7 @@ export async function createMultiTimeReminder(title, userId, cron, nextExecution
     nextExecutionAt: fireAt,
     expiryDate: toIST(expiryDate),
     failedAt: null,
+    reminderResponse: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

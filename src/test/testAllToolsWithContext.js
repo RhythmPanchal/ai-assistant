@@ -49,6 +49,10 @@ const ARGS = {
     // and fails on the lookup — which is the point, because that lookup is
     // filtered by the userId the context supplies.
     cancelReminder: { id: "aaaaaaaaaaaaaaaaaaaaaaaa", reason: "test" },
+    // Well-formed id that matches nothing, for the same reason as cancelReminder:
+    // the row lookup is filtered by the userId the context supplies, so this
+    // reaches that lookup and fails there rather than before it.
+    answerReminder: { id: "aaaaaaaaaaaaaaaaaaaaaaaa", outcome: "completed" },
     completeFlow: { flowType: "goodMorning", reason: "done" },
     updateFlowScratchpad: { flowType: "goodMorning", scratchpad: {} },
     connectApp: { appName: "unknownApp" },

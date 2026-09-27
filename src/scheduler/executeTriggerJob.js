@@ -40,7 +40,16 @@ export default async function executeTriggerJob(job) {
         // write lands with no context and throws.
         const res = await runWithUserContext(
             { userId: updatedJob.userId, channel: "scheduler", reason: updatedJob.actionType },
-            () => dispatchAction(updatedJob.actionType, updatedJob.payload)
+            // The row's own identity rides alongside its payload. dispatchAction
+            // picks arguments by NAME from this object, so an action that does
+            // not declare them is unaffected — and sendReminder can put the
+            // job's _id in its buttons' callback data without createReminders
+            // having to write the id back into the payload after insert.
+            () => dispatchAction(updatedJob.actionType, {
+                ...updatedJob.payload,
+                jobId: String(updatedJob._id),
+                jobTitle: updatedJob.title,
+            })
         );
         console.log("[executeTriggerJob] job function result",res); 
         //TODO : handle the results. 
