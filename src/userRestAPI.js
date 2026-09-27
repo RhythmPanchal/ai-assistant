@@ -65,8 +65,20 @@ function readToken(token, purpose) {
     return { userId: Number(userId), epoch: Number(epoch) };
 }
 
-export function createLoginLink(userId, epoch = 0) {
+export function dashboardOrigin() {
     const base = (process.env.APP_UI_ORIGIN || "").split(",")[0].trim().replace(/\/+$/, "");
+    return /^https?:\/\//i.test(base) ? base : null;
+}
+
+export function createLoginLink(userId, epoch = 0) {
+    const base = dashboardOrigin();
+    if (!base) {
+        throw new Error("APP_UI_ORIGIN is not set to an http(s) origin — cannot build a dashboard link");
+    }
+    if (!secret()) {
+        throw new Error("SESSION_SECRET is not set — cannot sign a dashboard link");
+    }
+
     const code = mintToken("login", userId, epoch, LOGIN_TTL_MS);
     return { code, url: `${base}/login#${code}`, minutes: Math.round(LOGIN_TTL_MS / 60000) };
 }

@@ -7,7 +7,7 @@ import { handleTelegramMessage, handleCallbackQuery } from "./tools/telegram/tel
 import initCron from "./scheduler/initCron.js";
 import oauthRouter from "./oauthRestAPI.js";
 import adminRouter from "./adminRestAPI.js";
-import userRouter from "./userRestAPI.js";
+import userRouter, { dashboardOrigin } from "./userRestAPI.js";
 import runStartupMigrations, { migrationStatus } from "./tools/mongo/migrations/runStartupMigrations.js";
 import { runAsSystem } from "./identity/userContext.js";
 
@@ -53,6 +53,12 @@ app.get('/', (req, res) => {
     // Read-only, and the only way to see what a boot migration did without
     // shell access to the host. Counts and statuses only — no row contents.
     migrations: migrationStatus,
+    // Whether the dashboard can actually issue a login link. The origin is a
+    // public URL so it is named; the secret is reported only as set or not.
+    dashboard: {
+      origin: dashboardOrigin(),
+      secretSet: Boolean(process.env.SESSION_SECRET),
+    },
   });
 });
 

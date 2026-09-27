@@ -169,14 +169,22 @@ export async function handleTelegramMessage(message) {
     // before it, never welcomed, is onboarded on its next message too. A failed
     // lookup costs the onboarding, never the message.
     if (isLoginCommand(text)) {
-      const link = createLoginLink(userId);
-      await sendMessage(chatId, [
-        "*Your dashboard link*",
-        "",
-        `[Open Rasmalai](${link.url})`,
-        "",
-        `The link expires in ${link.minutes} minutes. Don't forward it — it signs in as you.`,
-      ].join("\n"));
+      let link = null;
+      try {
+        link = createLoginLink(userId);
+      } catch (err) {
+        console.error("[handleTelegramMessage] dashboard link unavailable:", err.message);
+      }
+
+      await sendMessage(chatId, link
+        ? [
+            "*Your dashboard link*",
+            "",
+            `[Open Rasmalai](${link.url})`,
+            "",
+            `The link expires in ${link.minutes} minutes. Don't forward it — it signs in as you.`,
+          ].join("\n")
+        : "The dashboard isn't set up on this server yet, so I can't send you a link. Nothing is wrong on your side.");
       return;
     }
 

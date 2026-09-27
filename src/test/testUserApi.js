@@ -22,7 +22,7 @@ function ok(name, condition, detail = "") {
 
 const module_ = await import("../userRestAPI.js");
 const userRouter = module_.default;
-const { mintToken, readToken, createLoginLink } = module_;
+const { mintToken, readToken, createLoginLink, dashboardOrigin } = module_;
 
 const app = express();
 app.use(express.json());
@@ -72,6 +72,40 @@ ok("the login link points at the app origin",
     link.url);
 ok("its code is a login token", readToken(link.code, "login")?.userId === 7);
 ok("the link says how long it lasts", link.minutes === 10, String(link.minutes));
+
+/*
+ * A link is only a link to Telegram if it carries a scheme: renderMarkdown
+ * only promotes https?, tg: and mailto:, and shows anything else as its own
+ * text. With APP_UI_ORIGIN unset the URL came out as "/login#…", which the
+ * renderer correctly refused, and the user was sent raw markdown. Refusing to
+ * build one at all is the only honest answer.
+ */
+ok("the link carries a scheme, or Telegram renders it as text",
+    /^https?:\/\//.test(link.url), link.url);
+
+const savedOrigin = process.env.APP_UI_ORIGIN;
+
+delete process.env.APP_UI_ORIGIN;
+ok("with no APP_UI_ORIGIN there is no origin to use", dashboardOrigin() === null);
+let threw = false;
+try { createLoginLink(7); } catch { threw = true; }
+ok("and a link is refused rather than built relative", threw);
+
+process.env.APP_UI_ORIGIN = "rasmalai-ui.pages.dev";
+ok("an origin without a scheme is refused too", dashboardOrigin() === null);
+threw = false;
+try { createLoginLink(7); } catch { threw = true; }
+ok("so that one is refused as well", threw);
+
+process.env.APP_UI_ORIGIN = "https://rasmalai-ui.pages.dev/";
+ok("a trailing slash is trimmed rather than doubled",
+    createLoginLink(7).url.startsWith("https://rasmalai-ui.pages.dev/login#"));
+
+process.env.APP_UI_ORIGIN = "https://a.example.com, https://b.example.com";
+ok("with several origins the link uses the first",
+    createLoginLink(7).url.startsWith("https://a.example.com/login#"));
+
+process.env.APP_UI_ORIGIN = savedOrigin;
 
 // ------------------------------------------------------------- the routes ---
 
