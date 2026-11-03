@@ -9,7 +9,7 @@ import { TASK_REGISTER } from "./tools/mongo/schema/taskRegisterSchema.js";
 import { TASK_CALENDAR } from "./tools/mongo/schema/taskCalendarSchema.js";
 import { USER_SCHEDULE } from "./tools/mongo/schema/userScheduleSchema.js";
 import { CHAT_SUMMARY } from "./tools/mongo/schema/chatSummarySchema.js";
-import { toIST, localDateOf, previousDay, IST_TIMEZONE } from "./tools/mongo/dateUtils.js";
+import { toIST, localDateOf, previousDay, personalDayOf, dayScope, IST_TIMEZONE } from "./tools/mongo/dateUtils.js";
 
 const router = Router();
 
@@ -268,7 +268,10 @@ router.get("/api/me", requireUser, (req, res) => {
         locale: user.locale ?? null,
         onboarded: Boolean(user.onboardedAt),
         routines: user.preferences?.triggersOptIn === true,
-        today: localDateOf(new Date(), req.timeZone),
+        today: personalDayOf(new Date(), {
+            hour: dayScope(user).dayStartHour,
+            timeZone: req.timeZone,
+        }),
         notes: NOTE_SECTIONS.map(({ key, label }) => ({
             key,
             label,
@@ -283,7 +286,14 @@ router.get("/api/me/overview", requireUser, async (req, res) => {
         const userId = req.user.userId;
         const timeZone = req.timeZone;
 
-        const today = localDateOf(new Date(), timeZone);
+        // Their day, so the dashboard and the agent name the same one. On the
+        // calendar day a meal logged at 00:30 was filed under the day that was
+        // still running and then looked for under the day that had just begun,
+        // so the dashboard showed an empty day over a day's worth of rows.
+        const today = personalDayOf(new Date(), {
+            hour: dayScope(req.user).dayStartHour,
+            timeZone,
+        });
         const yesterday = previousDay(today);
         const threeDaysAgo = previousDay(previousDay(yesterday));
 
