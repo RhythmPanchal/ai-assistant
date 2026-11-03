@@ -10,6 +10,7 @@
  */
 
 const M = {
+    CLAUDE_HAIKU: "claude-haiku-4-5",
     GEM_35_FL: "gemini-3.5-flash-lite",
     GEM_31_FL: "gemini-3.1-flash-lite",
     GEM_35_F: "gemini-3.5-flash",
@@ -23,9 +24,17 @@ const M = {
     OLLAMA: "llama3.1",
 };
 
+const an = (model) => ({ provider: "anthropic", model });
 const g = (model) => ({ provider: "gemini", model });
 const co = (model) => ({ provider: "cohere", model });
 const or = (model) => ({ provider: "openrouter", model });
+
+// Leads every chain: one model that holds schemas and multi-step tool use
+// across all six tasks beats a different one per task, because a prompt tuned
+// against the leader is then tuned for every route. The free-tier chains stay
+// behind it in their existing order, so a billing or availability problem
+// degrades to what ran before instead of failing the turn.
+const LEAD = [an(M.CLAUDE_HAIKU)];
 
 // Only reached when everything above is exhausted.
 const LAST_RESORT = [or(M.OR_NEMOTRON)];
@@ -39,10 +48,10 @@ export const agentConfig = {
          */
         tasks: {
             // High frequency, tool-heavy, writes to Mongo, user is waiting.
-            // Needs the highest-volume models first. Schema mistakes here land
-            // silently as bad rows, so only verified models lead.
+            // Schema mistakes here land silently as bad rows, so only verified
+            // models lead; the rest are ordered by volume behind them.
             conversation: {
-                chain: [g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), g(M.GEM_25_FL), ...LAST_RESORT],
+                chain: [...LEAD, g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), g(M.GEM_25_FL), ...LAST_RESORT],
                 maxSteps: 20,
             },
 
@@ -50,37 +59,37 @@ export const agentConfig = {
             // no tool calls — pure prose reasoning, nothing to violate. The one
             // task worth spending a scarce high-quality bucket on.
             goodMorning: {
-                chain: [g(M.GEM_35_F), g(M.GEM_25_F), co(M.COH_APLUS), g(M.GEM_35_FL)],
+                chain: [...LEAD, g(M.GEM_35_F), g(M.GEM_25_F), co(M.COH_APLUS), g(M.GEM_35_FL)],
                 maxSteps: 8,
             },
 
             // Not one call — a multi-turn extraction conversation, tool-heavy
-            // and schema-critical. Strongest model first for extraction
-            // fluency; a long wrap-up spills into the higher-volume models.
+            // and schema-critical. A long wrap-up spills from the leader into
+            // the strongest Gemini tier, then into the higher-volume ones.
             goodNight: {
-                chain: [g(M.GEM_35_F), g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), ...LAST_RESORT],
+                chain: [...LEAD, g(M.GEM_35_F), g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), ...LAST_RESORT],
                 maxSteps: 20,
             },
 
             // Once per user, conversational, and every answer is a notes write:
-            // the extraction has to hold across a dozen turns, so the strongest
-            // model leads, spilling into the higher-volume ones.
+            // the extraction has to hold across a dozen turns, so the fallbacks
+            // run strongest-first rather than highest-volume-first.
             onboarding: {
-                chain: [g(M.GEM_35_F), g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), ...LAST_RESORT],
+                chain: [...LEAD, g(M.GEM_35_F), g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), ...LAST_RESORT],
                 maxSteps: 10,
             },
 
             // Future weekly/monthly rollups: large inputs, no tools, nobody
             // waiting. Leads on volume rather than nuance.
             summarize: {
-                chain: [g(M.GEM_31_FL), co(M.COH_A), g(M.GEM_25_FL), or(M.OR_OSS20B)],
+                chain: [...LEAD, g(M.GEM_31_FL), co(M.COH_A), g(M.GEM_25_FL), or(M.OR_OSS20B)],
                 maxSteps: 4,
             },
 
             // Future Slack ingestion: event-driven bursts, structured
             // extraction. Bursts need per-minute headroom.
             ingest: {
-                chain: [g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), ...LAST_RESORT],
+                chain: [...LEAD, g(M.GEM_35_FL), g(M.GEM_31_FL), co(M.COH_APLUS), ...LAST_RESORT],
                 maxSteps: 10,
             },
         },
@@ -89,6 +98,7 @@ export const agentConfig = {
 
         // Used only when a chain entry supplies no model override.
         models: {
+            anthropic: process.env.CLAUDE_MODEL || M.CLAUDE_HAIKU,
             gemini: process.env.GEMINI_MODEL || M.GEM_35_FL,
             groq: process.env.GROQ_MODEL || M.GROQ_120B,
             cohere: process.env.COHERE_MODEL || M.COH_APLUS,

@@ -67,6 +67,10 @@ test("every chain contains only eval-verified models", () => {
         "gemini-2.5-flash", "gemini-2.5-flash-lite",
         "command-a-plus-05-2026", "command-a-03-2025",
         "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-20b:free",
+        // Completes the multi-step tool loop; 18/24 on 2026-11-03, against
+        // 17/20 for the model it now leads. It is NOT in the STRONG set below,
+        // so every chain still has to carry a fully-verified model behind it.
+        "claude-haiku-4-5",
     ]);
     const bad = [];
     for (const task of Object.keys(agentConfig.llm.tasks))
