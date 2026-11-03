@@ -1,4 +1,4 @@
-import { localDateOf, IST_TIMEZONE } from "../../tools/mongo/dateUtils.js";
+import { personalDayOf, dayScope, DAY_START_HOUR, IST_TIMEZONE } from "../../tools/mongo/dateUtils.js";
 import { getUserProfile } from "../../identity/userManager.js";
 
 /**
@@ -6,9 +6,10 @@ import { getUserProfile } from "../../identity/userManager.js";
  *
  * Both close paths land here — the agent's completeFlow when the user wrapped
  * up, and goodMorningJob's supersede when they never replied — so the rule for
- * WHICH day gets summarised is written once. It is the day the wrap-up flow
- * OPENED on, never the day it closed on: a wrap-up typed at 02:40 belongs to the
- * day that ended, and the no-reply path closes at 09:00 the following morning.
+ * WHICH day gets summarised is written once. It is the personal day the wrap-up
+ * flow OPENED on, never the day it closed on: a wrap-up typed at 02:40 belongs
+ * to the day that ended, and the no-reply path closes at 09:00 the following
+ * morning.
  *
  * The third exit, lazy expiry at 10:00, is deliberately not hooked. It is only
  * reached when goodMorningJob never ran, and it fires from inside
@@ -21,14 +22,17 @@ export async function onGoodNightClosed(flow) {
     if (!flow?.userId) return null;
 
     let timeZone = IST_TIMEZONE;
+    let dayStartHour = DAY_START_HOUR;
     try {
         const profile = await getUserProfile(flow.userId);
-        timeZone = profile?.timezone || IST_TIMEZONE;
+        ({ timeZone, dayStartHour } = dayScope(profile));
     } catch (e) {
         console.warn(`[onGoodNightClosed] profile lookup failed, assuming ${IST_TIMEZONE}: ${e.message}`);
     }
 
-    const logDate = localDateOf(flow.startedAt, timeZone);
+    const logDate = flow.startedAt
+        ? personalDayOf(flow.startedAt, { hour: dayStartHour, timeZone })
+        : null;
     if (!logDate) {
         console.warn(`[onGoodNightClosed] flow ${flow._id} has no usable startedAt — nothing queued`);
         return null;

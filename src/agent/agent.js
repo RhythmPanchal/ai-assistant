@@ -13,7 +13,7 @@ import { buildSystemInstruction, NO_REPLY } from "./instruction.js";
 import chatHistoryKnowledge from "../knowledge/chatHistoryKnowledge.js";
 import userProfileKnowledge from "../knowledge/userProfileKnowledge.js";
 import chatSummaryKnowledge from "../knowledge/chatSummaryKnowledge.js";
-import { localDateOf, IST_TIMEZONE, datesForModel } from "../tools/mongo/dateUtils.js";
+import { personalDayOf, dayScope, DAY_START_HOUR, IST_TIMEZONE, datesForModel } from "../tools/mongo/dateUtils.js";
 import { getOpenFlowsForUser, extendFlow } from "../scheduler/flows/activeFlowsRepo.js";
 import goodNightFlow from "./flows/goodNightFlow.js";
 import goodMorningFlow from "./flows/goodMorningFlow.js";
@@ -94,14 +94,22 @@ export const FLOW_OVERLAYS = Object.fromEntries(
  * Without this the scratchpad is write-only and the two-strike rule in the
  * goodMorning overlay can never fire.
  *
- * LOG DATE is the important one: it is the calendar day the flow OPENED on,
- * not the current day. A goodNight flow opens at 23:00 and is often answered
- * after midnight, when "today" in RIGHT NOW has already rolled over — so the
- * day is decided here, once, and handed to the model as a literal.
+ * LOG DATE is the important one: it is the personal day the flow OPENED on,
+ * not the current one. A goodNight flow opens at 23:00 and is often answered
+ * after the personal day has rolled over too — someone starting at 04:00 who
+ * wraps up at 05:00 — so the day is decided here, once, and handed to the model
+ * as a literal. The personal day rather than the calendar day because a night
+ * routine can itself open after midnight: a 01:00 nightHour used to stamp the
+ * flow with the date that had just begun, putting the whole wrap-up a day late.
  */
-export function flowStateBlock(flow, timeZone = IST_TIMEZONE) {
+export function flowStateBlock(flow, timeZone = IST_TIMEZONE, dayStartHour = DAY_START_HOUR) {
     const sp = flow.scratchpad || {};
-    const logDate = localDateOf(flow.startedAt, timeZone);
+    // Guarded rather than passed straight in: personalDayOf defaults a missing
+    // instant to NOW, so an unstarted flow would be stamped with today instead
+    // of reading "unknown" and being noticed.
+    const logDate = flow.startedAt
+        ? personalDayOf(flow.startedAt, { hour: dayStartHour, timeZone })
+        : null;
     return [
         "-------------------------------------",
         `📌 FLOW STATE (${flow.flowType})`,
@@ -134,11 +142,11 @@ export function flowStateBlock(flow, timeZone = IST_TIMEZONE) {
  * the fallback path is the one that matters and the only way to exercise it for
  * real is to hand it a context that throws.
  */
-export async function buildFlowOverlay(flow, { userId, timeZone = IST_TIMEZONE, profile = null, flows = FLOWS } = {}) {
+export async function buildFlowOverlay(flow, { userId, timeZone = IST_TIMEZONE, dayStartHour = DAY_START_HOUR, profile = null, flows = FLOWS } = {}) {
     const definition = flows[flow.flowType];
     if (!definition) return null;
 
-    const parts = [definition.instruction, flowStateBlock(flow, timeZone)];
+    const parts = [definition.instruction, flowStateBlock(flow, timeZone, dayStartHour)];
 
     if (typeof definition.buildContext === "function") {
         try {
@@ -146,7 +154,7 @@ export async function buildFlowOverlay(flow, { userId, timeZone = IST_TIMEZONE, 
             // block needs its LOG DATE (from startedAt) and its scratchpad.
             // `profile` is the users document runAgent already loaded, so a
             // context about the person (onboarding's) costs no query of its own.
-            const context = await definition.buildContext(userId, { timeZone, flow, profile });
+            const context = await definition.buildContext(userId, { timeZone, dayStartHour, flow, profile });
             if (context) parts.push(context);
         } catch (err) {
             console.warn(`[runAgent] ${flow.flowType} live context unavailable:`, err.message);
@@ -307,12 +315,16 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         } catch (e) {
             console.warn("[runAgent] user profile lookup failed, using internal keys:", e.message);
         }
-        const timeZone = userProfile?.timezone || IST_TIMEZONE;
+        // Their day, which ends at dayStartHour and not at midnight. Resolved
+        // once here and threaded everywhere: the history window, the date the
+        // model is told it is, and the day a routine files under all have to
+        // agree, and they only agree if they read the same two fields.
+        const { timeZone, dayStartHour } = dayScope(userProfile);
+        const today = personalDayOf(new Date(), { hour: dayStartHour, timeZone });
 
-        // Their day, which ends at dayStartHour and not at midnight.
         const { history: chatHistory, carriedFrom } = await chatHistoryKnowledge(userId, {
             timeZone,
-            dayStartHour: userProfile?.preferences?.dayStartHour,
+            dayStartHour,
         });
 
         // Active flow overlays. Lazy expiry inside getOpenFlowsForUser. keeps stale flows from leaking.
@@ -340,7 +352,7 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
             : null;
 
         const [routineOverlays, nudge] = await Promise.all([
-            Promise.all(activeFlows.map(f => buildFlowOverlay(f, { userId, timeZone, profile: userProfile }))),
+            Promise.all(activeFlows.map(f => buildFlowOverlay(f, { userId, timeZone, dayStartHour, profile: userProfile }))),
             // Once a week at most, and only inside a routine — see routineNotes.js.
             // Claimed here, once per turn, rather than per flow: with both
             // routines open two claims would race for the same week.
@@ -370,12 +382,18 @@ export async function runAgent(userId, userInstruction, source = "telegram", tas
         // are still job hunting.
         const [profileBlock, recentBlock] = await Promise.all([
             userProfileKnowledge(userId, userProfile),
-            chatSummaryKnowledge(userId, { timeZone }),
+            // `today` explicitly, so "yesterday" in the RECENTLY block is
+            // relative to the day they are in. Left to its own default it reads
+            // the calendar, and at 00:30 would label the day still running as
+            // one that had already ended.
+            chatSummaryKnowledge(userId, { timeZone, today }),
         ]);
         const systemInstruction = buildSystemInstruction(overlays, {
             profile: profileBlock,
             recent: recentBlock,
             carriedFrom,
+            timeZone,
+            dayStartHour,
         });
 
         const messages = [

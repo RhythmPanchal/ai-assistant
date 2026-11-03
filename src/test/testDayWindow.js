@@ -13,7 +13,7 @@
  */
 import assert from "node:assert";
 
-const { personalDayRange, personalDayRangeOf, personalDayOf, localHourOf, localDayRange, DAY_START_HOUR, IST_TIMEZONE } =
+const { personalDayRange, personalDayRangeOf, personalDayOf, localHourOf, localDayRange, dayScope, DAY_START_HOUR, IST_TIMEZONE } =
     await import("../tools/mongo/dateUtils.js");
 const { buildSystemInstruction } = await import("../agent/instruction.js");
 
@@ -182,6 +182,87 @@ test("a day is 24 hours long in a zone without DST", () => {
 
 test("a garbage label is refused rather than guessed at", () => {
     assert.equal(personalDayRangeOf("not-a-date", { hour: 6, timeZone: IST }), null);
+});
+
+// ------------------------------------------------------ reading the scope off a user --
+test("dayScope reads both fields, and falls back to the defaults", () => {
+    assert.deepEqual(dayScope({ timezone: "Europe/London", preferences: { dayStartHour: 9 } }),
+        { timeZone: "Europe/London", dayStartHour: 9 });
+    assert.deepEqual(dayScope(null), { timeZone: IST, dayStartHour: DAY_START_HOUR });
+    assert.deepEqual(dayScope({}), { timeZone: IST, dayStartHour: DAY_START_HOUR });
+});
+
+test("dayScope ignores a dayStartHour that is not a whole hour", () => {
+    // A non-integer reaching atLocalHour builds an unparseable datetime and the
+    // day silently becomes Invalid Date, so it has to be refused here.
+    assert.equal(dayScope({ preferences: { dayStartHour: "9" } }).dayStartHour, DAY_START_HOUR);
+    assert.equal(dayScope({ preferences: { dayStartHour: 9.5 } }).dayStartHour, DAY_START_HOUR);
+    assert.equal(dayScope({ preferences: { dayStartHour: null } }).dayStartHour, DAY_START_HOUR);
+});
+
+test("dayStartHour 0 is honoured, not treated as absent", () => {
+    // The one value a truthiness check would drop, and it means something:
+    // a person whose day really is midnight to midnight.
+    assert.equal(dayScope({ preferences: { dayStartHour: 0 } }).dayStartHour, 0);
+});
+
+/*
+ * What the model is TOLD the date is. The window above was only ever half of
+ * it: the agent read the right conversation and then labelled everything in it
+ * with the calendar date, because RIGHT NOW was built from the clock. At 00:30
+ * that is the date that has just begun, and the prompt told the model in as many
+ * words to resolve "today" against it.
+ */
+const nowBlockAt = (now, opts = {}) => buildSystemInstruction([], { order: ["now"], now, ...opts });
+
+test("before the rollover the prompt gives their day, not the calendar's", () => {
+    const out = nowBlockAt(ist("2026-02-12T00:30:00"));
+    assert.match(out, /Their day: 2026-02-11/);
+    assert.ok(!/Their day: 2026-02-12/.test(out), "the calendar date must not be offered as their day");
+});
+
+test("the weekday is the personal day's, not the instant's", () => {
+    // 2026-02-12 is a Thursday; the day it belongs to is Wednesday the 11th.
+    // Getting this from the instant makes the block contradict itself, which is
+    // an invitation to the model to pick the half it likes.
+    assert.match(nowBlockAt(ist("2026-02-12T00:30:00")), /Their day: 2026-02-11 \(Wednesday\)/);
+});
+
+test("the real clock is still shown, so a reminder is not dated a day back", () => {
+    // The failure this prevents: "today is the 11th" plus "remind me in ten
+    // minutes" dates the reminder 2026-02-11T00:40 — 24 hours in the past,
+    // where it fires instantly or never.
+    const out = nowBlockAt(ist("2026-02-12T00:30:00"));
+    assert.match(out, /Clock:\s+2026-02-12 00:30:00/);
+    assert.match(out, /Scheduling something still to COME is a real instant/);
+    assert.match(out, /Filing something that HAPPENED/);
+});
+
+test("an explicit dayStartHour moves the prompt's boundary with it", () => {
+    // 06:00 is a new calendar day and a new default day, but not a new day for
+    // someone who starts at 09:00.
+    assert.match(nowBlockAt(ist("2026-02-12T06:00:00"), { dayStartHour: 9 }), /Their day: 2026-02-11/);
+    assert.match(nowBlockAt(ist("2026-02-12T06:00:00")), /Their day: 2026-02-12/);
+    assert.match(nowBlockAt(ist("2026-02-12T06:00:00"), { dayStartHour: 9 }), /runs 09:00 to 09:00/);
+});
+
+test("after the rollover the extra paragraph is gone", () => {
+    // It costs prompt on every ordinary turn, and the model has to read past it
+    // to reach the rules. It is only true for four hours a day.
+    const out = nowBlockAt(ist("2026-02-11T15:30:00"));
+    assert.match(out, /Their day: 2026-02-11 \(Wednesday\)/);
+    assert.ok(!/past midnight/i.test(out), "the midnight paragraph must not show at 15:30");
+    assert.match(out, /Resolve "today", "tomorrow", "tonight", "next week" against their day/);
+});
+
+test("the zone comes from the caller, not from a constant in the prompt", () => {
+    // 2026-02-12T00:30 IST is still 2026-02-11 19:00 in London, so a London
+    // user is mid-evening on the 11th — same label, different reason, and the
+    // block must name the zone it used.
+    const out = nowBlockAt(ist("2026-02-12T00:30:00"), { timeZone: "Europe/London" });
+    assert.match(out, /Their day: 2026-02-11/);
+    assert.match(out, /Europe\/London/);
+    assert.ok(!/Asia\/Kolkata/.test(out), "the user's zone must not be overridden by the default");
 });
 
 let pass = 0;

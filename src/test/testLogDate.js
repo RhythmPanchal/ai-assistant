@@ -11,6 +11,7 @@ import "dotenv/config";
 import assert from "node:assert/strict";
 import { localDateOf, toIST, atLocalHour } from "../tools/mongo/dateUtils.js";
 import { flowStateBlock } from "../agent/agent.js";
+import { pickLogDate } from "../tools/mongo/operation/logDate.js";
 
 let pass = 0;
 function check(label, fn) {
@@ -64,6 +65,44 @@ check("block still exposes unrelatedReplies (two-strike rule)", () =>
 
 check("missing startedAt degrades to 'unknown' rather than crashing", () =>
     assert.ok(flowStateBlock({ flowType: "goodNight" }).includes("LOG DATE: unknown")));
+
+check("a routine that OPENS after midnight labels the day it is wrapping up", () => {
+    // The anchor's own blind spot. A nightHour past midnight stamped the flow
+    // with the date that had just begun, so the one value holding the whole
+    // wrap-up to the right day was itself a day out, and every row with it.
+    const lateNight = { flowType: "goodNight", startedAt: new Date("2026-08-14T01:00:00+05:30") };
+    assert.ok(flowStateBlock(lateNight).includes("LOG DATE: 2026-08-13"),
+        flowStateBlock(lateNight));
+});
+
+check("the LOG DATE boundary moves with the user's own dayStartHour", () => {
+    // 07:00 is yesterday to someone who starts at 09:00 and today to everyone else.
+    const earlyFlow = { flowType: "goodNight", startedAt: new Date("2026-08-14T07:00:00+05:30") };
+    assert.ok(flowStateBlock(earlyFlow, "Asia/Kolkata", 9).includes("LOG DATE: 2026-08-13"));
+    assert.ok(flowStateBlock(earlyFlow).includes("LOG DATE: 2026-08-14"));
+});
+
+console.log("\nA — pickLogDate clamps to the day being logged");
+
+check("a date past the anchor is pulled back to it", () => {
+    // The post-midnight mistake, as it arrives: the model read the clock, saw
+    // the 14th, and sent it for a meal eaten on the 13th.
+    const out = pickLogDate({ requested: "2026-08-14", today: "2026-08-13" });
+    assert.equal(out.date, "2026-08-13");
+    assert.match(out.note, /after today/);
+});
+
+check("an earlier date is left alone — they meant yesterday", () =>
+    assert.equal(pickLogDate({ requested: "2026-08-11", today: "2026-08-13" }).date, "2026-08-11"));
+
+check("the flow's LOG DATE outranks today as the ceiling", () => {
+    const out = pickLogDate({ requested: "2026-08-14", flowLogDate: "2026-08-13", today: "2026-08-14" });
+    assert.equal(out.date, "2026-08-13");
+    assert.match(out.note, /the night routine's LOG DATE/);
+});
+
+check("nothing requested falls to the anchor", () =>
+    assert.equal(pickLogDate({ today: "2026-08-13" }).date, "2026-08-13"));
 
 console.log("\nA — a bare LOG DATE survives the write path unshifted");
 

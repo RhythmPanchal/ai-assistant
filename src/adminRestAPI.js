@@ -8,7 +8,7 @@ import { runWithUserContext } from "./identity/userContext.js";
 import { runAgent } from "./agent/agent.js";
 import {
     IST_TIMEZONE,
-    DAY_START_HOUR,
+    dayScope,
     personalDayOf,
     personalDayRangeOf,
 } from "./tools/mongo/dateUtils.js";
@@ -162,15 +162,6 @@ router.post("/admin/chat", async (req, res) => {
         res.status(500).json({ error: String(err.message || err) });
     }
 });
-
-function dayScope(user) {
-    return {
-        timeZone: user?.timezone || IST_TIMEZONE,
-        dayStartHour: Number.isInteger(user?.preferences?.dayStartHour)
-            ? user.preferences.dayStartHour
-            : DAY_START_HOUR,
-    };
-}
 
 async function findUser(userId) {
     const db = await getDB();

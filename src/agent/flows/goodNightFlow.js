@@ -1,4 +1,4 @@
-import { atLocalHour, localDateOf, IST_TIMEZONE } from "../../tools/mongo/dateUtils.js";
+import { atLocalHour, personalDayOf, DAY_START_HOUR, IST_TIMEZONE } from "../../tools/mongo/dateUtils.js";
 import nightLogKnowledge from "../../knowledge/nightLogKnowledge.js";
 import unattendedRemindersKnowledge from "../../knowledge/unattendedRemindersKnowledge.js";
 
@@ -19,8 +19,13 @@ export function buildNightTriggerPrompt() {
   return NIGHT_TRIGGER;
 }
 
-export async function buildNightContext(userId, { timeZone = IST_TIMEZONE, flow } = {}) {
-  const logDate = localDateOf(flow?.startedAt, timeZone);
+export async function buildNightContext(userId, { timeZone = IST_TIMEZONE, dayStartHour = DAY_START_HOUR, flow } = {}) {
+  // The same personal day flowStateBlock puts in the overlay, derived the same
+  // way — these two disagreeing means the block says one date and the data
+  // under it belongs to another.
+  const logDate = flow?.startedAt
+    ? personalDayOf(flow.startedAt, { hour: dayStartHour, timeZone })
+    : null;
   if (!logDate) throw new Error("the night routine has no start time, so its LOG DATE is unknown");
 
   // Both read the same LOG DATE, and both are rebuilt every turn — the second

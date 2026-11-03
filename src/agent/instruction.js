@@ -1,3 +1,5 @@
+import { personalDayOf, localHourOf, DAY_START_HOUR } from "../tools/mongo/dateUtils.js";
+
 const TZ = "Asia/Kolkata";
 
 /**
@@ -17,15 +19,29 @@ export const NO_REPLY = "[[NO_REPLY]]";
  * toISOString()/toLocaleTimeString(), which followed the HOST timezone — on a
  * UTC server that shifted TODAY_DATE near IST midnight and fed the model UTC
  * wall-clock time, which then leaked into reminder strings.
+ *
+ * TODAY_DATE is the PERSONAL day, not the calendar day — see personalDayRange.
+ * The two differ between midnight and dayStartHour, which is exactly when a
+ * wrap-up gets answered, and the model resolves "today" against this value.
+ * The calendar clock is carried alongside it rather than dropped, because a
+ * reminder is an instant and must still be counted forward from the real time.
  */
-function getCurrentContext() {
-  const now = new Date();
-  const opts = { timeZone: TZ };
+function getCurrentContext({ timeZone = TZ, dayStartHour = DAY_START_HOUR, now = new Date() } = {}) {
+  const opts = { timeZone };
+  const day = personalDayOf(now, { hour: dayStartHour, timeZone });
   return {
-    TODAY_DATE: now.toLocaleDateString("en-CA", opts),
-    TODAY_DAY: now.toLocaleDateString("en-US", { ...opts, weekday: "long" }),
+    TODAY_DATE: day,
+    // The weekday of the personal day LABEL, not of the instant: at 00:30 on a
+    // Thursday belonging to Wednesday, the model must be told Wednesday or the
+    // two halves of this block contradict each other. Formatted in UTC off a
+    // midday anchor so the label cannot shift back out of its own day.
+    TODAY_DAY: new Date(`${day}T12:00:00Z`)
+      .toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long" }),
+    CLOCK_DATE: now.toLocaleDateString("en-CA", opts),
     CURRENT_TIME: now.toLocaleTimeString("en-GB", { ...opts, hour12: false }),
-    TIMEZONE: TZ,
+    TIMEZONE: timeZone,
+    DAY_START: `${String(dayStartHour).padStart(2, "0")}:00`,
+    BEFORE_ROLLOVER: localHourOf(now, timeZone) < dayStartHour,
   };
 }
 
@@ -216,16 +232,52 @@ WHEN NOTHING NEEDS SAYING
   that is what ${NO_REPLY} is for.
 `.trim();
 
-function nowBlock() {
-  const c = getCurrentContext();
-  return `
-=====================================================================
-RIGHT NOW
-=====================================================================
-Date: ${c.TODAY_DATE} (${c.TODAY_DAY})   Time: ${c.CURRENT_TIME}   Zone: ${c.TIMEZONE}
+/**
+ * Their day, and the clock, which are not the same thing between midnight and
+ * dayStartHour.
+ *
+ * Two values because the model needs both and for different jobs. A day LABEL
+ * is what everything already behind them is filed under: at 00:30 their day has
+ * not ended, so the meal they just mentioned belongs to the day that is still
+ * running. An INSTANT is a real moment on the clock: a reminder ten minutes out
+ * is ten minutes from now, and dating it inside the day label would put it
+ * nearly a full day in the past, where it fires at once or never.
+ *
+ * The extra paragraph is rendered only while the two disagree. Every other hour
+ * of the day it would be prompt the model has to read past to reach the rules.
+ *
+ * `now` is injectable because the only behaviour worth testing here lives in a
+ * 4-hour window, and reaching it by mocking the global Date breaks `instanceof`
+ * for every date helper this calls.
+ */
+function nowBlock(ctx) {
+  const c = getCurrentContext(ctx);
+  const lines = [
+    "=====================================================================",
+    "RIGHT NOW",
+    "=====================================================================",
+    `Their day: ${c.TODAY_DATE} (${c.TODAY_DAY})`,
+    `Clock:     ${c.CLOCK_DATE} ${c.CURRENT_TIME}  ${c.TIMEZONE}`,
+    "",
+    `Their day runs ${c.DAY_START} to ${c.DAY_START}, not midnight to midnight.`,
+  ];
 
-Resolve "today", "tomorrow", "tonight", "next week" against this.
-`.trim();
+  if (c.BEFORE_ROLLOVER) {
+    lines.push(
+      "",
+      `It is past midnight. The calendar has moved on; their day has not — until`,
+      `${c.DAY_START} it is still ${c.TODAY_DATE} to them, and they will say "today" meaning it.`,
+      "",
+      `  • Filing something that HAPPENED — a meal, work done, a spend — dates it`,
+      `    ${c.TODAY_DATE}. So does "today", "tonight", "this morning", "earlier".`,
+      `  • Scheduling something still to COME is a real instant, counted from the`,
+      `    clock above, so it carries the clock's date: "in ten minutes" is`,
+      `    ${c.CLOCK_DATE}T${c.CURRENT_TIME.slice(0, 5)} plus ten.`,
+    );
+  }
+
+  lines.push("", `Resolve "today", "tomorrow", "tonight", "next week" against their day.`);
+  return lines.join("\n");
 }
 
 /**
@@ -303,11 +355,15 @@ const SECTIONS = {
  *                                     guessing at one.
  */
 export function buildSystemInstruction(overlays = [], options = {}) {
-  const { profile = null, recent = null, carriedFrom = null, order = ORDER } = options;
+  const {
+    profile = null, recent = null, carriedFrom = null, order = ORDER,
+    timeZone = TZ, dayStartHour = DAY_START_HOUR, now = new Date(),
+  } = options;
   // filter(Boolean) so an empty section leaves no blank gap between the two
   // around it — the block is absent for any user whose first day is not yet
   // summarised, which is every user on day one.
-  let out = order.map((k) => SECTIONS[k]({ profile, recent, carriedFrom })).filter(Boolean).join("\n\n");
+  const ctx = { profile, recent, carriedFrom, timeZone, dayStartHour, now };
+  let out = order.map((k) => SECTIONS[k](ctx)).filter(Boolean).join("\n\n");
 
   if (overlays.length) {
     out += `

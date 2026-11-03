@@ -8,7 +8,7 @@ import { buildDayRecord } from "../../agent/summarize/dayRecord.js";
 import dayTranscriptKnowledge from "../../knowledge/dayTranscriptKnowledge.js";
 import { findDaySummary, hasDaySummary } from "../../tools/mongo/operation/chatSummaries.js";
 import { getUserProfile } from "../../identity/userManager.js";
-import { IST_TIMEZONE, localDayRange, previousDay } from "../../tools/mongo/dateUtils.js";
+import { IST_TIMEZONE, localDayRange, previousDay, dayScope, DAY_START_HOUR } from "../../tools/mongo/dateUtils.js";
 
 /**
  * Writes one day into chatSummary, once that day's wrap-up is finished.
@@ -129,16 +129,20 @@ export async function summarizeDayJob(userId, logDate, timeZone = IST_TIMEZONE) 
     }
 
     let apiKeys = {};
+    let dayStartHour = DAY_START_HOUR;
     try {
         const profile = await getUserProfile(userId);
         apiKeys = profile?.apiKeys || {};
+        // The caller's timeZone stays the fallback: this job is queued with one
+        // and a lookup failure must not silently move the day boundary.
+        ({ dayStartHour } = dayScope(profile));
         timeZone = profile?.timezone || timeZone;
     } catch (e) {
         console.warn(`[summarizeDayJob] profile lookup failed, using shared keys: ${e.message}`);
     }
 
     const [transcript, previous, { schedule, taskLogs }] = await Promise.all([
-        dayTranscriptKnowledge(userId, logDate, { timeZone }),
+        dayTranscriptKnowledge(userId, logDate, { timeZone, dayStartHour }),
         findDaySummary(userId, previousDay(logDate)).catch(() => null),
         readPlanAndLog(userId, logDate),
     ]);

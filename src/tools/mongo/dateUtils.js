@@ -226,3 +226,20 @@ export function personalDayRangeOf(date, { hour = DAY_START_HOUR, timeZone = IST
 export function personalDayOf(at = new Date(), { hour = DAY_START_HOUR, timeZone = IST_TIMEZONE } = {}) {
   return localDateOf(personalDayRange(at, { hour, timeZone }).start, timeZone);
 }
+
+/**
+ * The two fields every day label is computed from, read off a users document.
+ *
+ * One helper rather than a pair of reads at each call site, because the two are
+ * only correct together: code that picks up the zone and forgets the start hour
+ * silently falls back to midnight-to-midnight, which is the bug this whole
+ * boundary exists to prevent and which nothing visible reports.
+ */
+export function dayScope(user) {
+  return {
+    timeZone: user?.timezone || IST_TIMEZONE,
+    dayStartHour: Number.isInteger(user?.preferences?.dayStartHour)
+      ? user.preferences.dayStartHour
+      : DAY_START_HOUR,
+  };
+}

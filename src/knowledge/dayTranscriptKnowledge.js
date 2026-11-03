@@ -1,6 +1,6 @@
 import { getDB } from "../tools/mongo/mongoClient.js";
 import { CHAT_HISTORY } from "../tools/mongo/schema/chatHistorySchema.js";
-import { localDayRange, IST_TIMEZONE } from "../tools/mongo/dateUtils.js";
+import { personalDayRangeOf, DAY_START_HOUR, IST_TIMEZONE } from "../tools/mongo/dateUtils.js";
 
 /**
  * One local day's conversation, rendered as a transcript for the summarizer.
@@ -49,11 +49,18 @@ function clip(text, limit) {
  * @param {string} date "YYYY-MM-DD" — the local day to render
  * @returns {Promise<string>} the transcript, or a plain sentence saying there is none
  */
-export default async function dayTranscriptKnowledge(userId, date, { timeZone = IST_TIMEZONE } = {}) {
+export default async function dayTranscriptKnowledge(userId, date, { timeZone = IST_TIMEZONE, dayStartHour = DAY_START_HOUR } = {}) {
     if (!userId) throw new Error("[dayTranscriptKnowledge] userId is required");
     if (!date) throw new Error("[dayTranscriptKnowledge] date is required");
 
-    const { start, end } = localDayRange(date);
+    // The personal day, not the calendar day. On a midnight-to-midnight window
+    // the summary of a day never saw the end of its own wrap-up: the routine
+    // opens at 23:00 and the answers arrive at 00:42, on the far side of the
+    // cut. The summariser was reading a conversation that stopped mid-sentence
+    // and writing up a day whose log it could not see being made.
+    const range = personalDayRangeOf(date, { hour: dayStartHour, timeZone });
+    if (!range) throw new Error(`[dayTranscriptKnowledge] "${date}" is not a YYYY-MM-DD date`);
+    const { start, end } = range;
     const db = await getDB();
 
     const turns = await db.collection(CHAT_HISTORY)
