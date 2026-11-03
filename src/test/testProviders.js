@@ -6,6 +6,8 @@ import assert from "node:assert";
 import { agentConfig } from "../config/agent.config.js";
 import { GeminiProvider, FOREIGN_CALL_SIGNATURE } from "../agent/llm/GeminiProvider.js";
 import { OpenAICompatibleProvider } from "../agent/llm/OpenAICompatibleProvider.js";
+import { AnthropicProvider } from "../agent/llm/AnthropicProvider.js";
+import { classifyQuotaError } from "../agent/llm/usageMeter.js";
 import { ProviderManager } from "../agent/llm/createProvider.js";
 
 const realFetch = global.fetch;
@@ -174,6 +176,163 @@ test("all providers failing reports every reason", () =>
                 /openrouter\/free/.test(e.message)
         );
     }));
+
+// ── Anthropic wire format ──────────────────────────────────────────────────
+//
+// The SDK does not go through global fetch, so a stand-in client captures the
+// request instead. What is pinned here is the translation: everything below is
+// a 400 from the Messages API rather than a worse answer.
+
+const ANTHROPIC_REPLY = {
+    content: [{ type: "text", text: "done" }],
+    stop_reason: "end_turn",
+    usage: { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 20, cache_creation_input_tokens: 5 },
+};
+
+/** @returns {[AnthropicProvider, {body: object}]} */
+function stubAnthropic(reply = ANTHROPIC_REPLY) {
+    const seen = {};
+    const client = {
+        messages: {
+            create: async (body) => {
+                seen.body = body;
+                if (reply instanceof Error) throw reply;
+                return reply;
+            },
+        },
+    };
+    return [new AnthropicProvider({ model: "claude-haiku-4-5", client }), seen];
+}
+
+// Two calls in one assistant turn, each answered separately — the shape the
+// agent loop actually produces for parallel tool use.
+const PARALLEL = [
+    { role: "system", content: "you are rasmalai" },
+    { role: "user", content: "log 200 on auto and 50 on chai" },
+    {
+        role: "assistant",
+        content: "On it.",
+        toolCalls: [
+            { id: "c1", name: "createRecord", args: { amount: 200 } },
+            { id: "c2", name: "createRecord", args: { amount: 50 } },
+        ],
+    },
+    { role: "tool_result", toolCallId: "c1", toolName: "createRecord", content: { success: true } },
+    { role: "tool_result", toolCallId: "c2", toolName: "createRecord", content: { success: true } },
+];
+
+test("lifts the system prompt out of messages into a top-level parameter", async () => {
+    const [p, seen] = stubAnthropic();
+    await p.chat(PARALLEL, TOOLS);
+    assert.strictEqual(seen.body.system, "you are rasmalai");
+    assert.ok(!seen.body.messages.some((m) => m.role === "system"), "system must not stay a message");
+});
+
+test("answers every tool call of a turn in ONE user message", async () => {
+    const [p, seen] = stubAnthropic();
+    await p.chat(PARALLEL, TOOLS);
+
+    // Split across two user messages the API rejects the request outright.
+    const results = seen.body.messages.filter(
+        (m) => m.role === "user" && Array.isArray(m.content) && m.content.some((b) => b.type === "tool_result")
+    );
+    assert.strictEqual(results.length, 1, "both results belong to one turn");
+    assert.deepStrictEqual(results[0].content.map((b) => b.tool_use_id), ["c1", "c2"]);
+    assert.strictEqual(results[0].content[0].content, JSON.stringify({ success: true }));
+});
+
+test("never merges a tool result into a real user message", async () => {
+    const [p, seen] = stubAnthropic();
+    await p.chat([...PARALLEL, { role: "user", content: "thanks" }], TOOLS);
+    const last = seen.body.messages.at(-1);
+    assert.strictEqual(last.content, "thanks", "a later user message stays its own turn");
+});
+
+test("sends assistant text and tool calls as one block list", async () => {
+    const [p, seen] = stubAnthropic();
+    await p.chat(PARALLEL, TOOLS);
+    const asst = seen.body.messages.find((m) => m.role === "assistant");
+    assert.deepStrictEqual(asst.content.map((b) => b.type), ["text", "tool_use", "tool_use"]);
+    assert.deepStrictEqual(asst.content[1], { type: "tool_use", id: "c1", name: "createRecord", input: { amount: 200 } });
+});
+
+test("opens on a user turn even when the history starts with a reply", async () => {
+    const [p, seen] = stubAnthropic();
+    // The stale-history fallback can hand over a day that begins mid-exchange.
+    await p.chat([
+        { role: "system", content: "s" },
+        { role: "assistant", content: "earlier reply" },
+        { role: "user", content: "hi" },
+    ], TOOLS);
+    assert.strictEqual(seen.body.messages[0].role, "user");
+});
+
+test("maps tool parameters onto input_schema, and always sends max_tokens", async () => {
+    const [p, seen] = stubAnthropic();
+    await p.chat(PARALLEL, TOOLS);
+    assert.strictEqual(seen.body.tools[0].name, "createRecord");
+    assert.deepStrictEqual(seen.body.tools[0].input_schema, { type: "object" });
+    assert.ok(!("parameters" in seen.body.tools[0]), "parameters is the OpenAI spelling");
+    // Not optional on this API — a request without it is rejected.
+    assert.ok(seen.body.max_tokens > 0);
+});
+
+test("counts cached tokens inside input, not beside it", async () => {
+    const [p] = stubAnthropic();
+    const res = await p.chat(PARALLEL, TOOLS);
+    // input_tokens excludes both cache figures here, unlike every other
+    // provider, so they are added back to keep `cached` a subset of `input`.
+    assert.strictEqual(res.usage.input, 125);
+    assert.strictEqual(res.usage.cached, 20);
+    assert.strictEqual(res.usage.output, 10);
+    assert.ok(res.usage.cached <= res.usage.input);
+});
+
+test("parses tool_use blocks, keeping the id the next turn has to echo", async () => {
+    const [p] = stubAnthropic({
+        content: [
+            { type: "text", text: "looking" },
+            { type: "tool_use", id: "toolu_9", name: "fetchRecord", input: { collection: "taskCalendar" } },
+        ],
+        stop_reason: "tool_use",
+        usage: { input_tokens: 5, output_tokens: 2 },
+    });
+    const res = await p.chat(PARALLEL, TOOLS);
+    assert.strictEqual(res.hasToolCalls(), true);
+    assert.deepStrictEqual(
+        [res.toolCalls[0].name, res.toolCalls[0].id, res.toolCalls[0].args],
+        ["fetchRecord", "toolu_9", { collection: "taskCalendar" }]
+    );
+    assert.strictEqual(res.text, "looking");
+});
+
+test("keeps the HTTP status in the error so a 429 stays classifiable", async () => {
+    const err = new Error("rate limited");
+    err.status = 429;
+    const [p] = stubAnthropic(err);
+    await assert.rejects(() => p.chat(PARALLEL, TOOLS), (e) => {
+        // ProviderManager reads this to tell a burst from an exhausted day.
+        assert.strictEqual(classifyQuotaError(e).is429, true);
+        return /429/.test(e.message);
+    });
+});
+
+test("a refusal fails the entry instead of returning an empty reply", async () => {
+    const [p] = stubAnthropic({
+        content: [],
+        stop_reason: "refusal",
+        stop_details: { type: "refusal", category: "cyber" },
+        usage: { input_tokens: 5, output_tokens: 0 },
+    });
+    // Returning it would send the user a blank message; throwing moves the
+    // chain to the next model.
+    await assert.rejects(() => p.chat(PARALLEL, TOOLS), /refusal \(cyber\)/);
+});
+
+test("a missing key fails the entry, not the whole turn", () => {
+    assert.throws(() => new AnthropicProvider({ model: "claude-haiku-4-5" }), /CLAUDE_API_KEY/);
+    assert.throws(() => new AnthropicProvider({ client: {} }), /requires a model id/);
+});
 
 // ── runner ─────────────────────────────────────────────────────────────────
 let pass = 0;

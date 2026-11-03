@@ -1,7 +1,7 @@
 RASMALAI — MODEL EVAL
 ══════════════════════════════════════════════════════════════════════════════
-Generated : 2026-08-09T21:52:57.872Z
-Prompt    : real system instruction + all 13 registry tool declarations
+Generated : 2026-11-03T16:46:50.194Z
+Prompt    : real system instruction + all 24 registry tool declarations
 Execution : STUBBED — deterministic grading, nothing written to Mongo
 
 SCENARIOS
@@ -39,60 +39,60 @@ SCENARIOS
 SUMMARY
 ══════════════════════════════════════════════════════════════════════════════
   MODEL                                    read      log-clear log-ambig update-no reminder-  TOTAL
-  gemini:gemini-3.5-flash-lite             ERR       ERR       ERR       ERR       ERR        0/5
+  anthropic:claude-haiku-4-5               3/5       5/6       3/3       3/5       4/5        18/24
 
 PER-RUN DETAIL
 ══════════════════════════════════════════════════════════════════════════════
 
-gemini:gemini-3.5-flash-lite  —  [read]
+anthropic:claude-haiku-4-5  —  [read]
 ──────────────────────────────────────────────────────────────────────────────
-  0/1   steps 3   3168ms
-  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
+  3/5   steps 3   4454ms
   tool calls:
     fetchCollectionNameAndSchema
     fetchRecord
-        {"filters":{"date":"2026-08-01","category":"Food","userId":1136575387},"collection":"expenseRegister"}
+        {"collection":"expenseRegister","filters":{"category":"Food","month":"November","year":2026}}
+  reply:
+    The results show August records, not November. Let me check what you have for November more carefully — it looks like you haven't logged any food expenses yet this month. 
+    
+    Do you want to add some, or were there expenses you'd like me to find?
+  failed: filteredByUser, answeredTotal
+
+anthropic:claude-haiku-4-5  —  [log-clear]
+──────────────────────────────────────────────────────────────────────────────
+  5/6   steps 2   2450ms
+  tool calls:
+    createRecord
+        {"collectionName":"expenseRegister","data":{"amount":250,"category":"Food","date":"2026-11-03","notes":"Lunch"}}
   reply:
     (none)
+  failed: confirmed
+
+anthropic:claude-haiku-4-5  —  [log-ambiguous]
+──────────────────────────────────────────────────────────────────────────────
+  3/3   steps 1   844ms
+  tool calls:
+    (none)
+  reply:
+    How much was it?
   failed: none
 
-gemini:gemini-3.5-flash-lite  —  [log-clear]
+anthropic:claude-haiku-4-5  —  [update-no-fabrication]
 ──────────────────────────────────────────────────────────────────────────────
-  0/1   steps 2   1317ms
-  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
+  3/5   steps 3   3921ms
   tool calls:
     fetchCollectionNameAndSchema
+    fetchRecord
+        {"collection":"taskCalendar","filters":{"title":{"$regex":"gym","$options":"i"}}}
   reply:
-    (none)
-  failed: none
+    Your gym task has a deadline in August, not today. Did you mean to reschedule it to today at 7pm, or do you have a different gym task in mind?
+  failed: calledUpdate, usedRealId
 
-gemini:gemini-3.5-flash-lite  —  [log-ambiguous]
+anthropic:claude-haiku-4-5  —  [reminder-date]
 ──────────────────────────────────────────────────────────────────────────────
-  0/1   steps 1   334ms
-  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
-  tool calls:
-    (none)
-  reply:
-    (none)
-  failed: none
-
-gemini:gemini-3.5-flash-lite  —  [update-no-fabrication]
-──────────────────────────────────────────────────────────────────────────────
-  0/1   steps 1   260ms
-  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
-  tool calls:
-    (none)
-  reply:
-    (none)
-  failed: none
-
-gemini:gemini-3.5-flash-lite  —  [reminder-date]
-──────────────────────────────────────────────────────────────────────────────
-  0/1   steps 2   1426ms
-  ERROR: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-lim
+  4/5   steps 2   2659ms
   tool calls:
     createOneTimeReminder
-        {"title":"Call mom","nextExecutionAt":"2026-08-11T21:00:00","userId":1136575387,"message":"Call mom"}
+        {"title":"Call mom","nextExecutionAt":"2026-11-04T21:00:00","message":"Call mom"}
   reply:
-    (none)
-  failed: none
+    Reminder set for tomorrow at 9 PM.
+  failed: hasUserId

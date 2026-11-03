@@ -22,6 +22,9 @@ export const PRICING_AS_OF = "2026-09-04";
 
 /** USD per MILLION tokens. `cachedIn` is optional; input rate applies without it. */
 const PRICES = {
+    // Anthropic's own published rate, not an OpenRouter listing.
+    "anthropic:claude-haiku-4-5": { in: 1.00, out: 5.00 },
+
     "gemini:gemini-3.5-flash-lite": { in: 0.30, out: 2.50 },
     "gemini:gemini-3.1-flash-lite": { in: 0.25, out: 1.50 },
     "gemini:gemini-3.5-flash": { in: 1.50, out: 9.00 },

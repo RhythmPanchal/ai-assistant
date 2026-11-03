@@ -1,4 +1,5 @@
 import { agentConfig } from "../../config/agent.config.js";
+import { AnthropicProvider } from "./AnthropicProvider.js";
 import { GeminiProvider } from "./GeminiProvider.js";
 import { OpenAICompatibleProvider } from "./OpenAICompatibleProvider.js";
 import { classifyQuotaError } from "./usageMeter.js";
@@ -7,6 +8,15 @@ import { classifyQuotaError } from "./usageMeter.js";
 // times in a chain under different models — the thing that makes per-model
 // quota buckets addressable.
 const PROVIDER_FACTORIES = {
+    // CLAUDE_API_KEY, not ANTHROPIC_API_KEY: every other provider here is named
+    // after the model family rather than the company, and the SDK would pick up
+    // ANTHROPIC_API_KEY on its own, hiding a missing key behind the ambient one.
+    anthropic: (apiKey, model) =>
+        new AnthropicProvider({
+            model: model || agentConfig.llm.models.anthropic,
+            apiKey: apiKey || process.env.CLAUDE_API_KEY,
+        }),
+
     gemini: (apiKey, model) =>
         new GeminiProvider({
             model: model || agentConfig.llm.models.gemini,

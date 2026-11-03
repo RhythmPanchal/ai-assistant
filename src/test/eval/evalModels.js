@@ -22,6 +22,7 @@ import toolRegistry from "../../agent/tools/definitions/index.js";
 import { SCENARIOS } from "./scenarios.js";
 
 const MODELS = [
+    ["anthropic", "claude-haiku-4-5"],
     ["gemini", "gemini-3.5-flash"], ["gemini", "gemini-3.5-flash-lite"],
     ["gemini", "gemini-3.1-flash-lite"],
     ["gemini", "gemini-2.5-flash"], ["gemini", "gemini-2.5-flash-lite"],
@@ -32,7 +33,7 @@ const MODELS = [
 const MAX_STEPS = 6;
 // TPM windows are per organisation, so back-to-back runs on one provider can
 // 429 for reasons unrelated to the model.
-const PACE_SEC = { groq: 70, cohere: 5, gemini: 3, openrouter: 5, ollama: 0 };
+const PACE_SEC = { groq: 70, cohere: 5, gemini: 3, openrouter: 5, ollama: 0, anthropic: 2 };
 const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
 
 const tools = toolRegistry.getToolDeclarations();
