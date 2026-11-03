@@ -10,7 +10,7 @@
  */
 
 const M = {
-    CLAUDE_HAIKU: "claude-haiku-4-5",
+    CLAUDE_HAIKU: "claude-haiku-5-5",
     GEM_35_FL: "gemini-3.5-flash-lite",
     GEM_31_FL: "gemini-3.1-flash-lite",
     GEM_35_F: "gemini-3.5-flash",

@@ -1,6 +1,6 @@
 RASMALAI — MODEL EVAL
 ══════════════════════════════════════════════════════════════════════════════
-Generated : 2026-11-03T16:46:50.194Z
+Generated : 2026-11-03T16:51:25.071Z
 Prompt    : real system instruction + all 24 registry tool declarations
 Execution : STUBBED — deterministic grading, nothing written to Mongo
 
@@ -39,60 +39,70 @@ SCENARIOS
 SUMMARY
 ══════════════════════════════════════════════════════════════════════════════
   MODEL                                    read      log-clear log-ambig update-no reminder-  TOTAL
-  anthropic:claude-haiku-4-5               3/5       5/6       3/3       3/5       4/5        18/24
+  anthropic:claude-haiku-5-5               4/5       6/6       3/3       3/5       4/5        20/24
 
 PER-RUN DETAIL
 ══════════════════════════════════════════════════════════════════════════════
 
-anthropic:claude-haiku-4-5  —  [read]
+anthropic:claude-haiku-5-5  —  [read]
 ──────────────────────────────────────────────────────────────────────────────
-  3/5   steps 3   4454ms
+  4/5   steps 4   7338ms
   tool calls:
     fetchCollectionNameAndSchema
     fetchRecord
-        {"collection":"expenseRegister","filters":{"category":"Food","month":"November","year":2026}}
+        {"collection":"expenseRegister","filters":{"category":"Food","date":{"$gte":"2026-11-01","$lt":"2026-12-01"}},"limit":100,"sortBy":"date","sortOrder":"asc"}
+    fetchRecord
+        {"collection":"expenseRegister","filters":{"category":"Food","year":2026},"limit":100,"sortBy":"date","sortOrder":"desc"}
   reply:
-    The results show August records, not November. Let me check what you have for November more carefully — it looks like you haven't logged any food expenses yet this month. 
+    You have no food expenses logged for November 2026 (today is 2026-11-03).
     
-    Do you want to add some, or were there expenses you'd like me to find?
-  failed: filteredByUser, answeredTotal
+    The only food expenses in your register are three from August 2026, totalling ₹1,930:
+    - 2026-08-02: Lunch - thali, ₹250
+    - 2026-08-05: Groceries, ₹1,200
+    - 2026-08-07: Coffee, ₹480
+    
+    If you've spent on food this month, tell me the items and amounts and I'll log them.
+  failed: filteredByUser
 
-anthropic:claude-haiku-4-5  —  [log-clear]
+anthropic:claude-haiku-5-5  —  [log-clear]
 ──────────────────────────────────────────────────────────────────────────────
-  5/6   steps 2   2450ms
+  6/6   steps 4   6952ms
   tool calls:
+    fetchCollectionNameAndSchema
+    fetchRecord   ← UNKNOWN TOOL
+        {"collection":"expenseRegister","filters":{"date":{"$gte":"2026-10-01","$lt":"2026-11-04"}},"limit":3}
     createRecord
-        {"collectionName":"expenseRegister","data":{"amount":250,"category":"Food","date":"2026-11-03","notes":"Lunch"}}
+        {"collectionName":"expenseRegister","data":{"name":"Lunch","amount":250,"category":"Food","date":"2026-11-03","month":"November","year":2026}}
   reply:
-    (none)
-  failed: confirmed
-
-anthropic:claude-haiku-4-5  —  [log-ambiguous]
-──────────────────────────────────────────────────────────────────────────────
-  3/3   steps 1   844ms
-  tool calls:
-    (none)
-  reply:
-    How much was it?
+    Logged ₹250, Food (lunch, 2026-11-03).
   failed: none
 
-anthropic:claude-haiku-4-5  —  [update-no-fabrication]
+anthropic:claude-haiku-5-5  —  [log-ambiguous]
 ──────────────────────────────────────────────────────────────────────────────
-  3/5   steps 3   3921ms
+  3/3   steps 1   1145ms
+  tool calls:
+    (none)
+  reply:
+    How much did lunch cost?
+  failed: none
+
+anthropic:claude-haiku-5-5  —  [update-no-fabrication]
+──────────────────────────────────────────────────────────────────────────────
+  3/5   steps 3   10085ms
   tool calls:
     fetchCollectionNameAndSchema
     fetchRecord
-        {"collection":"taskCalendar","filters":{"title":{"$regex":"gym","$options":"i"}}}
+        {"collection":"taskCalendar","filters":{"status":"Pending"},"limit":100}
   reply:
-    Your gym task has a deadline in August, not today. Did you mean to reschedule it to today at 7pm, or do you have a different gym task in mind?
+    The 7pm slot today has already passed; it's 22:20 now. Did you mean 7pm tomorrow (2026-11-04), or a different time today?
   failed: calledUpdate, usedRealId
 
-anthropic:claude-haiku-4-5  —  [reminder-date]
+anthropic:claude-haiku-5-5  —  [reminder-date]
 ──────────────────────────────────────────────────────────────────────────────
-  4/5   steps 2   2659ms
+  4/5   steps 2   2853ms
   tool calls:
     createOneTimeReminder
-        {"title":"Call mom","nextExecutionAt":"2026-11-04T21:00:00","message":"Call mom"}
+        {"title":"Call mom at 9pm","nextExecutionAt":"2026-11-04T21:00:00","message":"Call mom"}
   reply:
-    Reminder set for tomorrow at 9 PM.
+    Reminder set for tomorrow, 2026-11-04 at 21:00, to call mom.
   failed: hasUserId

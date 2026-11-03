@@ -22,8 +22,14 @@ export const PRICING_AS_OF = "2026-09-04";
 
 /** USD per MILLION tokens. `cachedIn` is optional; input rate applies without it. */
 const PRICES = {
-    // Anthropic's own published rate, not an OpenRouter listing.
-    "anthropic:claude-haiku-4-5": { in: 1.00, out: 5.00 },
+    // Anthropic's own published rates, not an OpenRouter listing.
+    //
+    // Haiku 5.5 is priced in two tiers and these are the under-100K-token
+    // ones. A turn here is around 10K, so that is the tier every request
+    // actually pays; a prompt that ever crossed 100K would be under-reported
+    // fivefold, which is the one case to revisit this entry for.
+    "anthropic:claude-haiku-5-5": { in: 0.10, out: 0.50, cachedIn: 0.01 },
+    "anthropic:claude-haiku-4-5": { in: 1.00, out: 5.00, cachedIn: 0.10 },
 
     "gemini:gemini-3.5-flash-lite": { in: 0.30, out: 2.50 },
     "gemini:gemini-3.1-flash-lite": { in: 0.25, out: 1.50 },

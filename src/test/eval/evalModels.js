@@ -22,7 +22,7 @@ import toolRegistry from "../../agent/tools/definitions/index.js";
 import { SCENARIOS } from "./scenarios.js";
 
 const MODELS = [
-    ["anthropic", "claude-haiku-4-5"],
+    ["anthropic", "claude-haiku-5-5"],
     ["gemini", "gemini-3.5-flash"], ["gemini", "gemini-3.5-flash-lite"],
     ["gemini", "gemini-3.1-flash-lite"],
     ["gemini", "gemini-2.5-flash"], ["gemini", "gemini-2.5-flash-lite"],
