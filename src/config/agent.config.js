@@ -86,6 +86,17 @@ export const agentConfig = {
                 maxSteps: 4,
             },
 
+            // Once a day, no tools, ~10K tokens of transcript in and a short
+            // JSON verdict out. It judges the other chains' output, so a weak
+            // critic is worse than none: it leads on the strongest available
+            // models and falls back on quality rather than volume. No
+            // last-resort entry — a day left uncritiqued costs nothing, while a
+            // bad critique becomes a code change.
+            critique: {
+                chain: [...LEAD, g(M.GEM_35_F), g(M.GEM_31_FL), co(M.COH_APLUS)],
+                maxSteps: 2,
+            },
+
             // Future Slack ingestion: event-driven bursts, structured
             // extraction. Bursts need per-minute headroom.
             ingest: {

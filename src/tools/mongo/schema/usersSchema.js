@@ -169,6 +169,18 @@ const usersSchema = {
           description:
             "Bumped to invalidate every web session at once. Dashboard tokens are signed, not stored, so this integer is the only kill switch — a token carrying an older epoch is refused.",
         },
+        agentCritique: {
+          bsonType: ["bool", "null"],
+          description:
+            "Whether the nightly self-critique pass reads this user's own conversations back and writes an engineering report. Opt-in and OFF by default: it is an instrument for whoever maintains the agent, not a feature of it, and the person it is about never sees the output. Deliberately absent from the updateUserSettings declaration, like llmTrace — an operator turns it on, the model cannot.",
+        },
+        critiqueHour: {
+          bsonType: ["int", "null"],
+          minimum: 0,
+          maximum: 23,
+          description:
+            "Local hour the self-critique fires. Falls back to CRITIQUE_HOUR (03:00) when null. Best left before dayStartHour, where the personal day in progress is the day that just ended.",
+        },
         dayStartHour: {
           bsonType: ["int", "null"],
           minimum: 0,
@@ -225,4 +237,5 @@ export default usersSchema;
 export const USERS_INDEXES = [
   { key: { userId: 1 }, name: "userId_1", unique: true },
   { key: { "preferences.triggersOptIn": 1 }, name: "preferences.triggersOptIn_1" },
+  { key: { "preferences.agentCritique": 1 }, name: "preferences.agentCritique_1" },
 ];

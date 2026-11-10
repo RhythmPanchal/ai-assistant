@@ -2,13 +2,14 @@ import cron from "node-cron";
 import { getDB } from "../tools/mongo/mongoClient.js";
 import { TRIGGER_JOB } from "../tools/mongo/schema/triggerJobSchema.js";
 import executeTriggerJob from "./executeTriggerJob.js";
-import { resolveRoutineTargets } from "../identity/userManager.js";
+import { resolveRoutineTargets, resolveCritiqueTargets } from "../identity/userManager.js";
 import { goodMorningJob } from "./jobs/goodMorningJob.js";
 import { goodNightJob } from "./jobs/goodNightJob.js";
+import { critiqueDayFor, CRITIQUE_HOUR } from "./jobs/critiqueDayJob.js";
 import { ROUTINE_HOURS } from "../tools/mongo/schema/usersSchema.js";
 
 // Re-exported for the tests that pin the defaults alongside routineDue.
-export { ROUTINE_HOURS };
+export { ROUTINE_HOURS, CRITIQUE_HOUR };
 
 /**
  * Which routine, if either, is due for this user at this local hour.
@@ -25,6 +26,39 @@ export function routineDue(user, hour) {
 	if (hour === morning) return "morning";
 	if (hour === night) return "night";
 	return null;
+}
+
+/**
+ * Whether the self-critique pass is due for this user at this local hour.
+ *
+ * Separate from routineDue, which answers which USER-FACING routine fires.
+ * Folding the critique in there would have made it a third return value every
+ * caller had to know about, and would have put an audit on the same opt-in as
+ * a good-morning message.
+ */
+export function critiqueDue(user, hour) {
+	if (user?.preferences?.agentCritique !== true) return false;
+	return hour === (user?.preferences?.critiqueHour ?? CRITIQUE_HOUR);
+}
+
+async function critiqueExecutor() {
+	const users = await resolveCritiqueTargets();
+	if (!users.length) return;
+
+	for (const user of users) {
+		const timeZone = user.timezone || "Asia/Kolkata";
+		const hour = Number(
+			new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", hourCycle: "h23" })
+				.format(new Date())
+		);
+		if (!critiqueDue(user, hour)) continue;
+
+		// Caught per user: a dead daily quota on one account must not stop the
+		// next account's pass, and nothing downstream depends on the report.
+		await critiqueDayFor(user).catch(err =>
+			console.error(`[critiqueExecutor] failed for ${user.userId}:`, err.message)
+		);
+	}
 }
 
 export default function initCron() {
@@ -44,6 +78,14 @@ export default function initCron() {
 			await routineExecutor();
 		} catch (err) {
 			console.error("Routine cron error:", err);
+		}
+		// Its own try, and after the routines rather than inside them: an
+		// engineering pass must never be able to cost a user their morning
+		// plan, and it fans out over a different set of users.
+		try {
+			await critiqueExecutor();
+		} catch (err) {
+			console.error("Critique cron error:", err);
 		}
 	});
 }

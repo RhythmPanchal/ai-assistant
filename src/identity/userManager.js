@@ -61,6 +61,21 @@ export async function resolveRoutineTargets(user) {
     return users.length ? users : [LEGACY_USER];
 }
 
+/**
+ * Who the nightly self-critique runs for.
+ *
+ * Its own query rather than resolveRoutineTargets, and no LEGACY_USER fallback.
+ * triggersOptIn governs whether a PERSON gets morning and night messages; this
+ * governs whether an ENGINEER is auditing that person's conversations. Tying
+ * the two together would start reading the chats of everyone who wanted a
+ * good-morning note, and the empty list is the correct answer when nobody has
+ * asked for it.
+ */
+export async function resolveCritiqueTargets() {
+    const db = await getDB();
+    return db.collection(USERS_COLLECTION).find({ "preferences.agentCritique": true }).toArray();
+}
+
 /* ─────────────────────────── identity resolution ───────────────────────────
  *
  * userId is an IDENTITY — the number every collection stores.

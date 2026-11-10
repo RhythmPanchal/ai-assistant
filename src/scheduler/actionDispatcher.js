@@ -13,6 +13,7 @@ import { insertSchedule } from "../tools/mongo/operation/insertSchedule.js";
 import { goodMorningJob } from "./jobs/goodMorningJob.js";
 import { goodNightJob } from "./jobs/goodNightJob.js";
 import { summarizeDayJob } from "./jobs/summarizeDayJob.js";
+import { critiqueDayJob } from "./jobs/critiqueDayJob.js";
 import { completeFlow } from "./flows/completeFlow.js";
 import { connectApp } from "../connectors/oauth/connectApp.js";
 import { disconnectApp } from "../connectors/oauth/disconnectApp.js";
@@ -113,6 +114,15 @@ export const ACTION_MAP = {
   // flow closes, never by the model.
   summarizeDayJob: {
     fn: summarizeDayJob,
+    params: ["userId", "logDate", "timeZone"]
+  },
+
+  // critiqueDayJob(userId, logDate, timeZone) — spread positionally, so this
+  // order is the signature. Reachable here so a missed night can be re-run as
+  // a one-off row, and so the hourly cron is not the only way in. Never
+  // offered to the model: it audits the model.
+  critiqueDayJob: {
+    fn: critiqueDayJob,
     params: ["userId", "logDate", "timeZone"]
   },
 
