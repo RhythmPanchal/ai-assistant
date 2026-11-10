@@ -136,6 +136,32 @@ test("a job's trigger is labelled a trigger, never the user", () => {
     assert.match(transcript, /· morning routine/);
 });
 
+test("a routine turn says its data came from the system instruction", async () => {
+    // The single worst false positive, found on real prod turns: a routine is
+    // handed pending tasks, the plan and the day's log as a system-side block
+    // that chatHistory never stores, so it states counts and due dates with no
+    // lookup line. Reading that gap, the critic called two sound replies
+    // hallucinations — which the auto-fix loop would then have "fixed".
+    const { transcript } = renderTurns([day({
+        source: "goodMorningJob",
+        messages: [
+            { role: "user", content: "It is time for the morning planning routine" },
+            { role: "assistant", content: "The deck review is 156 days old and due 2026-11-30." },
+        ],
+    })], { timeZone: IST });
+    assert.match(transcript, /no lookup call is expected/);
+
+    // An ordinary turn must NOT carry that excuse, or test 2 never applies.
+    const { transcript: plain } = renderTurns([day({
+        messages: [{ role: "assistant", content: "You are at ₹8,420 this month." }],
+    })], { timeZone: IST });
+    assert.ok(!/no lookup call is expected/.test(plain));
+
+    const { TURN_CRITIQUE_INSTRUCTION } = await import("../agent/critique/critiquePrompt.js");
+    assert.match(TURN_CRITIQUE_INSTRUCTION, /ABSENCE of a tool call is never evidence/);
+    assert.match(TURN_CRITIQUE_INSTRUCTION, /most\s+common false positive/);
+});
+
 test("dates in a tool result are rendered in local time", () => {
     // 2026-11-09T18:30Z is IST midnight on the 10th. Serialised as UTC it reads
     // as the 9th, and the critic would flag a correctly dated row as the wrong

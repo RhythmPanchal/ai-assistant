@@ -125,8 +125,15 @@ export function renderTurns(docs, { timeZone = IST_TIMEZONE, dayStartHour = DAY_
                 // A job trigger is not something the person said, and a critic
                 // that mistakes one for a user message reads the system's own
                 // instruction as a request and grades the reply against it.
-                const who = SOURCE_LABELS[doc.source] ? "trigger" : "user";
-                if (msg.content) lines.push(`${who}: ${clip(msg.content, MAX_MESSAGE_CHARS)}`);
+                const routine = SOURCE_LABELS[doc.source];
+                if (msg.content) lines.push(`${routine ? "trigger" : "user"}: ${clip(msg.content, MAX_MESSAGE_CHARS)}`);
+                // Said in the turn itself, not only in the instruction, because
+                // the reader needs it exactly here. A routine's data arrives as
+                // a system-side context block that chatHistory does not store,
+                // so this turn can state task counts and due dates with no
+                // lookup line — and a critic reading the gap concluded the
+                // numbers were invented. Observed on real prod turns.
+                if (routine) lines.push(`   [${routine}: the day's data was supplied in the system instruction, which is not shown here — no lookup call is expected]`);
                 continue;
             }
             if (msg.role === "assistant") {

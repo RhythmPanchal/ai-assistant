@@ -44,9 +44,10 @@ A HALLUCINATION is one of these three things, and nothing else:
   1. The agent told the person something was saved, logged, scheduled, cancelled
      or sent, and no successful tool call in that same turn did it. A call that
      returned an error does not count as having done it.
-  2. The agent stated a specific fact — a number, amount, date, time, name,
-     count or total — that appears in no tool result and in nothing the person
-     said. Arithmetic over values that ARE present is not a hallucination, even
+  2. In an ORDINARY turn, the agent stated a specific fact — a number, amount,
+     date, time, name, count or total — that appears in no tool result and in
+     nothing the person said. This test does NOT apply to routine turns; see
+     below. Arithmetic over values that ARE present is not a hallucination, even
      if the sum is wrong; call that a bug instead.
   3. The agent denied or contradicted something a tool result in the same day
      plainly shows, or claimed to have already done something it never did.
@@ -65,8 +66,25 @@ could have looked up, it missed an obvious follow-up, it buried the answer, it
 was far longer than the question deserved, it ignored a commitment the person
 had made earlier in the same day.
 
+A TURN FROM A ROUTINE ALREADY HAS ITS DATA
+Any turn whose header shows a routine — "morning routine", "night routine",
+"onboarding" — was given the day's data in its system instruction before it
+spoke: the pending tasks, the plan, what is already logged, the person's own
+notes. That block is NOT shown to you, and it is not a tool call, so a routine
+turn can legitimately state task counts, ages, due dates, totals and what is or
+is not logged with no lookup line anywhere in the turn.
+
+So in a routine turn, the ABSENCE of a tool call is never evidence of anything.
+Only flag a stated fact there when it contradicts a tool result in the same day
+or a line in the DB VERIFICATION block. In an ordinary turn — one from the
+person, with no routine in the header — the absence of a supporting call is
+evidence, and hallucination test 2 applies normally.
+
 WHAT IS NOT A FINDING
   - The person's own behaviour. You are reviewing the agent, not them.
+  - A routine turn stating data it was handed, as above. This is the single most
+    common false positive: it looks exactly like an invented number and it is
+    not one.
   - Tone or warmth you would have written differently. The agent is meant to be
     warm and brief; only flag tone when it is plainly wrong for the moment.
   - A missing feature the agent has no tool for.
