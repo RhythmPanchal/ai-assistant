@@ -59,9 +59,16 @@ const flat = (s) => String(s).replace(/\s+/g, " ").toLowerCase();
  * hallucination because its severity was spelled "critical" loses the thing we
  * ran the pass for.
  */
-export function coerceCritique(parsed, { turnIds = [], transcript = "" } = {}) {
+/**
+ * `quotable` is everything the model could legitimately have quoted — the
+ * transcript AND the verification block — not just the transcript. A finding
+ * citing a MISSING line is quoting the input, and marking it unquoted would
+ * put a "check this before acting" warning on the one kind of finding that is
+ * already proven.
+ */
+export function coerceCritique(parsed, { turnIds = [], quotable = "" } = {}) {
     const known = new Set(turnIds);
-    const haystack = flat(transcript);
+    const haystack = flat(quotable);
     const dropped = [];
 
     const findings = [];
@@ -85,7 +92,12 @@ export function coerceCritique(parsed, { turnIds = [], transcript = "" } = {}) {
             summary,
             evidence,
             suggestion: clean(raw.suggestion, SUGGESTION_CHARS),
-            // Whether the quote is really in the transcript, normalised for
+            // Judged by a model, as against the db-verified findings merged in
+            // later. The report keeps them apart because they warrant different
+            // trust: one is an opinion about a transcript, the other is a row
+            // that is not where it should be.
+            source: "critic",
+            // Whether the quote is really in the input, normalised for
             // whitespace and case. NOT a drop: models paraphrase quotes often
             // enough that exact matching would discard sound findings. It is
             // carried into the report so the fix session knows which findings
@@ -96,37 +108,48 @@ export function coerceCritique(parsed, { turnIds = [], transcript = "" } = {}) {
         if (findings.length >= MAX_FINDINGS) break;
     }
 
-    // Worst first. The report is read top-down by whoever fixes it, and within
-    // a severity a wrong claim outranks a missed opportunity.
+    return { ...summaryOf(parsed), findings: sortFindings(findings), dropped };
+}
+
+/**
+ * Worst first, and proven before judged.
+ *
+ * Whoever reads the report works top-down, so a row that is demonstrably not in
+ * the database has to sit above a model's opinion of equal severity.
+ */
+export function sortFindings(findings) {
     const bySeverity = { high: 0, medium: 1, low: 2 };
     const byKind = { hallucination: 0, bug: 1, improvement: 2 };
-    findings.sort((a, b) =>
+    const bySource = { db: 0, critic: 1 };
+    return [...findings].sort((a, b) =>
         bySeverity[a.severity] - bySeverity[b.severity] ||
+        (bySource[a.source] ?? 1) - (bySource[b.source] ?? 1) ||
         byKind[a.kind] - byKind[b.kind] ||
         a.turn.localeCompare(b.turn, undefined, { numeric: true })
     );
+}
+
+function summaryOf(parsed) {
 
     const score = coerceScore(parsed?.satisfaction?.score);
 
     return {
         satisfaction: { score, why: score === null ? null : clean(parsed?.satisfaction?.why, SUMMARY_CHARS) },
-        findings,
         wentWell: (Array.isArray(parsed?.wentWell) ? parsed.wentWell : [])
             .map(v => clean(v, SUMMARY_CHARS))
             .filter(Boolean)
             .slice(0, 3),
-        dropped,
     };
 }
 
 /** The two messages sent. Exported so a dry run can print them without spending a request. */
-export function buildCritiqueMessages({ logDate, transcript, turnCount, timeZone = IST_TIMEZONE }) {
+export function buildCritiqueMessages({ logDate, transcript, turnCount, verification = null, timeZone = IST_TIMEZONE }) {
     const weekday = new Date(`${logDate}T12:00:00+05:30`)
         .toLocaleDateString("en-GB", { timeZone, weekday: "long" });
 
     return [
         { role: "system", content: TURN_CRITIQUE_INSTRUCTION },
-        { role: "user", content: buildCritiqueInput({ logDate, weekday, turnCount, transcript }) },
+        { role: "user", content: buildCritiqueInput({ logDate, weekday, turnCount, transcript, verification }) },
     ];
 }
 
@@ -136,12 +159,15 @@ export function buildCritiqueMessages({ logDate, transcript, turnCount, timeZone
  *          JSON throws too — unlike the day review, there is no partial result
  *          worth keeping here, and the report is the entire output.
  */
-export async function critiqueDay({ userId, logDate, transcript, turns = [], timeZone = IST_TIMEZONE, apiKeys = {} }) {
+export async function critiqueDay({
+    userId, logDate, transcript, turns = [], verification = null, dbFindings = [],
+    timeZone = IST_TIMEZONE, apiKeys = {},
+}) {
     if (!Number.isInteger(userId)) throw new Error("[critiqueDay] userId must be an integer");
     if (!logDate) throw new Error("[critiqueDay] logDate is required");
 
     const turnIds = turns.map(t => t.id);
-    const messages = buildCritiqueMessages({ logDate, transcript, turnCount: turnIds.length, timeZone });
+    const messages = buildCritiqueMessages({ logDate, transcript, turnCount: turnIds.length, verification, timeZone });
     const meter = startTurn(userId, "critiqueJob", "critique");
 
     try {
@@ -154,10 +180,20 @@ export async function critiqueDay({ userId, logDate, transcript, turns = [], tim
             onResult: (info) => meter.recordResult(info),
         });
 
-        const critique = coerceCritique(extractJson(response.text), { turnIds, transcript });
-        if (critique.dropped.length) {
-            console.warn(`[critiqueDay] ${logDate}: dropped ${critique.dropped.length} finding(s) — ${critique.dropped.join("; ")}`);
+        // The whole user message is the haystack, so a finding quoting the
+        // verification block counts as quoted.
+        const judged = coerceCritique(extractJson(response.text), { turnIds, quotable: messages[1].content });
+        if (judged.dropped.length) {
+            console.warn(`[critiqueDay] ${logDate}: dropped ${judged.dropped.length} finding(s) — ${judged.dropped.join("; ")}`);
         }
+
+        // db-proven findings go in whatever the model said, and are capped
+        // separately: they are facts, so MAX_FINDINGS must not be able to
+        // discard one to make room for an opinion.
+        const critique = {
+            ...judged,
+            findings: sortFindings([...dbFindings, ...judged.findings]),
+        };
 
         await meter.finish("ok");
         return { critique, raw: response.text, provider: response.provider, model: response.model };

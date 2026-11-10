@@ -1,23 +1,41 @@
 /**
  * Hand-run:
- *   node src/test/testCritiqueLive.js --dry                  fixture day, prints both messages, no key needed
- *   node src/test/testCritiqueLive.js                        fixture day -> a real model call, writes no file
- *   node src/test/testCritiqueLive.js --from-db 1 2026-11-09  a real day from the database
- *   node src/test/testCritiqueLive.js --from-db 1 2026-11-09 --write   also writes the report file
+ *   node src/test/testCritiqueLive.js --dry       fixture day, prints both messages, no key needed
+ *   node src/test/testCritiqueLive.js             fixture day -> a real model call, writes no file
+ *   node src/test/testCritiqueLive.js --from-db 1 2026-11-09 --db Rasmalai-prod
+ *   node src/test/testCritiqueLive.js --from-db 1 2026-11-09 --db Rasmalai-prod --write
  *
  * What the critic actually does with a day, as opposed to what the coercer
  * permits. testCritique.js is the guard; this is for reading the output.
+ *
+ * --db sets MONGODB_DB_NAME before the first getDB(), which is the only moment
+ * it is read — the same override the eval guards use. The real conversations
+ * live in the prod database, so a run without it reviews the near-empty dev one
+ * and reports a quiet day that never happened. The resolved name is printed on
+ * every run for that reason. Everything here READS; the only write is the local
+ * report file under --write.
  */
 import "dotenv/config";
 import { renderTurns } from "../knowledge/turnReviewKnowledge.js";
 import turnReviewKnowledge from "../knowledge/turnReviewKnowledge.js";
 import { critiqueDay, buildCritiqueMessages } from "../agent/critique/critiqueDay.js";
+import { verifyWrites, renderVerificationBlock, findingsFromChecks } from "../agent/critique/verifyWrites.js";
 import { renderCritiqueReport } from "../agent/critique/critiqueReport.js";
 import { critiqueDayJob } from "../scheduler/jobs/critiqueDayJob.js";
 
 const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
 const IST = "Asia/Kolkata";
+
+const dbFlag = argv.indexOf("--db");
+if (dbFlag !== -1) {
+    const name = argv[dbFlag + 1];
+    if (!name || name.startsWith("--")) {
+        console.error("usage: --db <databaseName>");
+        process.exit(1);
+    }
+    process.env.MONGODB_DB_NAME = name;
+}
 
 // A day built to contain exactly one of each thing the critic must catch and
 // one it must leave alone — so a reply that flags three findings is right and a
@@ -67,11 +85,22 @@ const FIXTURE = [
     },
 ];
 
+// Stands in for verifyWrites on the fixture path, which has no database. Shaped
+// like a real block so the dry run shows the prompt the model actually gets,
+// and carrying a MISSING so the planted T3 is proven rather than merely judged.
+const FIXTURE_CHECKS = [
+    { turn: "T2", tool: "insertSchedule", status: "CONFIRMED", detail: "userSchedule/…a1b2c3 is in the database" },
+    { turn: "T4", tool: "createRecord", status: "MISSING", detail: "expenseRegister/…d4e5f6 was reported inserted and is NOT in the database" },
+];
+
 async function main() {
     let userId = 1;
     let logDate = "2026-11-09";
     let transcript;
     let turns;
+    let checks;
+
+    console.log(`[db] ${process.env.MONGODB_DB_NAME || "(MONGODB_DB_NAME unset)"}`);
 
     const fromDb = argv.indexOf("--from-db");
     if (fromDb !== -1) {
@@ -87,12 +116,19 @@ async function main() {
             process.exit(0);
         }
         ({ transcript, turns } = await turnReviewKnowledge(userId, logDate, { timeZone: IST }));
+        ({ checks } = await verifyWrites(turns, { userId }));
     } else {
         ({ transcript, turns } = renderTurns(FIXTURE, { timeZone: IST }));
+        checks = FIXTURE_CHECKS;
     }
 
+    const verification = { block: renderVerificationBlock(checks), summary: `${checks.length} write(s) checked` };
+    const dbFindings = findingsFromChecks(checks);
+
     if (has("--dry")) {
-        const [system, user] = buildCritiqueMessages({ logDate, transcript, turnCount: turns.length, timeZone: IST });
+        const [system, user] = buildCritiqueMessages({
+            logDate, transcript, turnCount: turns.length, verification: verification.block, timeZone: IST,
+        });
         console.log("════════ SYSTEM ════════\n");
         console.log(system.content);
         console.log("\n════════ USER ════════\n");
@@ -101,9 +137,13 @@ async function main() {
         process.exit(0);
     }
 
-    const { critique, provider, model } = await critiqueDay({ userId, logDate, transcript, turns, timeZone: IST });
+    const { critique, provider, model } = await critiqueDay({
+        userId, logDate, transcript, turns, verification: verification.block, dbFindings, timeZone: IST,
+    });
 
-    console.log(renderCritiqueReport({ userId, logDate, critique, turns, model: `${provider}:${model}`, timeZone: IST }));
+    console.log(renderCritiqueReport({
+        userId, logDate, critique, turns, verification, model: `${provider}:${model}`, timeZone: IST,
+    }));
 
     if (fromDb === -1) {
         const kinds = critique.findings.map(f => f.kind);
@@ -114,6 +154,8 @@ async function main() {
         console.log(`findings: ${critique.findings.length} (2-3 expected: T3's unsaved claim, T4's invented total and category)`);
         console.log(`turns cited: ${critique.findings.map(f => f.turn).join(", ") || "none"} — T3 and T4 are the planted ones; T2 is clean`);
         console.log(`kinds: ${kinds.join(", ") || "none"}`);
+        const proven = critique.findings.filter(f => f.source === "db").length;
+        console.log(`proven from the database: ${proven} (the fixture plants one MISSING on T4, which must appear whatever the model said)`);
         if (critique.findings.some(f => f.turn === "T2")) console.log("NOTE: T2 is a clean turn — a finding there is the padding reflex.");
     }
     process.exit(0);

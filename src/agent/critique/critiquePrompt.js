@@ -28,8 +28,17 @@ Each turn is numbered T1, T2 and so on, in time order. Inside a turn:
      tool returned: ...   what that call actually returned
   rasmalai:               what the person was shown
 
-The tool lines are the record of what really happened. The "rasmalai:" lines are
-the claims. Your job is largely to compare the two.
+The tool lines are the agent's own account of what happened. The "rasmalai:"
+lines are the claims. Your job is largely to compare the two.
+
+You are also given a DB VERIFICATION block. Every write the day attempted has
+been re-read from the database and the verdicts in that block were COMPUTED, not
+judged. They outrank the tool results and they outrank your own reading: a tool
+line saying success and a verification line saying MISSING means the row is not
+there, full stop. Those cases have already been raised as findings for you — do
+not repeat them. Use the block to avoid the opposite mistake too: do not accuse
+the agent of losing a row the block says is CONFIRMED. UNVERIFIABLE means nobody
+could check, which is not the same as fine and is not evidence of a defect.
 
 A HALLUCINATION is one of these three things, and nothing else:
   1. The agent told the person something was saved, logged, scheduled, cancelled
@@ -107,12 +116,16 @@ was wrong but harmless; low for polish.`;
  * worked over, and both providers attend to the tail more reliably than the
  * middle — the same placement the review and summary prompts use.
  */
-export function buildCritiqueInput({ logDate, weekday, turnCount, transcript }) {
+export function buildCritiqueInput({ logDate, weekday, turnCount, transcript, verification = null }) {
     return [
         `DAY UNDER REVIEW: ${weekday} ${logDate}`,
         `TURNS: ${turnCount}`,
         "",
         "Valid turn ids are the ones that appear below. A finding citing any other id is discarded.",
+        "",
+        "--- DB VERIFICATION ---",
+        verification || "No verification was run for this day.",
+        "--- END DB VERIFICATION ---",
         "",
         "--- TRANSCRIPT ---",
         transcript,

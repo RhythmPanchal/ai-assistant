@@ -2,6 +2,7 @@ import { mkdir, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import turnReviewKnowledge from "../../knowledge/turnReviewKnowledge.js";
 import { critiqueDay } from "../../agent/critique/critiqueDay.js";
+import { verifyWrites, renderVerificationBlock, findingsFromChecks } from "../../agent/critique/verifyWrites.js";
 import { renderCritiqueReport } from "../../agent/critique/critiqueReport.js";
 import { getUserProfile } from "../../identity/userManager.js";
 import {
@@ -18,9 +19,12 @@ import {
  * its output.
  */
 
-// Local hour the pass runs. 03:00 is before DAY_START_HOUR, which is what makes
-// "the day that just ended" the day currently in progress — see pickCritiqueDay.
-export const CRITIQUE_HOUR = 3;
+// Local hour the pass runs. 13:00 rather than the small hours: the machine this
+// runs on is asleep at 03:00, so a night-time pass simply never fired. Early
+// afternoon is late enough that yesterday is long finished — it ended at
+// DAY_START_HOUR — and pickCritiqueDay handles the hour being on either side of
+// that boundary.
+export const CRITIQUE_HOUR = 13;
 
 // Under the repo root, and gitignored. A generated file per night inside tracked
 // paths would leave `git status` dirty every single morning, which collides
@@ -105,12 +109,29 @@ export async function critiqueDayJob(userId, logDate = null, timeZone = IST_TIME
         return { skipped: true, reason: "no-turns", logDate: day };
     }
 
+    // Before the model, and independent of it. Every write the day attempted is
+    // re-read from the database, so a row that is not there becomes a finding
+    // whether or not the critic notices it — and the critic is handed the
+    // verdicts so it cannot claim a confirmed row was lost.
+    const { checks, counts } = await verifyWrites(turns, { userId });
+    const verification = {
+        block: renderVerificationBlock(checks),
+        summary: checks.length
+            ? Object.entries(counts).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(", ")
+            : "no writes attempted",
+    };
+    const dbFindings = findingsFromChecks(checks);
+    if (dbFindings.length) {
+        console.warn(`[critiqueDayJob] ${day}: ${dbFindings.length} write(s) did not land — ${verification.summary}`);
+    }
+
     const { critique, provider, model } = await critiqueDay({
         userId, logDate: day, transcript, turns, timeZone, apiKeys,
+        verification: verification.block, dbFindings,
     });
 
     const report = renderCritiqueReport({
-        userId, logDate: day, critique, turns,
+        userId, logDate: day, critique, turns, verification,
         model: `${provider}:${model}`, timeZone,
     });
 
@@ -123,7 +144,7 @@ export async function critiqueDayJob(userId, logDate = null, timeZone = IST_TIME
         `${critique.findings.length} finding(s), ${high} high, satisfaction ${critique.satisfaction.score ?? "-"}/5`
     );
 
-    return { skipped: false, logDate: day, file, critique, turnCount };
+    return { skipped: false, logDate: day, file, critique, turnCount, checks };
 }
 
 /** The cron entry: one opted-in user, their own day and zone. */

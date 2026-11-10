@@ -1,6 +1,6 @@
 import { getDB } from "../tools/mongo/mongoClient.js";
 import { CHAT_HISTORY } from "../tools/mongo/schema/chatHistorySchema.js";
-import { personalDayRangeOf, DAY_START_HOUR, IST_TIMEZONE, datesForModel } from "../tools/mongo/dateUtils.js";
+import { personalDayRangeOf, personalDayOf, DAY_START_HOUR, IST_TIMEZONE, datesForModel } from "../tools/mongo/dateUtils.js";
 
 /**
  * One personal day's turns, rendered for a critic rather than a summarizer.
@@ -96,14 +96,14 @@ export default async function turnReviewKnowledge(userId, date, { timeZone = IST
         .limit(MAX_TURNS)
         .toArray();
 
-    return renderTurns(docs.reverse(), { timeZone });
+    return renderTurns(docs.reverse(), { timeZone, dayStartHour });
 }
 
 /**
  * The pure half: documents in, transcript out. Exported so the guards can
  * exercise the rendering without a database.
  */
-export function renderTurns(docs, { timeZone = IST_TIMEZONE } = {}) {
+export function renderTurns(docs, { timeZone = IST_TIMEZONE, dayStartHour = DAY_START_HOUR } = {}) {
     const turns = [];
     const blocks = [];
     let budget = MAX_TRANSCRIPT_CHARS;
@@ -150,7 +150,14 @@ export function renderTurns(docs, { timeZone = IST_TIMEZONE } = {}) {
         }
         budget -= block.length;
         blocks.push(block);
-        turns.push({ id, conversationId: doc.conversationId ?? null, source, at });
+        // doc and date ride along for verifyWrites: it re-reads the calls from
+        // the document, and a day-scoped append has to be looked up under the
+        // personal day the call was made on, not the day being reviewed — a
+        // 00:40 reply belongs to the night before.
+        turns.push({
+            id, conversationId: doc.conversationId ?? null, source, at, doc,
+            date: personalDayOf(at, { hour: dayStartHour, timeZone }),
+        });
     }
 
     if (!blocks.length) {

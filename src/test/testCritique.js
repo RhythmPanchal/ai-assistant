@@ -16,8 +16,12 @@ const test = (n, f) => tests.push([n, f]);
 const { pickCritiqueDay, reportPath, reportDir, CRITIQUE_HOUR } =
     await import("../scheduler/jobs/critiqueDayJob.js");
 const { renderTurns } = await import("../knowledge/turnReviewKnowledge.js");
-const { coerceCritique, buildCritiqueMessages, KINDS, SEVERITIES } =
+const { coerceCritique, buildCritiqueMessages, sortFindings, KINDS, SEVERITIES } =
     await import("../agent/critique/critiqueDay.js");
+const {
+    pairCallsWithResults, fieldMatches, findingsFromChecks, renderVerificationBlock,
+    isWriteTool, CONFIRMED, MISSING, MISMATCH, UNVERIFIABLE,
+} = await import("../agent/critique/verifyWrites.js");
 const { renderCritiqueReport, parseCritiqueCounts } =
     await import("../agent/critique/critiqueReport.js");
 
@@ -55,8 +59,17 @@ test("the day is read in the user's zone, not the host's", () => {
     assert.strictEqual(ny, "2026-11-08", "16:00 in NY is a day already finished there");
 });
 
-test("the pass runs before the day rolls over", () => {
-    assert.ok(CRITIQUE_HOUR < 4, "a critique hour at or after dayStartHour reviews an unfinished day by default");
+test("the default hour reviews a day that is actually finished", () => {
+    // The hour moved from 03:00 to 13:00 because the machine is asleep at 03:00.
+    // That crosses dayStartHour, so the invariant worth pinning is not "before
+    // the boundary" but the thing the boundary was protecting: whatever hour is
+    // configured, the day handed to the critic must be over.
+    const at = new Date("2026-11-10T00:00:00.000Z");
+    const noon = new Date(at);
+    noon.setUTCHours(CRITIQUE_HOUR - 5, 30, 0, 0); // CRITIQUE_HOUR local in IST
+    const picked = pickCritiqueDay(noon, { timeZone: IST, dayStartHour: 4 });
+    const todayIst = new Date(noon).toLocaleDateString("en-CA", { timeZone: IST });
+    assert.notStrictEqual(picked, todayIst, "the critic must never be handed a day still in progress");
 });
 
 /* ──────────────────────── the report stays out of git ──────────────────────── */
@@ -150,7 +163,7 @@ test("a day with no turns says so instead of rendering nothing", () => {
 
 /* ───────────────────────────── the coercer ───────────────────────────── */
 
-const ids = { turnIds: ["T1", "T2"], transcript: "rasmalai: Logged your dinner and the fifty rupee rickshaw." };
+const ids = { turnIds: ["T1", "T2"], quotable: "rasmalai: Logged your dinner and the fifty rupee rickshaw." };
 const finding = (over = {}) => ({
     turn: "T1", kind: "hallucination", severity: "high",
     summary: "Claimed dinner was saved with no successful call.",
@@ -164,6 +177,7 @@ test("a sound finding survives intact and is marked verbatim", () => {
     assert.strictEqual(findings.length, 1);
     assert.strictEqual(findings[0].kind, "hallucination");
     assert.strictEqual(findings[0].quoted, true, "the quote is in the transcript and must be marked so");
+    assert.strictEqual(findings[0].source, "critic", "a model's finding must be distinguishable from a proven one");
 });
 
 test("a finding citing a turn that does not exist is dropped", () => {
@@ -254,7 +268,7 @@ test("the footer is machine-readable and round-trips", () => {
     const md = renderCritiqueReport({ userId: 1, logDate: "2026-11-09", critique: critiqueOf(findings), turns: turnsOf });
 
     const counts = parseCritiqueCounts(md);
-    assert.deepStrictEqual(counts, { date: "2026-11-09", user: 1, findings: 2, high: 1, medium: 0, low: 1 });
+    assert.deepStrictEqual(counts, { date: "2026-11-09", user: 1, findings: 2, high: 1, medium: 0, low: 1, proven: 0 });
 });
 
 test("a report with no findings says so and reports zero", () => {
@@ -293,20 +307,21 @@ test("findings dropped by the coercer are recorded in the file", () => {
 
 test("the critique is opt-in and off by default", () => {
     const { critiqueDue } = require_initCron();
-    assert.strictEqual(critiqueDue({ preferences: {} }, 3), false, "nobody is audited without asking");
-    assert.strictEqual(critiqueDue(null, 3), false);
-    assert.strictEqual(critiqueDue({ preferences: { agentCritique: true } }, 3), true);
-    assert.strictEqual(critiqueDue({ preferences: { agentCritique: true } }, 4), false);
+    assert.strictEqual(critiqueDue({ preferences: {} }, CRITIQUE_HOUR), false, "nobody is audited without asking");
+    assert.strictEqual(critiqueDue(null, CRITIQUE_HOUR), false);
+    assert.strictEqual(critiqueDue({ preferences: { agentCritique: true } }, CRITIQUE_HOUR), true);
+    assert.strictEqual(critiqueDue({ preferences: { agentCritique: true } }, CRITIQUE_HOUR + 1), false);
     assert.strictEqual(critiqueDue({ preferences: { agentCritique: true, critiqueHour: 2 } }, 2), true);
-    assert.strictEqual(critiqueDue({ preferences: { agentCritique: true, critiqueHour: 2 } }, 3), false);
-    assert.strictEqual(critiqueDue({ preferences: { triggersOptIn: true } }, 3), false,
+    assert.strictEqual(critiqueDue({ preferences: { agentCritique: true, critiqueHour: 2 } }, CRITIQUE_HOUR), false,
+        "an explicit hour must override the default, not sit alongside it");
+    assert.strictEqual(critiqueDue({ preferences: { triggersOptIn: true } }, CRITIQUE_HOUR), false,
         "wanting a good-morning message is not consenting to an audit");
 });
 
 test("routineDue is untouched — the critique is not a user-facing routine", () => {
     const { routineDue, ROUTINE_HOURS } = require_initCron();
     assert.deepStrictEqual(ROUTINE_HOURS, { morning: 9, night: 23 });
-    assert.strictEqual(routineDue({ preferences: { agentCritique: true } }, 3), null);
+    assert.strictEqual(routineDue({ preferences: { agentCritique: true } }, CRITIQUE_HOUR), null);
 });
 
 test("the job is dispatchable with its params in signature order", async () => {
@@ -348,13 +363,126 @@ test("the instruction defines the three hallucination tests, and permits silence
     for (const sev of SEVERITIES) assert.ok(TURN_CRITIQUE_INSTRUCTION.includes(sev));
 });
 
-test("the transcript is the last thing the critic reads", () => {
+test("the transcript is the last thing the critic reads, after the verification", () => {
     const [system, user] = buildCritiqueMessages({
-        logDate: "2026-11-09", transcript: "### T1\nuser: hi", turnCount: 1, timeZone: IST,
+        logDate: "2026-11-09", transcript: "### T1\nuser: hi", turnCount: 1,
+        verification: "T1 createRecord MISSING — gone", timeZone: IST,
     });
     assert.strictEqual(system.role, "system");
     assert.match(user.content, /Monday 2026-11-09/);
     assert.match(user.content, /END TRANSCRIPT ---$/);
+    assert.ok(user.content.indexOf("DB VERIFICATION") < user.content.indexOf("--- TRANSCRIPT ---"),
+        "the verdicts must arrive before the material they are verdicts about");
+});
+
+/* ──────────────────────── db verification (requirement 1) ──────────────────────── */
+
+test("calls are paired with the results they produced, in dispatch order", () => {
+    const pairs = pairCallsWithResults([
+        { role: "user", content: "log both" },
+        { role: "assistant", functionCalls: [
+            { name: "createRecord", args: { collectionName: "expenseRegister", data: { amount: 50 } } },
+            { name: "createRecord", args: { collectionName: "dietRegister", data: { amount: 1 } } },
+        ] },
+        { role: "tool", toolName: "createRecord", result: { insertedId: "a" } },
+        { role: "tool", toolName: "createRecord", result: { insertedId: "b" } },
+        { role: "assistant", content: "done" },
+    ]);
+    assert.strictEqual(pairs.length, 2);
+    assert.strictEqual(pairs[0].args.collectionName, "expenseRegister");
+    assert.strictEqual(pairs[1].args.collectionName, "dietRegister", "two calls to one tool must not collapse");
+    assert.strictEqual(pairs[1].result.insertedId, "b");
+});
+
+test("a call that never returned is reported, not dropped", () => {
+    // The agent may well have spoken as though it landed.
+    const pairs = pairCallsWithResults([
+        { role: "assistant", functionCalls: [{ name: "createRecord", args: {} }] },
+        { role: "assistant", content: "Saved it." },
+    ]);
+    assert.strictEqual(pairs.length, 1);
+    assert.strictEqual(pairs[0].result, undefined);
+});
+
+test("only writes are verified", () => {
+    for (const w of ["createRecord", "updateRecords", "deleteRecord", "addMeal", "addPerformedTask", "cancelReminder"]) {
+        assert.ok(isWriteTool(w), `${w} writes and must be checked`);
+    }
+    for (const r of ["fetchRecord", "fetchCollectionNameAndSchema", "loadSkill"]) {
+        assert.ok(!isWriteTool(r), `${r} writes nothing`);
+    }
+});
+
+test("field comparison is forgiving about form and undecided about shape", () => {
+    // A false MISMATCH is reported to the critic as proven fact, so anything
+    // this cannot compare confidently must come back undecided.
+    assert.strictEqual(fieldMatches("Completed", "Completed"), true);
+    assert.strictEqual(fieldMatches("Pending", "Completed"), false);
+    assert.strictEqual(fieldMatches(50, "50"), true, "the model sends numbers as strings");
+    assert.strictEqual(fieldMatches(new Date("2026-11-09T18:30:00Z"), "2026-11-09T18:30:00.000Z"), true);
+    assert.strictEqual(fieldMatches(new Date("2026-11-09T18:30:00Z"), "2026-11-10T18:30:00Z"), false);
+    assert.strictEqual(fieldMatches({ a: 1 }, { a: 1 }), null, "nested shapes are undecided, never a mismatch");
+    assert.strictEqual(fieldMatches(new Date("2026-11-09T18:30:00Z"), "not a date"), null);
+    assert.strictEqual(fieldMatches(undefined, "x"), false, "a field that is simply absent did not take");
+});
+
+test("a lost row becomes a high-severity proven finding without the model", () => {
+    // The point of requirement 1: the tool said success, the row is not there,
+    // and that must not depend on a critic noticing it.
+    const found = findingsFromChecks([
+        { turn: "T1", tool: "createRecord", status: CONFIRMED, detail: "present" },
+        { turn: "T2", tool: "createRecord", status: MISSING, detail: "expenseRegister/…abc is NOT in the database" },
+        { turn: "T3", tool: "deleteRecord", status: MISMATCH, detail: "still there" },
+        { turn: "T4", tool: "updateNotes", status: UNVERIFIABLE, detail: "no check" },
+    ]);
+    assert.strictEqual(found.length, 2, "confirmed and unverifiable are not findings");
+    for (const f of found) {
+        assert.strictEqual(f.severity, "high");
+        assert.strictEqual(f.source, "db");
+        assert.strictEqual(f.quoted, true, "its evidence is the verification line, which is in the input");
+    }
+    assert.match(found[0].evidence, /MISSING/);
+});
+
+test("proven findings sort above judged ones of equal severity", () => {
+    const sorted = sortFindings([
+        { turn: "T1", kind: "hallucination", severity: "high", source: "critic" },
+        { turn: "T2", kind: "bug", severity: "high", source: "db" },
+    ]);
+    assert.strictEqual(sorted[0].source, "db", "a row that is demonstrably missing outranks an opinion");
+});
+
+test("the verification block names what could NOT be checked", () => {
+    // UNVERIFIABLE silently rendered as fine would make the pass look more
+    // thorough than it is.
+    const block = renderVerificationBlock([
+        { turn: "T1", tool: "updateNotes", status: UNVERIFIABLE, detail: "no database check is implemented" },
+    ]);
+    assert.match(block, /UNVERIFIABLE/);
+    assert.match(block, /NOT the same as fine/);
+    assert.match(block, /computed, not judged/);
+
+    assert.match(renderVerificationBlock([]), /nothing to verify/);
+});
+
+test("the critic is told the verdicts outrank its own reading", async () => {
+    const { TURN_CRITIQUE_INSTRUCTION } = await import("../agent/critique/critiquePrompt.js");
+    assert.match(TURN_CRITIQUE_INSTRUCTION, /COMPUTED, not\s+judged/);
+    assert.match(TURN_CRITIQUE_INSTRUCTION, /do\s+not repeat them/);
+    // The opposite error matters just as much: accusing the agent of losing a
+    // row the database says is there.
+    assert.match(TURN_CRITIQUE_INSTRUCTION, /CONFIRMED/);
+    assert.match(TURN_CRITIQUE_INSTRUCTION, /UNVERIFIABLE/);
+});
+
+test("the verifier only ever reads", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const src = await readFile(new URL("../agent/critique/verifyWrites.js", import.meta.url), "utf8");
+    // It runs against the production database. A write of any kind in here is
+    // a defect, not a style question.
+    for (const banned of ["insertOne", "insertMany", "updateOne", "updateMany", "deleteOne", "deleteMany", "findOneAndUpdate", "findOneAndDelete", "bulkWrite"]) {
+        assert.ok(!src.includes(banned), `verifyWrites must never call ${banned} — it reads prod`);
+    }
 });
 
 let initCronMod;
