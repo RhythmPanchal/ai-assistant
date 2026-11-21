@@ -11,7 +11,7 @@ Talk to it like a friend. It plans your day, tracks your money and meals, and nu
 ![MongoDB](https://img.shields.io/badge/DB-MongoDB%20Atlas-47A248?logo=mongodb&logoColor=white)
 ![Telegram](https://img.shields.io/badge/Chat-Telegram-26A5E4?logo=telegram&logoColor=white)
 
-### [💬 Chat with Rasmalai on Telegram](https://t.me/rasmalai_secratery_bot) · [🖥️ Open the dashboard](https://rasmalai-ui.pages.dev)
+### [💬 Chat with Rasmalai on Telegram](https://web.telegram.org/k/#@rasmalai_secratery_bot) · [🖥️ Open the dashboard](https://rasmalai-ui.pages.dev)
 
 </div>
 
@@ -108,7 +108,7 @@ src/
 
 ## 🖥️ Companion UI
 
-The web dashboard and operator console are hosted on Cloudflare Pages at **[rasmalai-ui.pages.dev](https://rasmalai-ui.pages.dev)**. Send `/login` to [@rasmalai_secratery_bot](https://t.me/rasmalai_secratery_bot) to get a magic link into the dashboard.
+The web dashboard and operator console are hosted on Cloudflare Pages at **[rasmalai-ui.pages.dev](https://rasmalai-ui.pages.dev)**. Send `/login` to [@rasmalai_secratery_bot](https://web.telegram.org/k/#@rasmalai_secratery_bot) to get a magic link into the dashboard.
 
 ## 📌 Status
 
